@@ -9,6 +9,8 @@ Namespace [Shared].Content
 
         Private GraphicsDevice As GraphicsDevice
 
+        Private ReadOnly ContentDirectoryOverride As String
+
         Public TexturesInstance As Textures
 
         Public Property Content As ContentManager
@@ -24,9 +26,25 @@ Namespace [Shared].Content
 
         Public Sub LoadAllContent()
             '#If WINDOWS Then
-            Dim ContentDirectory As String = AppDomain.CurrentDomain.BaseDirectory & "Content"
+            ' Content roots must follow the host that owns this ContentManager.
+            ' VST hosts run from the DAW directory, so AppDomain.BaseDirectory
+            ' points at FL Studio rather than at the plugin installation.
+            Dim ContentDirectory As String = ContentDirectoryOverride
+            If String.IsNullOrWhiteSpace(ContentDirectory) Then
+                ContentDirectory = Content.RootDirectory
+            End If
+            If Not IO.Path.IsPathRooted(ContentDirectory) Then
+                ContentDirectory = IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ContentDirectory)
+            End If
+            ContentDirectory = IO.Path.GetFullPath(ContentDirectory)
 
-            For Each FontDirectory As String In IO.Directory.GetDirectories(ContentDirectory & "\Fonts")
+            Dim FontsDirectory As String = IO.Path.Combine(ContentDirectory, "Fonts")
+            If Not IO.Directory.Exists(FontsDirectory) Then
+                Throw New IO.DirectoryNotFoundException(
+                    $"Project Z content directory does not contain Fonts: '{FontsDirectory}'.")
+            End If
+
+            For Each FontDirectory As String In IO.Directory.GetDirectories(FontsDirectory)
                 For Each FontPath As String In IO.Directory.GetFiles(FontDirectory)
                     Dim RelativeFontPath As String = FontPath.Remove(0, ContentDirectory.Length + 1)
                     Dim Extension As String = IO.Path.GetExtension(RelativeFontPath)
@@ -43,9 +61,11 @@ Namespace [Shared].Content
 #End If
 #End Region
 
-        Public Sub New(Content As ContentManager, GraphicsDevice As GraphicsDevice)
+        Public Sub New(Content As ContentManager, GraphicsDevice As GraphicsDevice,
+                       Optional ContentDirectory As String = Nothing)
             Me.Content = Content
             Me.GraphicsDevice = GraphicsDevice
+            ContentDirectoryOverride = ContentDirectory
             TexturesInstance = New Textures(GraphicsDevice)
         End Sub
 

@@ -20,9 +20,7 @@
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
-	<PackageIcon>256x256 UI framework(1).png</PackageIcon>
 	<PackageProjectUrl>https://github.com/JackOfFates/Project-Z</PackageProjectUrl>
-	<PackageLicenseFile>License.txt</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -46,26 +44,23 @@
     <Page Remove="Project Z Tower Defense\**" />
   </ItemGroup>
 
-  <!-- MonoGame DesktopGL (OpenGL) -->
+  <!-- KNI WinForms DirectX 11 backend. This keeps Project Z native on Windows
+       and allows its render HWND to be embedded in a VST3 editor. -->
   <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
+    <PackageReference Include="nkast.Kni.Platform.WinForms.DX11" Version="4.2.9001" />
     <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
-    <PackageReference Include="SocketJack" Version="1.2.3" />
+    <PackageReference Include="SocketJack" Version="1.2.3" Condition="!Exists('..\SocketJack\SocketJack\SocketJack.csproj')" />
     <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('..\SocketJack\SocketJack\SocketJack.csproj')">
+    <ProjectReference Include="..\SocketJack\SocketJack\SocketJack.csproj" />
   </ItemGroup>
 
   <!-- Project references retained as project references -->
 
   <!-- Keep resources -->
   <ItemGroup>
-    <None Include="..\..\..\..\Downloads\256x256 UI framework(1).png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="..\SocketJack\SocketJack\License.txt">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Include=".github\copilot-instructions.md" />
     <None Include=".github\upgrades\scenarios\new-dotnet-version_64215c\plan.md" />
     <EmbeddedResource Include="Properties\Resources.resx">

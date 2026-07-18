@@ -67,6 +67,10 @@ Namespace [Shared].Drawing.UI.Layout
         Public Property Column As Integer = 0
         Public Property RowSpan As Integer = 1
         Public Property ColumnSpan As Integer = 1
+        Public Property WidthExplicit As Boolean
+        Public Property HeightExplicit As Boolean
+        Public Property DesiredWidth As Single
+        Public Property DesiredHeight As Single
     End Class
 
     ''' <summary>
@@ -247,14 +251,23 @@ Namespace [Shared].Drawing.UI.Layout
         ''' <summary>
         ''' Adds a child element at the specified grid position.
         ''' </summary>
-        Public Sub AddChild(element As SceneElement, row As Integer, column As Integer, 
-                           Optional rowSpan As Integer = 1, Optional columnSpan As Integer = 1)
+        Public Sub AddChild(element As SceneElement, row As Integer, column As Integer,
+                           Optional rowSpan As Integer = 1, Optional columnSpan As Integer = 1,
+                           Optional widthExplicit As Boolean = False, Optional heightExplicit As Boolean = False)
             Dim attached = EnsureAttached(element)
             attached.Row = row
             attached.Column = column
             attached.RowSpan = rowSpan
             attached.ColumnSpan = columnSpan
+            attached.WidthExplicit = widthExplicit
+            attached.HeightExplicit = heightExplicit
+            attached.DesiredWidth = element.Size.X
+            attached.DesiredHeight = element.Size.Y
             Children.Add(element)
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            ArrangeChildren()
         End Sub
 
         ''' <summary>
@@ -286,12 +299,12 @@ Namespace [Shared].Drawing.UI.Layout
                 Dim colSpan = Math.Min(attached.ColumnSpan, _ColumnDefinitions.Count - col)
 
                 ' Calculate position
-                Dim x As Single = Padding.Left
+                Dim x As Single = Position.X + Padding.Left
                 For i = 0 To col - 1
                     x += _ColumnDefinitions(i).ActualSize
                 Next
 
-                Dim y As Single = Padding.Top
+                Dim y As Single = Position.Y + Padding.Top
                 For i = 0 To row - 1
                     y += _RowDefinitions(i).ActualSize
                 Next
@@ -307,8 +320,41 @@ Namespace [Shared].Drawing.UI.Layout
                     height += _RowDefinitions(i).ActualSize
                 Next
 
-                child.Position = New Vector2(x, y)
-                child.Size = New Vector2(width, height)
+                Dim preserveDesiredWidth = attached.WidthExplicit OrElse
+                                           child.HorizontalAlign = HorizontalAlignment.Right OrElse
+                                           child.HorizontalAlign = HorizontalAlignment.Center
+                Dim preserveDesiredHeight = attached.HeightExplicit OrElse
+                                            child.VerticalAlign = VerticalAlignment.Bottom OrElse
+                                            child.VerticalAlign = VerticalAlignment.Center
+                Dim childWidth = If(preserveDesiredWidth,
+                                    attached.DesiredWidth,
+                                    Math.Max(0.0F, width - child.Margin.Left - child.Margin.Right))
+                Dim childHeight = If(preserveDesiredHeight,
+                                     attached.DesiredHeight,
+                                     Math.Max(0.0F, height - child.Margin.Top - child.Margin.Bottom))
+
+                Dim childX As Single
+                Select Case child.HorizontalAlign
+                    Case HorizontalAlignment.Right
+                        childX = x + width - child.Margin.Right - childWidth
+                    Case HorizontalAlignment.Center
+                        childX = x + (width - childWidth + child.Margin.Left - child.Margin.Right) / 2.0F
+                    Case Else
+                        childX = x + child.Margin.Left
+                End Select
+
+                Dim childY As Single
+                Select Case child.VerticalAlign
+                    Case VerticalAlignment.Bottom
+                        childY = y + height - child.Margin.Bottom - childHeight
+                    Case VerticalAlignment.Center
+                        childY = y + (height - childHeight + child.Margin.Top - child.Margin.Bottom) / 2.0F
+                    Case Else
+                        childY = y + child.Margin.Top
+                End Select
+
+                child.Position = New Vector2(childX, childY)
+                child.Size = New Vector2(childWidth, childHeight)
             Next
 
             RaiseEvent LayoutUpdated()
