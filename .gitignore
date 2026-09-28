@@ -361,3 +361,44 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/heirowSnap Legacy Settings/heirowSnap Legacy Settings.vbproj
+/heirowSnap Project Z/heirowSnap Project Z.vbproj
+/heirowSnap Project Z/CaptureCopyPolicy.vb
+/heirowSnap Project Z/CaptureSelection.vb
+/heirowSnap Project Z/ClipboardHistory.vb
+/heirowSnap Project Z/CornerRadiusSmokeGame.vb
+/heirowSnap Project Z/DesktopRecording.vb
+/heirowSnap Project Z/DesktopRegressionChecks.vb
+/heirowSnap Project Z/HeirowSnapApiClient.vb
+/heirowSnap Project Z/HeirowSnapChatGame.vb
+/heirowSnap Project Z/HeirowSnapChatScene.vb
+/heirowSnap Project Z/HeirowSnapChatWindow.vb
+/heirowSnap Project Z/HeirowSnapClipboardGame.vb
+/heirowSnap Project Z/HeirowSnapDesktopWindows.vb
+/heirowSnap Project Z/HeirowSnapGame.vb
+/heirowSnap Project Z/HeirowSnapRealtimeClient.vb
+/heirowSnap Project Z/HeirowSnapScene.vb
+/heirowSnap Project Z/HeirowSnapSettings.vb
+/heirowSnap Project Z/HeirowSnapVoiceCodec.vb
+/heirowSnap Project Z/HotkeyBindings.vb
+/heirowSnap Project Z/MediaPlaybackDiagnostic.vb
+/heirowSnap Project Z/Models.vb
+/heirowSnap Project Z/Program.vb
+/heirowSnap Project Z/ProjectZChatClient.vb
+/heirowSnap Project Z/ProjectZChatWindow.vb
+/heirowSnap Project Z/ProjectZClipboardWindow.vb
+/heirowSnap Project Z/ProjectZToolWindow.vb
+/heirowSnap Project Z/RecordingRegionWindow.vb
+/heirowSnap Project Z/RecordingSession.vb
+/heirowSnap Project Z/RtmpScreenStreaming.vb
+/heirowSnap Project Z/ScrollingRegressionChecks.vb
+/heirowSnap Project Z/ScrollInteractionChecks.vb
+/heirowSnap Project Z/ShaderParityChecks.vb
+/heirowSnap Project Z/ShellFileActions.vb
+/heirowSnap Project Z/TextInputChecks.vb
+/heirowSnap Project Z/UploadContractChecks.vb
+/heirowSnap Project Z/VideoThumbnailCache.vb
+/heirowSnap Project Z/WindowsHostServices.vb
+/THIRD-PARTY-NOTICES.md
+/.codex-artifacts
+/heirowSnap Project Z/Generated/LegacyXaml
