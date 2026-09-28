@@ -7,7 +7,7 @@
     <AssemblyName>Project Z UI Designer</AssemblyName>
     <OptionStrict>On</OptionStrict>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Platforms>AnyCPU;x86</Platforms>
+    <Platforms>AnyCPU;x86;x64</Platforms>
     <UseWPF>true</UseWPF>
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
-    <PackageReference Include="SocketJack" Version="1.3.0" />
+    <PackageReference Include="SocketJack" Version="1.6.7" />
     <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
   </ItemGroup>
 

@@ -12,6 +12,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OptionStrict>On</OptionStrict>
     <StartupObject>Test.Program</StartupObject>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="My Project\**" />
