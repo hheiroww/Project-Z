@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Project Z Linux/.github/upgrades/scenarios/new-dotnet-version_64215c
+/Project Z Linux/.github/copilot-instructions.md
