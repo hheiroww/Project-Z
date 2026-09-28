@@ -428,7 +428,11 @@ Namespace [Shared].Drawing.UI
             If _isCheckingValidation Then Return
             _isCheckingValidation = True
             Try
-                If Not Valid Then Validate()
+                ' Composite controls update internal child geometry from events such
+                ' as RectangleChanged and ValueChanged. Re-run the parent layout so
+                ' those local coordinates are resolved into scene coordinates before
+                ' every draw, even when the parent was previously marked valid.
+                Validate()
                 Children.ForEach(Sub(c) If c IsNot Nothing Then c.ValidationCheck())
             Finally
                 _isCheckingValidation = False
@@ -467,7 +471,7 @@ Namespace [Shared].Drawing.UI
                    (OrientationReserve = DisplayReservation.FloatY)
         End Function
 
-        Private Sub AlignChildren()
+        Protected Overridable Sub AlignChildren()
             ' Order, Size, and Position Children
             Dim CurrentPosition As New Vector2(Padding.Left, Padding.Top)
             Children.ForEach(Sub(c) AlignChild(c, CurrentPosition))

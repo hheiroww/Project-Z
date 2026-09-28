@@ -30,6 +30,7 @@ Whether you're building interactive visualizers, creative tools, or games, Proje
 | **Post-Processing** | Built-in FXAA shader support |
 | **Serialization** | `MetaSerializer` with `ObjectConverter` for element state persistence |
 | **Networking** | Integrated [SocketJack](https://github.com/Jackoffates/SocketJack) for real-time multiplayer and data exchange |
+| **VST3** | x64 granular synthesizer with a DirectX 11 editor, Visual Studio XAML design surface, MIDI input, SocketJack LLM profiles, and drag-and-drop file loading |
 
 ## 🖼️ Screenshots
 
@@ -155,7 +156,8 @@ Project-Z/
 ├── Project Z Application/            # Demo app with playable Tetris
 ├── Project Z Audio/                  # Audio engine (NAudio, FFT, spectrum analysis)
 ├── Project Z Video FX/               # Visual effects demo
-└── Project Z Tower Defense/          # Tower defense game & UI Designer
+├── Project Z Tower Defense/          # Tower defense game & UI Designer
+└── Project Z VST/                    # DirectX 11 VST3 granular synth and XAML-designed editor
 ```
 
 ## 🧩 UI Controls Reference

@@ -180,7 +180,8 @@ Namespace [Shared].Drawing.Designer
                             Dim gridCol = GetAttributeInteger(childXml, "Grid.Column", 0)
                             Dim gridRowSpan = GetAttributeInteger(childXml, "Grid.RowSpan", 1)
                             Dim gridColSpan = GetAttributeInteger(childXml, "Grid.ColumnSpan", 1)
-                            grid.AddChild(childElement, gridRow, gridCol, gridRowSpan, gridColSpan)
+                            grid.AddChild(childElement, gridRow, gridCol, gridRowSpan, gridColSpan,
+                                          childXml.HasAttribute("Width"), childXml.HasAttribute("Height"))
                         Else
                             element.Children.Add(childElement)
                         End If

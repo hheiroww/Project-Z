@@ -464,19 +464,31 @@ Namespace [Shared].Drawing
         End Sub
 
         ''' <summary>
-        ''' Adds a root element to the scene. Children are NOT added to the global list -
-        ''' they are rendered hierarchically within their parent's draw call.
+        ''' Adds an element and its existing descendants to the scene draw list.
+        ''' ChildCollection only raises ChildAdded for children appended after their
+        ''' parent is live, so parsed XAML trees must be walked here as well.
         ''' </summary>
         Public Sub AddElement(Element As SceneElement)
-            ' Only add the element itself, not its children
-            ' Children are rendered as part of their parent's draw cycle
-            AddQueue.Add(Element)
+            QueueElementTree(Element)
+        End Sub
+
+        Private Sub QueueElementTree(Element As SceneElement)
+            If Element Is Nothing Then Return
+            If Not AddQueue.Contains(Element) AndAlso Not ContainsElement(Element) Then
+                AddQueue.Add(Element)
+            End If
+            For Each child As SceneElement In Element.Children
+                QueueElementTree(child)
+            Next
         End Sub
 
         ''' <summary>
         ''' Removes a root element from the scene.
         ''' </summary>
         Public Sub RemoveElement(Element As SceneElement)
+            For Each child As SceneElement In Element.Children
+                RemoveElement(child)
+            Next
             ' Use GUID_INDEX to find the actual z-index in case Element.zIndex is stale
             If GUID_INDEX.ContainsKey(Element.GUID) Then
                 Dim actualZIndex As Integer = GUID_INDEX(Element.GUID)

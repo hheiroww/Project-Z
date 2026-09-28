@@ -19,7 +19,7 @@
     <None Remove="My Project\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
+    <PackageReference Include="nkast.Kni.Platform.WinForms.DX11" Version="4.2.9001" />
     <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
   </ItemGroup>
   <ItemGroup>
