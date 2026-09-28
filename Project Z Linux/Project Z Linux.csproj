@@ -1,0 +1,98 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\FXAA.mgfx">
+      <LogicalName>ProjectZ.Resources.FXAA.mgfx</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+      <PropertyGroup>
+     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+   </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\Downloads\256x256 UI framework(1).png" Link="256x256 UI framework%281%29.png">
+      <PackagePath>\</PackagePath>
+      <Pack>True</Pack>
+    </None>
+    <None Include=".github\copilot-instructions.md" />
+    <None Include=".github\upgrades\scenarios\new-dotnet-version_64215c\plan.md" />
+    <None Include="Shared\Animations\AnimationBase.cs" />
+    <None Include="Shared\Animations\ColorAnimation.cs" />
+    <None Include="Shared\Animations\DoubleAnimation.cs" />
+    <None Include="Shared\Animations\Easing\CircleEase.cs" />
+    <None Include="Shared\Animations\Easing\EaseFunction.cs" />
+    <None Include="Shared\Animations\Easing\EaseType.cs" />
+    <None Include="Shared\Animations\Easing\PowerEase.cs" />
+    <None Include="Shared\Animations\Easing\SineEase.cs" />
+    <None Include="Shared\Animations\Properties\ElementProperty.cs" />
+    <None Include="Shared\Animations\Timeline.cs" />
+    <None Include="Shared\Content\ContentContainer.cs" />
+    <None Include="Shared\Content\Fonts.cs" />
+    <None Include="Shared\Content\SpriteCollection.cs" />
+    <None Include="Shared\Content\Textures.cs" />
+    <None Include="Shared\Drawing\Designer\SceneXamlCodeGenerator.cs" />
+    <None Include="Shared\Drawing\Designer\SceneXamlParser.cs" />
+    <None Include="Shared\Drawing\Scene.cs" />
+    <None Include="Shared\Drawing\SceneManager.cs" />
+    <None Include="Shared\Drawing\Scenes\DefaultScene.cs" />
+    <None Include="Shared\Drawing\Thickness.cs" />
+    <None Include="Shared\Drawing\UI\Advanced\PolygonElement.cs" />
+    <None Include="Shared\Drawing\UI\Advanced\PolygonRenderProperties.cs" />
+    <None Include="Shared\Drawing\UI\Advanced\PrototypeElement.cs" />
+    <None Include="Shared\Drawing\UI\Advanced\SceneProjectionHost.cs" />
+    <None Include="Shared\Drawing\UI\Advanced\SpriteElement.cs" />
+    <None Include="Shared\Drawing\UI\ChildCollection.cs" />
+    <None Include="Shared\Drawing\UI\Input\AdvancedControls.cs" />
+    <None Include="Shared\Drawing\UI\Input\Button.cs" />
+    <None Include="Shared\Drawing\UI\Input\CheckBox.cs" />
+    <None Include="Shared\Drawing\UI\Input\ProgressBar.cs" />
+    <None Include="Shared\Drawing\UI\Input\RadioButton.cs" />
+    <None Include="Shared\Drawing\UI\Input\Textbox.cs" />
+    <None Include="Shared\Drawing\UI\Input\Trackbar.cs" />
+    <None Include="Shared\Drawing\UI\Layout\Grid.cs" />
+    <None Include="Shared\Drawing\UI\Layout\StackPanel.cs" />
+    <None Include="Shared\Drawing\UI\Primitives\CircleElement.cs" />
+    <None Include="Shared\Drawing\UI\Primitives\PrimitiveBatch.cs" />
+    <None Include="Shared\Drawing\UI\Primitives\RectangleElement.cs" />
+    <None Include="Shared\Drawing\UI\Primitives\TextElement.cs" />
+    <None Include="Shared\Drawing\UI\SceneElement.cs" />
+    <None Include="Shared\Extensions\ColorExtension.cs" />
+    <None Include="Shared\Extensions\GenericExtension.cs" />
+    <None Include="Shared\Extensions\PointExtension.cs" />
+    <None Include="Shared\Extensions\StringExtension.cs" />
+    <None Include="Shared\Extensions\TriangleExtension.cs" />
+    <None Include="Shared\Extensions\VertexExtension.cs" />
+    <None Include="Shared\Serialization\DictionaryProxy.cs" />
+    <None Include="Shared\Serialization\MetaData.cs" />
+    <None Include="Shared\Serialization\MetaSerializer.cs" />
+    <None Include="Shared\Serialization\ObjectConverter.cs" />
+    <None Include="Shared\XNA\SpriteBatchPropertySet.cs" />
+    <None Include="Shared\XNA\SpriteBatchWrapper.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <CustomToolNamespace>My.Resources</CustomToolNamespace>
+      <LastGenOutput>Resources.Designer.vb</LastGenOutput>
+      <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
+    <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
+    <PackageReference Include="SocketJack" Version="1.6.7" />
+    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Shared\Drawing\Designer\DesignTime\" />
+  </ItemGroup>
+
+</Project>

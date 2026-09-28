@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Test</RootNamespace>
+    <AssemblyName>Project Z Test</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OptionStrict>On</OptionStrict>
+    <StartupObject>Test.Program</StartupObject>
+  </PropertyGroup>
+  <PropertyGroup>
+     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+   </PropertyGroup>
+   <PropertyGroup>
+     <SelfContained>true</SelfContained>
+     <OutputType>WinExe</OutputType>
+   </PropertyGroup>
+  <ItemGroup>
+    <None Remove="My Project\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
+    <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
+    <PackageReference Include="SocketJack" Version="1.6.7" />
+    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Scenes\MainScene.vb" />
+    <Compile Include="zWindow.vb" />
+    <Compile Include="Program.vb" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Icon.ico" />
+    <None Include="app.config" />
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_10.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_12.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_14.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_18.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_24.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_36.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_48.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Content\Fonts\Segoe UI\SegoeUI_72.xnb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="My Project\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Project Z Linux\Project Z Linux.csproj" />
+  </ItemGroup>
+</Project>
