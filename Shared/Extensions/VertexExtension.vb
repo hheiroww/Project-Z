@@ -16,12 +16,12 @@ Namespace [Shared].Extensions
         End Function
 
         <Extension()>
-        Public Function ToXNAVector2(v As TriangleNet.Geometry.Vertex) As Vector2
+        Public Function ToXNAVector2(v As Global.ProjectZ.Shared.Drawing.UI.Advanced.PolygonVertex) As Vector2
             Return New Vector2(CSng(v.X), CSng(v.Y))
         End Function
 
         <Extension()>
-        Public Function ToXNAVectorArray(t As TriangleNet.Topology.Triangle) As Vector2()
+        Public Function ToXNAVectorArray(t As Global.ProjectZ.Shared.Drawing.UI.Advanced.PolygonTriangle) As Vector2()
             Dim P0 As Vector2 = t.GetVertex(0).ToXNAVector2
             Dim P1 As Vector2 = t.GetVertex(1).ToXNAVector2
             Dim P2 As Vector2 = t.GetVertex(2).ToXNAVector2
@@ -29,8 +29,8 @@ Namespace [Shared].Extensions
         End Function
 
         <Extension()>
-        Public Function ToTriangleNetVertex(t As Vector2) As TriangleNet.Geometry.Vertex
-            Return New TriangleNet.Geometry.Vertex(t.X, t.Y)
+        Public Function ToPolygonVertex(t As Vector2) As Global.ProjectZ.Shared.Drawing.UI.Advanced.PolygonVertex
+            Return New Global.ProjectZ.Shared.Drawing.UI.Advanced.PolygonVertex(t.X, t.Y)
         End Function
 
     End Module

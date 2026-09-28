@@ -1,10 +1,12 @@
 ﻿Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
+Imports Microsoft.Xna.Framework.Graphics
 Imports Microsoft.Xna.Framework.Input
 Imports ProjectZ.Shared.Content
 
 #If WINDOWS Then
 Imports ProjectZ.Windows.Input
+Imports System.Runtime.InteropServices
 #End If
 
 Namespace [Shared].Drawing
@@ -21,10 +23,10 @@ Namespace [Shared].Drawing
             End Get
             Set(value As Boolean)
                 _UseHardwareInput = value
-                If _UseHardwareInput Then
-                    MouseHook = New Windows.Input.MouseHook()
-                    MouseHook.Install()
-                ElseIf MouseHook IsNot Nothing Then
+                ' Hardware mode polls the foreground HWND. A global WH_MOUSE_LL
+                ' hook stalls the desktop when Project-Z is inactive/minimized
+                ' because it receives every system mouse packet.
+                If MouseHook IsNot Nothing Then
                     MouseHook.Uninstall()
                     MouseHook = Nothing
                 End If
@@ -48,6 +50,35 @@ Namespace [Shared].Drawing
         Private Property Scenes As New Dictionary(Of String, Scene)
         Public Property ActiveScene As Scene
         Public Property Sender As Game
+        ''' <summary>
+        ''' Uses input injected by an embedding host's real child HWND instead
+        ''' of MonoGame's process-global mouse and keyboard state.
+        ''' </summary>
+        Public Property UseExternalInput As Boolean
+
+        ''' <summary>
+        ''' Logical render size used by an off-screen host. When unset, external
+        ''' input continues to map to the Game back buffer as before.
+        ''' </summary>
+        Public Property ExternalViewportSize As Point
+
+        ''' <summary>Keeps the DX backbuffer/viewport matched to the native client area.</summary>
+        Public Property AutoResizeViewport As Boolean = True
+        Public Property MinimumViewportSize As New Point(320, 200)
+
+        Public ReadOnly Property ViewportScale As Vector2
+            Get
+                Dim bounds = Sender.Window.ClientBounds
+                If bounds.Width <= 0 OrElse bounds.Height <= 0 Then Return Vector2.One
+                Return New Vector2(
+                    Sender.GraphicsDevice.PresentationParameters.BackBufferWidth / CSng(bounds.Width),
+                    Sender.GraphicsDevice.PresentationParameters.BackBufferHeight / CSng(bounds.Height))
+            End Get
+        End Property
+
+        Public Event ViewportResized(oldSize As Point, newSize As Point)
+        Private graphicsManager As GraphicsDeviceManager
+        Private resizeInProgress As Boolean
 
 #End Region
 
@@ -62,6 +93,7 @@ Namespace [Shared].Drawing
 
         Private DoDuplicate As Boolean = False
         Private DuplicateKey As Keys
+        Private ReadOnly ExternalKeys As New HashSet(Of Keys)()
 
         Private Sub DetectKeyPress(gameTime As GameTime)
             Dim KeyboardState As KeyboardState = Keyboard.GetState
@@ -447,11 +479,52 @@ Namespace [Shared].Drawing
         Private StartPoint As Point = Nothing
         Private MouseDown As Boolean = False
         Private DragThreshold As Integer = 2
+        Private ExternalLastPoint As Point = New Point(-1, -1)
+        Private ExternalLeftDown As Boolean
+        Private ExternalRightDown As Boolean
+        Private ExternalScrollWheel As Integer
 
 #If WINDOWS Then
 
         Private WithEvents MouseHook As MouseHook
         Private LastPoint As Point = Nothing
+        Private HardwarePointerInside As Boolean
+        Private HardwareRightDown As Boolean
+        Private HardwareScrollWheel As Integer
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativePoint
+            Public X As Integer
+            Public Y As Integer
+        End Structure
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativeRect
+            Public Left As Integer
+            Public Top As Integer
+            Public Right As Integer
+            Public Bottom As Integer
+        End Structure
+
+        <DllImport("user32.dll", SetLastError:=True)>
+        Private Shared Function ScreenToClient(hwnd As IntPtr, ByRef point As NativePoint) As Boolean
+        End Function
+
+        <DllImport("user32.dll", SetLastError:=True)>
+        Private Shared Function GetClientRect(hwnd As IntPtr, ByRef rect As NativeRect) As Boolean
+        End Function
+
+        <DllImport("user32.dll", SetLastError:=True)>
+        Private Shared Function GetCursorPos(ByRef point As NativePoint) As Boolean
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function GetForegroundWindow() As IntPtr
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function IsIconic(hwnd As IntPtr) As Boolean
+        End Function
 
         ' Windows-specific: Get actual titlebar and border sizes from System.Windows.Forms
         Private ReadOnly TitlebarHeight As Integer = System.Windows.Forms.SystemInformation.CaptionHeight +
@@ -468,26 +541,52 @@ Namespace [Shared].Drawing
 #End If
 
 #If WINDOWS Then
-        Private Function ToRelativePoint(ms As MouseHook.MSLLHOOKSTRUCT) As Point
-            Dim clientPoint As Point
-            If Sender.Window.IsBorderless Then
-                clientPoint = New Point(ms.pt.x, ms.pt.y).Subtract(Sender.Window.ClientBounds.Location)
-            Else
-                clientPoint = New Point(ms.pt.x - BorderWidth, ms.pt.y - TitlebarHeight).Subtract(Sender.Window.ClientBounds.Location)
+        Private Function ToRelativePoint(ms As MouseHook.MSLLHOOKSTRUCT, ByRef insideClient As Boolean) As Point
+            ' A low-level mouse hook reports physical screen pixels.  Converting
+            ' through the native HWND is DPI-correct across moved/resized windows
+            ' and mixed-scale monitors; GameWindow.ClientBounds can be logical.
+            Dim native As New NativePoint With {.X = ms.pt.x, .Y = ms.pt.y}
+            Dim rect As NativeRect
+            Dim handle = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+            If handle <> IntPtr.Zero AndAlso ScreenToClient(handle, native) AndAlso GetClientRect(handle, rect) Then
+                Dim width = Math.Max(0, rect.Right - rect.Left)
+                Dim height = Math.Max(0, rect.Bottom - rect.Top)
+                insideClient = native.X >= 0 AndAlso native.Y >= 0 AndAlso native.X < width AndAlso native.Y < height
+                Return ClientToViewport(New Point(native.X, native.Y), width, height)
             End If
-            ' Scale to back buffer coordinates
-            Return ScaleMousePosition(clientPoint)
+
+            Dim fallback = New Point(ms.pt.x, ms.pt.y).Subtract(Sender.Window.ClientBounds.Location)
+            insideClient = fallback.X >= 0 AndAlso fallback.Y >= 0 AndAlso
+                           fallback.X < Sender.Window.ClientBounds.Width AndAlso fallback.Y < Sender.Window.ClientBounds.Height
+            Return ClientToViewport(fallback)
         End Function
 
+        Private Sub SetHardwareMouseState(point As Point)
+            ActiveScene.SetMouseState(New MouseState(
+                point.X, point.Y, HardwareScrollWheel,
+                If(MouseDown, ButtonState.Pressed, ButtonState.Released),
+                ButtonState.Released,
+                If(HardwareRightDown, ButtonState.Pressed, ButtonState.Released),
+                ButtonState.Released, ButtonState.Released))
+        End Sub
+
         Private Sub MouseHook_LeftButtonDown(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.LeftButtonDown
-            StartPoint = ToRelativePoint(mouseStruct)
+            Dim inside As Boolean
+            Dim point = ToRelativePoint(mouseStruct, inside)
+            If Not inside Then Return
+            StartPoint = point
             MouseDown = True
+            HardwarePointerInside = True
+            SetHardwareMouseState(point)
             ActiveScene.MouseLeftDown(StartPoint)
         End Sub
 
         Private Sub MouseHook_LeftButtonUp(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.LeftButtonUp
-            Dim p As Point = ToRelativePoint(mouseStruct)
+            If Not MouseDown Then Return
+            Dim inside As Boolean
+            Dim p As Point = ToRelativePoint(mouseStruct, inside)
             MouseDown = False
+            SetHardwareMouseState(p)
             ActiveScene.MouseLeftUp(p)
             Dim Difference As Point = GetDifference(StartPoint, p)
             If (Difference.X > DragThreshold) Or (Difference.Y > DragThreshold) Then
@@ -500,7 +599,16 @@ Namespace [Shared].Drawing
         End Sub
 
         Private Sub MouseHook_MouseMove(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.MouseMove
-            Dim p As Point = ToRelativePoint(mouseStruct)
+            Dim inside As Boolean
+            Dim p As Point = ToRelativePoint(mouseStruct, inside)
+            If Not inside AndAlso Not MouseDown Then
+                If HardwarePointerInside Then ActiveScene.CancelPointerInput()
+                HardwarePointerInside = False
+                LastPoint = p
+                Return
+            End If
+            HardwarePointerInside = inside
+            SetHardwareMouseState(p)
             If p <> LastPoint Then
                 If MouseDown Then
                     Dim Difference As Point = GetDifference(StartPoint, p)
@@ -513,22 +621,78 @@ Namespace [Shared].Drawing
                     isDragging = False
                 End If
                 ActiveScene.MouseMove(p, LastPoint)
+                LastPoint = p
             End If
         End Sub
 
         Private Sub MouseHook_RightButtonDown(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.RightButtonDown
-            ActiveScene.MouseRightClick(ToRelativePoint(mouseStruct))
+            Dim inside As Boolean
+            Dim point = ToRelativePoint(mouseStruct, inside)
+            If Not inside Then Return
+            HardwareRightDown = True
+            SetHardwareMouseState(point)
+            ActiveScene.MouseRightClick(point)
+        End Sub
+
+        Private Sub MouseHook_RightButtonUp(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.RightButtonUp
+            HardwareRightDown = False
+            Dim inside As Boolean
+            Dim point = ToRelativePoint(mouseStruct, inside)
+            If inside Then SetHardwareMouseState(point)
+        End Sub
+
+        Private Sub MouseHook_MouseWheel(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.MouseWheel
+            Dim inside As Boolean
+            Dim point = ToRelativePoint(mouseStruct, inside)
+            If Not inside Then Return
+            Dim bytes = BitConverter.GetBytes(mouseStruct.mouseData)
+            Dim delta = CInt(BitConverter.ToInt16(bytes, 2))
+            HardwareScrollWheel += delta
+            SetHardwareMouseState(point)
+            ActiveScene.MouseWheel(delta, point)
         End Sub
 
 #End If
 
-        Private Sub DetectMouseEvents(gameTime As GameTime)
+        Private Function TryGetNativeViewportPoint(ByRef point As Point) As Boolean
+#If WINDOWS Then
+            Dim handle = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+            If handle = IntPtr.Zero OrElse GetForegroundWindow() <> handle OrElse IsIconic(handle) Then Return False
+            Dim native As NativePoint
+            Dim rect As NativeRect
+            If Not GetCursorPos(native) OrElse Not ScreenToClient(handle, native) OrElse Not GetClientRect(handle, rect) Then Return False
+            Dim width = Math.Max(0, rect.Right - rect.Left)
+            Dim height = Math.Max(0, rect.Bottom - rect.Top)
+            If native.X < 0 OrElse native.Y < 0 OrElse native.X >= width OrElse native.Y >= height Then Return False
+            point = ClientToViewport(New Point(native.X, native.Y), width, height)
+            Return True
+#Else
+            Return False
+#End If
+        End Function
+
+        Private Sub DetectMouseEvents(gameTime As GameTime, Optional nativePosition As Boolean = False)
             Dim State As MouseState = Mouse.GetState()
-            Dim scaledPosition As Point = ScaleMousePosition(State.Position)
+            Dim scaledPosition As Point
+            If nativePosition Then
+                If Not TryGetNativeViewportPoint(scaledPosition) Then
+                    If MouseDown OrElse isDragging Then ActiveScene.CancelPointerInput()
+                    MouseDown = False
+                    isDragging = False
+                    LastState = State
+                    Return
+                End If
+            Else
+                scaledPosition = ClientToViewport(State.Position)
+            End If
             Dim scaledState As New MouseState(scaledPosition.X, scaledPosition.Y, State.ScrollWheelValue,
                                               State.LeftButton, State.MiddleButton, State.RightButton,
                                               State.XButton1, State.XButton2)
             ActiveScene.SetMouseState(scaledState)
+
+            If State.ScrollWheelValue <> LastState.ScrollWheelValue Then
+                ActiveScene.MouseWheel(State.ScrollWheelValue - LastState.ScrollWheelValue, scaledPosition)
+            End If
 
             'Left Button
             If (LastState.LeftButton = ButtonState.Pressed) And (State.LeftButton = ButtonState.Released) Then
@@ -549,7 +713,7 @@ Namespace [Shared].Drawing
             End If
 
             'Right Button
-            If LastState.RightButton = ButtonState.Pressed Then
+            If LastState.RightButton = ButtonState.Pressed AndAlso State.RightButton = ButtonState.Released Then
                 ' Mouse was clicked
                 ActiveScene.MouseRightClick(scaledPosition)
             End If
@@ -571,29 +735,180 @@ Namespace [Shared].Drawing
             LastState = scaledState
         End Sub
 
-        Private Function ScaleMousePosition(position As Point) As Point
-            ' Get the actual rendering target size (back buffer)
-            Dim backBufferWidth As Integer = Sender.GraphicsDevice.PresentationParameters.BackBufferWidth
-            Dim backBufferHeight As Integer = Sender.GraphicsDevice.PresentationParameters.BackBufferHeight
-
+        Public Function ClientToViewport(position As Point) As Point
             ' Get the window's client area size
             Dim clientBounds As Rectangle = Sender.Window.ClientBounds
 
+            Return ClientToViewport(position, clientBounds.Width, clientBounds.Height)
+        End Function
+
+        Private Function ClientToViewport(position As Point, clientWidth As Integer, clientHeight As Integer) As Point
+            Dim backBufferWidth As Integer = Sender.GraphicsDevice.PresentationParameters.BackBufferWidth
+            Dim backBufferHeight As Integer = Sender.GraphicsDevice.PresentationParameters.BackBufferHeight
             ' Avoid division by zero
-            If clientBounds.Width <= 0 OrElse clientBounds.Height <= 0 Then Return position
+            If clientWidth <= 0 OrElse clientHeight <= 0 Then Return position
 
             ' If back buffer matches client bounds, no scaling needed
-            If backBufferWidth = clientBounds.Width AndAlso backBufferHeight = clientBounds.Height Then
+            If backBufferWidth = clientWidth AndAlso backBufferHeight = clientHeight Then
                 Return position
             End If
 
             ' Mouse position is in window client coordinates
             ' We need to scale it to match the back buffer coordinates
-            Dim scaleX As Single = CSng(backBufferWidth) / CSng(clientBounds.Width)
-            Dim scaleY As Single = CSng(backBufferHeight) / CSng(clientBounds.Height)
+            Dim scaleX As Single = CSng(backBufferWidth) / CSng(clientWidth)
+            Dim scaleY As Single = CSng(backBufferHeight) / CSng(clientHeight)
 
             Return New Point(CInt(position.X * scaleX), CInt(position.Y * scaleY))
         End Function
+
+        ''' <summary>Transforms Project-Z viewport coordinates back to native client pixels.</summary>
+        Public Function ViewportToClient(position As Point) As Point
+            Dim backBufferWidth = Sender.GraphicsDevice.PresentationParameters.BackBufferWidth
+            Dim backBufferHeight = Sender.GraphicsDevice.PresentationParameters.BackBufferHeight
+            Dim bounds = Sender.Window.ClientBounds
+            If backBufferWidth <= 0 OrElse backBufferHeight <= 0 Then Return position
+            Return New Point(
+                CInt(position.X * (bounds.Width / CSng(backBufferWidth))),
+                CInt(position.Y * (bounds.Height / CSng(backBufferHeight))))
+        End Function
+
+        Private Function ScaleExternalMousePosition(position As Point, clientWidth As Integer, clientHeight As Integer) As Point
+            If clientWidth <= 0 OrElse clientHeight <= 0 Then Return New Point(-1, -1)
+            Dim backBufferWidth As Integer = If(ExternalViewportSize.X > 0, ExternalViewportSize.X,
+                                                Sender.GraphicsDevice.PresentationParameters.BackBufferWidth)
+            Dim backBufferHeight As Integer = If(ExternalViewportSize.Y > 0, ExternalViewportSize.Y,
+                                                 Sender.GraphicsDevice.PresentationParameters.BackBufferHeight)
+            Return New Point(
+                CInt(position.X * (CSng(backBufferWidth) / clientWidth)),
+                CInt(position.Y * (CSng(backBufferHeight) / clientHeight)))
+        End Function
+
+        Private Sub SetExternalMouseState(position As Point)
+            Dim state As New MouseState(
+                position.X, position.Y, ExternalScrollWheel,
+                If(ExternalLeftDown, ButtonState.Pressed, ButtonState.Released),
+                ButtonState.Released,
+                If(ExternalRightDown, ButtonState.Pressed, ButtonState.Released),
+                ButtonState.Released, ButtonState.Released)
+            ActiveScene.SetMouseState(state)
+        End Sub
+
+        Public Sub InjectMouseMove(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing Then Return
+            Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            SetExternalMouseState(point)
+            If point = ExternalLastPoint Then Return
+            If ExternalLeftDown Then
+                Dim difference As Point = GetDifference(StartPoint, point)
+                If isDragging OrElse difference.X > DragThreshold OrElse difference.Y > DragThreshold Then
+                    isDragging = True
+                    ActiveScene.MouseDrag(point, StartPoint)
+                End If
+            ElseIf isDragging Then
+                isDragging = False
+            End If
+            ActiveScene.MouseMove(point, ExternalLastPoint)
+            ExternalLastPoint = point
+        End Sub
+
+        Public Sub InjectMouseLeftDown(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing OrElse ExternalLeftDown Then Return
+            Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            ExternalLeftDown = True
+            MouseDown = True
+            StartPoint = point
+            ExternalLastPoint = point
+            SetExternalMouseState(point)
+            ActiveScene.MouseLeftDown(point)
+        End Sub
+
+        Public Sub InjectMouseLeftUp(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing OrElse Not ExternalLeftDown Then Return
+            Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            ExternalLeftDown = False
+            MouseDown = False
+            SetExternalMouseState(point)
+            ActiveScene.MouseLeftUp(point)
+            Dim difference As Point = GetDifference(StartPoint, point)
+            If isDragging OrElse difference.X > DragThreshold OrElse difference.Y > DragThreshold Then
+                ActiveScene.MouseDragDrop(point, StartPoint)
+            Else
+                ActiveScene.MouseLeftClick(point)
+            End If
+            isDragging = False
+            ExternalLastPoint = point
+        End Sub
+
+        Public Sub InjectMouseWheel(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer, delta As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing Then Return
+            Dim point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            ExternalScrollWheel += delta
+            SetExternalMouseState(point)
+            ActiveScene.MouseWheel(delta, point)
+            ExternalLastPoint = point
+        End Sub
+
+        Public Sub CancelInjectedPointer()
+            If ActiveScene Is Nothing Then Return
+            ExternalLeftDown = False
+            ExternalRightDown = False
+            MouseDown = False
+            isDragging = False
+            ExternalLastPoint = New Point(-1, -1)
+            ActiveScene.CancelPointerInput()
+        End Sub
+
+        Public Sub InjectMouseRightDown(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing OrElse ExternalRightDown Then Return
+            Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            ExternalRightDown = True
+            SetExternalMouseState(point)
+            ActiveScene.MouseRightClick(point)
+        End Sub
+
+        Public Sub InjectMouseRightUp(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing Then Return
+            ExternalRightDown = False
+            SetExternalMouseState(ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight))
+        End Sub
+
+        Public Sub InjectMouseLeave()
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing OrElse ExternalLeftDown Then Return
+            Dim outside As New Point(-1, -1)
+            SetExternalMouseState(outside)
+            ActiveScene.MouseMove(outside, ExternalLastPoint)
+            ExternalLastPoint = outside
+        End Sub
+
+        Public Sub CancelExternalInput()
+            ExternalLeftDown = False
+            ExternalRightDown = False
+            MouseDown = False
+            isDragging = False
+            StartPoint = Point.Zero
+            ExternalLastPoint = New Point(-1, -1)
+            ExternalKeys.Clear()
+            If ActiveScene IsNot Nothing Then
+                SetExternalMouseState(ExternalLastPoint)
+                ActiveScene.CancelPointerInput()
+            End If
+        End Sub
+
+        Public Sub InjectKeyDown(key As Keys, Optional isRepeat As Boolean = False)
+            If Not UseExternalInput OrElse ActiveScene Is Nothing Then Return
+            If ExternalKeys.Add(key) Then
+                ActiveScene.KeyDown(key, New KeyboardState(ExternalKeys.ToArray()))
+            ElseIf isRepeat Then
+                ProcessKeyPress(key, New KeyboardState(ExternalKeys.ToArray()))
+            End If
+        End Sub
+
+        Public Sub InjectKeyUp(key As Keys)
+            If Not UseExternalInput OrElse ActiveScene Is Nothing OrElse Not ExternalKeys.Remove(key) Then Return
+            Dim state As New KeyboardState(ExternalKeys.ToArray())
+            ActiveScene.KeyUp(key, state)
+            ProcessKeyPress(key, state)
+        End Sub
 
         Private Function GetDifference(StartPoint As Point, EndPoint As Point) As Point
             Dim DifferenceX As Integer = 0, DifferenceY As Integer = 0
@@ -708,9 +1023,11 @@ Namespace [Shared].Drawing
             End If
 
             If ActiveScene IsNot Nothing Then
-                DetectKeyPress(gameTime)
+                ' Input handlers can begin storyboards before Scene.Tick runs.
+                ActiveScene.gameTime = gameTime
+                If Not UseExternalInput Then DetectKeyPress(gameTime)
 #If WINDOWS Then
-                If Not UseHardwareInput Then
+                If Not UseHardwareInput AndAlso Not UseExternalInput Then
                     DetectMouseEvents(gameTime)
                 End If
 #ElseIf LINUX Then
@@ -719,6 +1036,7 @@ Namespace [Shared].Drawing
                 ActiveScene.Tick(gameTime)
             End If
         End Sub
+
 
         Public Sub AddScene(Name As String, Scene As Scene)
             If Name.Trim = String.Empty Then
@@ -741,13 +1059,53 @@ Namespace [Shared].Drawing
         Public Sub New(sender As Game, LimitFPS As Integer)
             Me.Sender = sender
             Me.LimitFPS = LimitFPS
+            InitializeViewportResize()
         End Sub
 
         Public Sub New(sender As Game)
             Me.Sender = sender
+            InitializeViewportResize()
             Dim DefaultScene As New DefaultScene(Me)
             Me.AddScene("Default", DefaultScene)
             Me.ActiveScene = DefaultScene
+        End Sub
+
+        Private Sub InitializeViewportResize()
+            graphicsManager = TryCast(Sender.Services.GetService(GetType(IGraphicsDeviceManager)), GraphicsDeviceManager)
+            AddHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
+        End Sub
+
+        Private Sub HandleClientSizeChanged(senderObject As Object, e As EventArgs)
+            If Not AutoResizeViewport OrElse resizeInProgress OrElse graphicsManager Is Nothing OrElse
+               Sender.GraphicsDevice Is Nothing Then Return
+
+            Dim bounds = Sender.Window.ClientBounds
+#If WINDOWS Then
+            Dim nativeBounds As NativeRect
+            Dim nativeHandle = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+            If nativeHandle <> IntPtr.Zero AndAlso GetClientRect(nativeHandle, nativeBounds) Then
+                bounds = New Rectangle(0, 0, nativeBounds.Right - nativeBounds.Left, nativeBounds.Bottom - nativeBounds.Top)
+            End If
+#End If
+            If bounds.Width < MinimumViewportSize.X OrElse bounds.Height < MinimumViewportSize.Y Then Return
+            Dim presentation = Sender.GraphicsDevice.PresentationParameters
+            If presentation.BackBufferWidth = bounds.Width AndAlso presentation.BackBufferHeight = bounds.Height Then Return
+
+            Dim oldSize As New Point(presentation.BackBufferWidth, presentation.BackBufferHeight)
+            Dim newSize As New Point(bounds.Width, bounds.Height)
+            resizeInProgress = True
+            Try
+                graphicsManager.PreferredBackBufferWidth = newSize.X
+                graphicsManager.PreferredBackBufferHeight = newSize.Y
+                graphicsManager.ApplyChanges()
+            Finally
+                resizeInProgress = False
+            End Try
+
+            For Each scene In Scenes.Values
+                scene.ResizeViewport(oldSize, newSize)
+            Next
+            RaiseEvent ViewportResized(oldSize, newSize)
         End Sub
 
         Public Class DebugParameters
@@ -763,6 +1121,7 @@ Namespace [Shared].Drawing
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
                 If disposing Then
+                    RemoveHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
                     ' Dispose all scenes
                     For Each scene In Scenes.Values
                         scene?.Dispose()

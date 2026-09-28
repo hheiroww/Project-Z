@@ -124,7 +124,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Public Sub Remove(item As SceneElement)
-            ChildrenList.Remove(item)
+            If Not ChildrenList.Remove(item) Then Return
             item.Parent = Nothing
             RaiseEvent ChildRemoved(item)
         End Sub
@@ -138,17 +138,19 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Public Sub RemoveAt(Index As Integer)
-            ChildrenList.Item(Index).Parent = Nothing
+            Dim removed = ChildrenList.Item(Index)
+            removed.Parent = Nothing
             ChildrenList.RemoveAt(Index)
-            RaiseEvent ChildRemoved(ChildrenList.Item(Index))
+            RaiseEvent ChildRemoved(removed)
         End Sub
 
         Public Sub RemoveRange(index As Integer, count As Integer)
-            For i As Integer = index To count
-                ChildrenList.Item(i).Parent = Nothing
-                RaiseEvent ChildRemoved(ChildrenList.Item(i))
-            Next
+            Dim removed = ChildrenList.GetRange(index, count)
             ChildrenList.RemoveRange(index, count)
+            For Each child As SceneElement In removed
+                child.Parent = Nothing
+                RaiseEvent ChildRemoved(child)
+            Next
         End Sub
 
         Public Function ToArray() As SceneElement()

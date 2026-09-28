@@ -4,6 +4,7 @@ Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports ProjectZ.Shared.Animations
 Imports Microsoft.Xna.Framework.Graphics
 Imports Microsoft.Xna.Framework
+Imports LibTessDotNet
 
 Namespace [Shared].Drawing.UI.Advanced
 
@@ -32,13 +33,13 @@ Namespace [Shared].Drawing.UI.Advanced
             End Set
         End Property
 
-        Public ReadOnly Property MeshData As TriangleNet.Mesh
+        Public ReadOnly Property MeshData As PolygonMesh
             Get
                 Return _MeshData
             End Get
         End Property
-        Private _MeshData As TriangleNet.Mesh
-        Private _FallbackMeshData As TriangleNet.Mesh
+        Private _MeshData As PolygonMesh
+        Private _FallbackMeshData As PolygonMesh
 
         Friend Property Texture As Texture2D
             Get
@@ -67,7 +68,7 @@ Namespace [Shared].Drawing.UI.Advanced
 
 #Region "Events"
 
-        Public Event Trangulated(newMesh As TriangleNet.Mesh)
+        Public Event Trangulated(newMesh As PolygonMesh)
 
 #End Region
 
@@ -236,38 +237,49 @@ Namespace [Shared].Drawing.UI.Advanced
                 points.Add(New Vector2(v.X, v.Y))
             Next
 
-            ' Convert _segments to List(Of Tuple(Of Integer, Integer))
-            ' Each segment is expected to be a pair of vertex indices: {fromIndex, toIndex}.
-            Dim segments As New List(Of Tuple(Of Integer, Integer))
-            For Each s As Integer() In _segments
-                If s Is Nothing OrElse s.Length < 2 Then
-                    Continue For
-                End If
-
-                Dim a As Integer = s(0)
-                Dim b As Integer = s(1)
-                If a < 0 OrElse b < 0 OrElse a >= points.Count OrElse b >= points.Count Then
-                    Continue For
-                End If
-
-                segments.Add(Tuple.Create(a, b))
-            Next
-            ' Triangulate using TriangleNet
-            Dim polygon As New TriangleNet.Geometry.Polygon()
-            Dim vertices As New List(Of TriangleNet.Geometry.Vertex)(points.Count)
-
+            ' LibTessDotNet accepts a polygon contour in boundary order. AddVectorPoints
+            ' maintains that order and closes the final edge in the segment collection.
+            Dim contour(points.Count - 1) As ContourVertex
             For i As Integer = 0 To points.Count - 1
-                Dim vtx As New TriangleNet.Geometry.Vertex(points(i).X, points(i).Y)
-                vertices.Add(vtx)
-                polygon.Add(vtx)
+                contour(i).Position = New Vec3(points(i).X, points(i).Y, 0.0F)
             Next
 
-            For Each s In segments
-                polygon.Add(New TriangleNet.Geometry.Segment(vertices(s.Item1), vertices(s.Item2)))
+            Dim tessellator As New Tess()
+            tessellator.AddContour(contour, ContourOrientation.Original)
+            tessellator.Tessellate(WindingRule.EvenOdd, ElementType.Polygons, 3)
+
+            Dim meshTriangles As New List(Of PolygonTriangle)(tessellator.ElementCount)
+            For elementIndex As Integer = 0 To tessellator.ElementCount - 1
+                Dim elementOffset As Integer = elementIndex * 3
+                Dim index0 As Integer = tessellator.Elements(elementOffset)
+                Dim index1 As Integer = tessellator.Elements(elementOffset + 1)
+                Dim index2 As Integer = tessellator.Elements(elementOffset + 2)
+                If index0 < 0 OrElse index1 < 0 OrElse index2 < 0 Then Continue For
+
+                Dim position0 As Vec3 = tessellator.Vertices(index0).Position
+                Dim position1 As Vec3 = tessellator.Vertices(index1).Position
+                Dim position2 As Vec3 = tessellator.Vertices(index2).Position
+
+                ' Ignore degenerate triangles so PrimitiveBatch never receives a
+                ' zero-area primitive from duplicate or collinear input points.
+                Dim signedDoubleArea As Double =
+                    (position1.X - position0.X) * (position2.Y - position0.Y) -
+                    (position1.Y - position0.Y) * (position2.X - position0.X)
+                If Math.Abs(signedDoubleArea) <= 0.000001R Then Continue For
+
+                meshTriangles.Add(New PolygonTriangle(
+                    New PolygonVertex(position0.X, position0.Y),
+                    New PolygonVertex(position1.X, position1.Y),
+                    New PolygonVertex(position2.X, position2.Y)))
             Next
 
-            Dim mesher As New TriangleNet.Meshing.GenericMesher()
-            Dim mesh As TriangleNet.Mesh = CType(mesher.Triangulate(polygon), TriangleNet.Mesh)
+            If meshTriangles.Count = 0 Then
+                _MeshData = _FallbackMeshData
+                Triangulated = _MeshData IsNot Nothing
+                Return
+            End If
+
+            Dim mesh As New PolygonMesh(meshTriangles)
             _MeshData = mesh
             _FallbackMeshData = mesh
 
@@ -367,7 +379,7 @@ Namespace [Shared].Drawing.UI.Advanced
             If Not Triangulated Then Triangulate()
             If MeshData Is Nothing Then Return
             'Fill Normally
-            primitiveBatch.Color = New Color(FillColorCache, FillColorCache.A)
+            primitiveBatch.Color = ApplyOpacity(New Color(FillColorCache, FillColorCache.A))
             primitiveBatch.Begin(PrimitiveType.TriangleList)
             For Each tri In MeshData.Triangles
                 For i As Integer = 0 To 2

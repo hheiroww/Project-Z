@@ -6,9 +6,9 @@
         Public Overrides Function Ease(t As Double) As Double
             Select Case EaseType
                 Case Easing.EaseType.EaseIn
-                    Return 1 - (Math.Sin(1 - t) * (Math.PI / 2))
+                    Return 1 - Math.Cos((t * Math.PI) / 2)
                 Case Easing.EaseType.EaseOut
-                    Return Math.Sin(t * Math.Max(Math.PI - (Math.PI / 2), 0))
+                    Return Math.Sin((t * Math.PI) / 2)
                 Case Easing.EaseType.EaseInOut
                     Return (Math.Sin(t * Math.PI - (Math.PI / 2)) + 1) / 2
                 Case Else

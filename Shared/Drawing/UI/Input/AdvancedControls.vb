@@ -19,6 +19,9 @@ Namespace [Shared].Drawing.UI.Input
         Private _headerText As TextElement
         Private _dropDownButton As TextElement
         Private _itemHeight As Single = 28.0F
+        Private ReadOnly ownerScene As Scene
+
+        Public Property DismissDistance As Single = 28.0F
 
         Public Event SelectionChanged(sender As ComboBox, selectedIndex As Integer)
 
@@ -76,6 +79,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Sub New(scene As Scene)
             MyBase.New(scene)
+            ownerScene = scene
             BackgroundColor = New Color(45, 45, 45)
             Size = New Vector2(180, 32)
 
@@ -87,11 +91,40 @@ Namespace [Shared].Drawing.UI.Input
             Children.Add(_headerText)
 
             _dropDownButton = New TextElement(scene) With {
-                .Text = "▼",
+                .Text = "v",
                 .ForegroundColor = Color.White,
                 .isMouseBypassEnabled = True
             }
             Children.Add(_dropDownButton)
+            AddHandler MouseLeftClick, Sub(point) IsDropDownOpen = Not IsDropDownOpen
+            If ownerScene IsNot Nothing Then
+                AddHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
+                AddHandler ownerScene.OnMouseLeftDown, AddressOf HandleSceneMouseLeftDown
+                AddHandler ownerScene.OnPointerCancelled, AddressOf HandlePointerCancelled
+            End If
+        End Sub
+
+        Private Function ContainsDropDownWithMargin(point As Point, margin As Single) As Boolean
+            Dim bottom = Position.Y + Size.Y
+            If _isDropDownOpen Then bottom += _items.Count * _itemHeight
+            Return point.X >= Position.X - margin AndAlso
+                   point.Y >= Position.Y - margin AndAlso
+                   point.X <= Position.X + Size.X + margin AndAlso
+                   point.Y <= bottom + margin
+        End Function
+
+        Private Sub HandleSceneMouseMove(currentPoint As Point, lastPoint As Point)
+            If _isDropDownOpen AndAlso Not ContainsDropDownWithMargin(currentPoint, DismissDistance) Then
+                IsDropDownOpen = False
+            End If
+        End Sub
+
+        Private Sub HandleSceneMouseLeftDown(point As Point)
+            If _isDropDownOpen AndAlso Not ContainsDropDownWithMargin(point, 0) Then IsDropDownOpen = False
+        End Sub
+
+        Private Sub HandlePointerCancelled()
+            If _isDropDownOpen Then IsDropDownOpen = False
         End Sub
 
         Private Sub UpdateVisual()
@@ -101,8 +134,16 @@ Namespace [Shared].Drawing.UI.Input
                 _headerText.Text = ""
             End If
 
+            AlignHeader()
+        End Sub
+
+        Private Sub AlignHeader()
             _headerText.Position = New Vector2(Position.X + 8, Position.Y + (Size.Y - _headerText.Size.Y) / 2)
             _dropDownButton.Position = New Vector2(Position.X + Size.X - 24, Position.Y + (Size.Y - _dropDownButton.Size.Y) / 2)
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            AlignHeader()
         End Sub
 
         Private Sub UpdateDropDown()
@@ -121,13 +162,14 @@ Namespace [Shared].Drawing.UI.Input
                     Dim itemBg As New RectangleElement(Scene) With {
                         .Position = New Vector2(Position.X, yOffset),
                         .Size = New Vector2(Size.X, _itemHeight),
-                        .BackgroundColor = If(i = _selectedIndex, New Color(60, 100, 60), New Color(55, 55, 55))
+                        .BackgroundColor = If(i = _selectedIndex, New Color(60, 100, 60), New Color(55, 55, 55)),
+                        .IsOverlay = True
                     }
 
                     Dim itemText As New TextElement(Scene) With {
                         .Text = _items(i),
                         .ForegroundColor = Color.White,
-                        .Position = New Vector2(Position.X + 8, yOffset + 4),
+                        .Margin = New Thickness(8, 4, 0, 0),
                         .isMouseBypassEnabled = True
                     }
 
@@ -166,6 +208,21 @@ Namespace [Shared].Drawing.UI.Input
 
         Protected Friend Overrides Sub doDraw(gameTime As GameTime)
             MyBase.doDraw(gameTime)
+        End Sub
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                If ownerScene IsNot Nothing Then
+                    RemoveHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
+                    RemoveHandler ownerScene.OnMouseLeftDown, AddressOf HandleSceneMouseLeftDown
+                    RemoveHandler ownerScene.OnPointerCancelled, AddressOf HandlePointerCancelled
+                End If
+                If _isDropDownOpen OrElse _dropDownItems.Count > 0 Then
+                    _isDropDownOpen = False
+                    UpdateDropDown()
+                End If
+            End If
+            MyBase.Dispose(disposing)
         End Sub
     End Class
 
@@ -241,6 +298,15 @@ Namespace [Shared].Drawing.UI.Input
             BackgroundColor = New Color(35, 35, 35)
             Size = New Vector2(200, 150)
             Clip = True
+            AddHandler MouseWheel, AddressOf HandleMouseWheel
+        End Sub
+
+        Private Sub HandleMouseWheel(delta As Integer, point As Point)
+            If delta = 0 Then Return
+            _scrollOffset -= (delta / 120.0F) * _itemHeight * 3
+            Dim maxOffset = Math.Max(0.0F, _items.Count * _itemHeight - Size.Y)
+            _scrollOffset = Math.Max(0.0F, Math.Min(_scrollOffset, maxOffset))
+            Invalidate()
         End Sub
 
         Public Sub AddItem(item As String)
@@ -285,7 +351,7 @@ Namespace [Shared].Drawing.UI.Input
                 Dim itemText As New TextElement(Scene) With {
                     .Text = _items(i),
                     .ForegroundColor = Color.White,
-                    .Position = New Vector2(6, 2),
+                    .Margin = New Thickness(6, 2, 0, 0),
                     .isMouseBypassEnabled = True
                 }
 
@@ -298,6 +364,15 @@ Namespace [Shared].Drawing.UI.Input
                                                   End Sub
 
                 yOffset += _itemHeight
+            Next
+            Invalidate()
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            For index = 0 To _itemElements.Count - 1
+                Dim item = _itemElements(index)
+                item.Position = New Vector2(Position.X, Position.Y + index * _itemHeight - _scrollOffset)
+                item.Size = New Vector2(Size.X, _itemHeight)
             Next
         End Sub
 
@@ -402,12 +477,12 @@ Namespace [Shared].Drawing.UI.Input
             Dim tabWidth As Single = Size.X / _tabs.Count
             For i As Integer = 0 To _tabs.Count - 1
                 Dim index As Integer = i
-                Dim header As New Button(Scene) With {
-                    .Text = _tabs(i).Header,
-                    .Position = New Vector2(i * tabWidth, 0),
-                    .Size = New Vector2(tabWidth, _tabHeaderHeight),
-                    .BackgroundColor = If(i = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
-                }
+                Dim header As New Button(Scene)
+                header.AutoSize = ButtonAutoSize.None
+                header.Text = _tabs(i).Header
+                header.Position = New Vector2(Position.X + i * tabWidth, Position.Y)
+                header.Size = New Vector2(tabWidth, _tabHeaderHeight)
+                header.BackgroundColor = If(i = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
 
                 AddHandler header.MouseLeftClick, Sub(p)
                                                       SelectedIndex = index
@@ -418,7 +493,7 @@ Namespace [Shared].Drawing.UI.Input
             Next
 
             ' Update content area
-            _contentArea.Position = New Vector2(0, _tabHeaderHeight)
+            _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
             _contentArea.Size = New Vector2(Size.X, Size.Y - _tabHeaderHeight)
 
             ' Add selected tab content
@@ -428,6 +503,16 @@ Namespace [Shared].Drawing.UI.Input
                     _contentArea.Children.Add(content)
                 End If
             End If
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            Dim tabWidth As Single = If(_tabHeaders.Count = 0, Size.X, Size.X / _tabHeaders.Count)
+            For index = 0 To _tabHeaders.Count - 1
+                _tabHeaders(index).Position = New Vector2(Position.X + index * tabWidth, Position.Y)
+                _tabHeaders(index).Size = New Vector2(tabWidth, _tabHeaderHeight)
+            Next
+            _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
+            _contentArea.Size = New Vector2(Size.X, Math.Max(0, Size.Y - _tabHeaderHeight))
         End Sub
     End Class
 
@@ -449,9 +534,12 @@ Namespace [Shared].Drawing.UI.Input
         Private _scrollOffset As Vector2 = Vector2.Zero
         Private _verticalScrollbar As RectangleElement
         Private _horizontalScrollbar As RectangleElement
+        Private _verticalTrack, _horizontalTrack As RectangleElement
+        Private _verticalDragOffset, _horizontalDragOffset As Single
         Private _scrollbarWidth As Single = 12.0F
         Private _canScrollVertically As Boolean = True
         Private _canScrollHorizontally As Boolean = False
+        Private _scrollVelocity As Vector2 = Vector2.Zero
 
         Public Property Content As SceneElement
             Get
@@ -474,8 +562,7 @@ Namespace [Shared].Drawing.UI.Input
                 Return _scrollOffset
             End Get
             Set(value As Vector2)
-                _scrollOffset = value
-                UpdateContentPosition()
+                ScrollTo(value)
             End Set
         End Property
 
@@ -503,19 +590,118 @@ Namespace [Shared].Drawing.UI.Input
             MyBase.New(scene)
             BackgroundColor = New Color(30, 30, 30)
             Clip = True
+            _verticalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            _horizontalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            Children.Add(_verticalTrack)
+            Children.Add(_horizontalTrack)
 
             _verticalScrollbar = New RectangleElement(scene) With {
                 .BackgroundColor = New Color(60, 60, 60),
+                .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
             Children.Add(_verticalScrollbar)
 
             _horizontalScrollbar = New RectangleElement(scene) With {
                 .BackgroundColor = New Color(60, 60, 60),
+                .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
             Children.Add(_horizontalScrollbar)
+            AddHandler _verticalScrollbar.MouseLeftDown, Sub(p)
+                                                            StopScrolling()
+                                                            _verticalDragOffset = _scrollOffset.Y
+                                                        End Sub
+            AddHandler _horizontalScrollbar.MouseLeftDown, Sub(p)
+                                                              StopScrolling()
+                                                              _horizontalDragOffset = _scrollOffset.X
+                                                          End Sub
+            AddHandler _verticalScrollbar.MouseDrag, Sub(current, start)
+                                                        Dim travel = _verticalTrack.Size.Y - _verticalScrollbar.Size.Y
+                                                        If travel > 0 Then ScrollTo(New Vector2(_scrollOffset.X, _verticalDragOffset + (current.Y - start.Y) * Math.Max(0, _content.Size.Y - _verticalTrack.Size.Y) / travel))
+                                                    End Sub
+            AddHandler _horizontalScrollbar.MouseDrag, Sub(current, start)
+                                                          Dim travel = _horizontalTrack.Size.X - _horizontalScrollbar.Size.X
+                                                          If travel > 0 Then ScrollTo(New Vector2(_horizontalDragOffset + (current.X - start.X) * Math.Max(0, _content.Size.X - _horizontalTrack.Size.X) / travel, _scrollOffset.Y))
+                                                      End Sub
+            AddHandler _verticalTrack.MouseLeftDown, Sub(p)
+                                                        StopScrolling()
+                                                        ScrollBy(New Vector2(0, If(p.Y + _verticalTrack.Position.Y < _verticalScrollbar.Position.Y, -1, 1) * _verticalTrack.Size.Y))
+                                                    End Sub
+            AddHandler _horizontalTrack.MouseLeftDown, Sub(p)
+                                                          StopScrolling()
+                                                          ScrollBy(New Vector2(If(p.X + _horizontalTrack.Position.X < _horizontalScrollbar.Position.X, -1, 1) * _horizontalTrack.Size.X, 0))
+                                                      End Sub
+            AddHandler Me.MouseWheel, AddressOf HandleMouseWheel
         End Sub
+
+        Public ReadOnly Property VerticalThumbBounds As Rectangle
+            Get
+                Return _verticalScrollbar.Rectangle
+            End Get
+        End Property
+
+        Public ReadOnly Property HorizontalThumbBounds As Rectangle
+            Get
+                Return _horizontalScrollbar.Rectangle
+            End Get
+        End Property
+
+        ''' <summary>Velocity added by one conventional mouse-wheel notch, in pixels per second.</summary>
+        Public Property WheelScrollAmount As Single = 900.0F
+
+        ''' <summary>Velocity removed per second while coasting.</summary>
+        Public Property ScrollDeceleration As Single = 2600.0F
+
+        ''' <summary>Caps kinetic scrolling so trackpads and free-spin wheels remain controllable.</summary>
+        Public Property MaximumScrollVelocity As Single = 3200.0F
+
+        Public ReadOnly Property ScrollVelocity As Vector2
+            Get
+                Return _scrollVelocity
+            End Get
+        End Property
+
+        Private Sub HandleMouseWheel(delta As Integer, p As Point)
+            ApplyWheelImpulse(delta)
+        End Sub
+
+        Public Sub ApplyWheelImpulse(delta As Integer)
+            If delta = 0 Then Return
+            Dim notches As Single = delta / 120.0F
+            If _canScrollVertically Then
+                _scrollVelocity.Y = Math.Max(-MaximumScrollVelocity,
+                                             Math.Min(MaximumScrollVelocity, _scrollVelocity.Y - notches * WheelScrollAmount))
+            ElseIf _canScrollHorizontally Then
+                _scrollVelocity.X = Math.Max(-MaximumScrollVelocity,
+                                             Math.Min(MaximumScrollVelocity, _scrollVelocity.X - notches * WheelScrollAmount))
+            End If
+        End Sub
+
+        Public Sub StopScrolling()
+            _scrollVelocity = Vector2.Zero
+        End Sub
+
+        Public Overrides Sub Tick(gameTime As GameTime)
+            MyBase.Tick(gameTime)
+            Dim elapsed = CSng(gameTime.ElapsedGameTime.TotalSeconds)
+            If elapsed <= 0 OrElse elapsed > 0.25F OrElse _scrollVelocity = Vector2.Zero Then Return
+
+            Dim before = _scrollOffset
+            ScrollBy(_scrollVelocity * elapsed)
+            If _scrollOffset.X = before.X AndAlso _scrollVelocity.X <> 0 Then _scrollVelocity.X = 0
+            If _scrollOffset.Y = before.Y AndAlso _scrollVelocity.Y <> 0 Then _scrollVelocity.Y = 0
+
+            Dim deceleration = Math.Max(0.0F, ScrollDeceleration) * elapsed
+            _scrollVelocity.X = ApproachZero(_scrollVelocity.X, deceleration)
+            _scrollVelocity.Y = ApproachZero(_scrollVelocity.Y, deceleration)
+        End Sub
+
+        Private Shared Function ApproachZero(value As Single, amount As Single) As Single
+            If value > 0 Then Return Math.Max(0.0F, value - amount)
+            If value < 0 Then Return Math.Min(0.0F, value + amount)
+            Return 0.0F
+        End Function
 
         Public Sub ScrollTo(offset As Vector2)
             _scrollOffset = offset
@@ -546,7 +732,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Private Sub UpdateContentPosition()
             If _content IsNot Nothing Then
-                _content.Position = -_scrollOffset
+                _content.Position = Position - _scrollOffset
             End If
         End Sub
 
@@ -554,6 +740,8 @@ Namespace [Shared].Drawing.UI.Input
             If _content Is Nothing Then
                 _verticalScrollbar.isVisible = False
                 _horizontalScrollbar.isVisible = False
+                _verticalTrack.isVisible = False
+                _horizontalTrack.isVisible = False
                 Return
             End If
 
@@ -563,28 +751,42 @@ Namespace [Shared].Drawing.UI.Input
             ' Vertical scrollbar
             If _canScrollVertically AndAlso _content.Size.Y > viewportHeight Then
                 _verticalScrollbar.isVisible = True
+                _verticalTrack.isVisible = True
+                _verticalTrack.Position = New Vector2(Position.X + Size.X - _scrollbarWidth, Position.Y)
+                _verticalTrack.Size = New Vector2(_scrollbarWidth, Math.Max(0, viewportHeight))
                 Dim scrollRatio = viewportHeight / _content.Size.Y
-                Dim thumbHeight = Math.Max(20, viewportHeight * scrollRatio)
+                Dim thumbHeight = Math.Min(viewportHeight, Math.Max(20, viewportHeight * scrollRatio))
                 Dim thumbOffset = (_scrollOffset.Y / (_content.Size.Y - viewportHeight)) * (viewportHeight - thumbHeight)
 
-                _verticalScrollbar.Position = New Vector2(Size.X - _scrollbarWidth, thumbOffset)
+                _verticalScrollbar.Position = New Vector2(Position.X + Size.X - _scrollbarWidth, Position.Y + thumbOffset)
                 _verticalScrollbar.Size = New Vector2(_scrollbarWidth, thumbHeight)
             Else
                 _verticalScrollbar.isVisible = False
+                _verticalTrack.isVisible = False
             End If
 
             ' Horizontal scrollbar
             If _canScrollHorizontally AndAlso _content.Size.X > viewportWidth Then
                 _horizontalScrollbar.isVisible = True
+                _horizontalTrack.isVisible = True
+                _horizontalTrack.Position = New Vector2(Position.X, Position.Y + Size.Y - _scrollbarWidth)
+                _horizontalTrack.Size = New Vector2(Math.Max(0, viewportWidth), _scrollbarWidth)
                 Dim scrollRatio = viewportWidth / _content.Size.X
-                Dim thumbWidth = Math.Max(20, viewportWidth * scrollRatio)
+                Dim thumbWidth = Math.Min(viewportWidth, Math.Max(20, viewportWidth * scrollRatio))
                 Dim thumbOffset = (_scrollOffset.X / (_content.Size.X - viewportWidth)) * (viewportWidth - thumbWidth)
 
-                _horizontalScrollbar.Position = New Vector2(thumbOffset, Size.Y - _scrollbarWidth)
+                _horizontalScrollbar.Position = New Vector2(Position.X + thumbOffset, Position.Y + Size.Y - _scrollbarWidth)
                 _horizontalScrollbar.Size = New Vector2(thumbWidth, _scrollbarWidth)
             Else
                 _horizontalScrollbar.isVisible = False
+                _horizontalTrack.isVisible = False
             End If
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            ClampScrollOffset()
+            UpdateContentPosition()
+            UpdateScrollbars()
         End Sub
     End Class
 
@@ -849,7 +1051,7 @@ Namespace [Shared].Drawing.UI.Input
             End Set
         End Property
 
-        Public Property BorderColor As Color
+        Public Shadows Property BorderColor As Color
             Get
                 Return _borderColor
             End Get

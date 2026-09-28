@@ -1,22 +1,35 @@
 //-----------------------------------------------------------------------------
 // FXAA (Fast Approximate Anti-Aliasing) Shader
-// For KNI/MonoGame
+// For MonoGame
 //-----------------------------------------------------------------------------
 
-#if OPENGL
+#if DIRECTX12
+    #define VS_SHADERMODEL vs_6_0
+    #define PS_SHADERMODEL ps_6_0
+    #define PS_TARGET SV_Target0
+#elif OPENGL
     #define SV_POSITION POSITION
     #define VS_SHADERMODEL vs_3_0
     #define PS_SHADERMODEL ps_3_0
+    #define PS_TARGET COLOR0
 #else
     #define VS_SHADERMODEL vs_4_0
     #define PS_SHADERMODEL ps_4_0
+    #define PS_TARGET COLOR0
 #endif
 
 // Parameters
 float EdgeThreshold = 0.125;
 float SubPixelAliasingRemoval = 0.75;
 
+#if DIRECTX12
+Texture2D TextureSampler : register(t0);
+SamplerState TextureSamplerState : register(s0);
+#define SAMPLE_TEXTURE(uv) TextureSampler.Sample(TextureSamplerState, uv)
+#else
 sampler2D TextureSampler : register(s0);
+#define SAMPLE_TEXTURE(uv) tex2D(TextureSampler, uv)
+#endif
 float2 InverseViewportSize;
 
 struct VertexShaderOutput
@@ -26,16 +39,16 @@ struct VertexShaderOutput
     float2 TexCoord : TEXCOORD0;
 };
 
-float4 FXAAPixelShader(VertexShaderOutput input) : COLOR0
+float4 FXAAPixelShader(VertexShaderOutput input) : PS_TARGET
 {
     float2 texCoord = input.TexCoord;
     
     // Sample the center pixel and its neighbors
-    float3 rgbNW = tex2D(TextureSampler, texCoord + float2(-1.0, -1.0) * InverseViewportSize).rgb;
-    float3 rgbNE = tex2D(TextureSampler, texCoord + float2(1.0, -1.0) * InverseViewportSize).rgb;
-    float3 rgbSW = tex2D(TextureSampler, texCoord + float2(-1.0, 1.0) * InverseViewportSize).rgb;
-    float3 rgbSE = tex2D(TextureSampler, texCoord + float2(1.0, 1.0) * InverseViewportSize).rgb;
-    float3 rgbM = tex2D(TextureSampler, texCoord).rgb;
+    float3 rgbNW = SAMPLE_TEXTURE(texCoord + float2(-1.0, -1.0) * InverseViewportSize).rgb;
+    float3 rgbNE = SAMPLE_TEXTURE(texCoord + float2(1.0, -1.0) * InverseViewportSize).rgb;
+    float3 rgbSW = SAMPLE_TEXTURE(texCoord + float2(-1.0, 1.0) * InverseViewportSize).rgb;
+    float3 rgbSE = SAMPLE_TEXTURE(texCoord + float2(1.0, 1.0) * InverseViewportSize).rgb;
+    float3 rgbM = SAMPLE_TEXTURE(texCoord).rgb;
     
     // Convert to luminance
     float3 luma = float3(0.299, 0.587, 0.114);
@@ -70,12 +83,12 @@ float4 FXAAPixelShader(VertexShaderOutput input) : COLOR0
     
     // Sample along the direction
     float3 rgbA = 0.5 * (
-        tex2D(TextureSampler, texCoord + dir * (1.0 / 3.0 - 0.5)).rgb +
-        tex2D(TextureSampler, texCoord + dir * (2.0 / 3.0 - 0.5)).rgb);
+        SAMPLE_TEXTURE(texCoord + dir * (1.0 / 3.0 - 0.5)).rgb +
+        SAMPLE_TEXTURE(texCoord + dir * (2.0 / 3.0 - 0.5)).rgb);
         
     float3 rgbB = rgbA * 0.5 + 0.25 * (
-        tex2D(TextureSampler, texCoord + dir * -0.5).rgb +
-        tex2D(TextureSampler, texCoord + dir * 0.5).rgb);
+        SAMPLE_TEXTURE(texCoord + dir * -0.5).rgb +
+        SAMPLE_TEXTURE(texCoord + dir * 0.5).rgb);
     
     float lumaB = dot(rgbB, luma);
     
@@ -91,9 +104,9 @@ float4 FXAAPixelShader(VertexShaderOutput input) : COLOR0
 }
 
 // Pass-through technique (no FXAA, just render normally)
-float4 PassThroughPixelShader(VertexShaderOutput input) : COLOR0
+float4 PassThroughPixelShader(VertexShaderOutput input) : PS_TARGET
 {
-    return tex2D(TextureSampler, input.TexCoord) * input.Color;
+    return SAMPLE_TEXTURE(input.TexCoord) * input.Color;
 }
 
 technique FXAA

@@ -1,0 +1,3 @@
+newmtl SurfaceMaterial
+Kd 0.25 0.55 0.95
+map_Kd test-texture.png

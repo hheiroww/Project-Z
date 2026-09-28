@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	<TargetFramework>net8.0-windows</TargetFramework>
+	<TargetFramework>net8.0-windows7.0</TargetFramework>
 	<RootNamespace>ProjectZ</RootNamespace>
 	<AssemblyName>ProjectZ</AssemblyName>
 	<OptionStrict>On</OptionStrict>
@@ -20,9 +20,11 @@
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
-	<PackageIcon>256x256 UI framework(1).png</PackageIcon>
 	<PackageProjectUrl>https://github.com/JackOfFates/Project-Z</PackageProjectUrl>
-	<PackageLicenseFile>License.txt</PackageLicenseFile>
+	<ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
+	<SocketJackProject>..\..\Documents\GitHub\SocketJack\SocketJack\SocketJack.csproj</SocketJackProject>
+	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">$(DefineConstants),PROJECTZ_DIRECTX12=-1</DefineConstants>
+	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">$(DefineConstants),PROJECTZ_DIRECTX11=-1</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +36,9 @@
     <Compile Remove="Project Z Video FX\**" />
     <Compile Remove="Project Z.sln.ide\**" />
     <Compile Remove="ProjectTemplate\**" />
+    <Compile Remove="heirowSnap Project Z\**" />
+    <Compile Remove="heirowSnap Protocol\**" />
+    <Compile Remove="heirowSnap Legacy Settings\**" />
     <None Remove="packages\**" />
     <None Remove="Project Z Application\**" />
     <None Remove="Project Z Audio\**" />
@@ -42,30 +47,62 @@
     <None Remove="Project Z Video FX\**" />
     <None Remove="Project Z.sln.ide\**" />
     <None Remove="ProjectTemplate\**" />
+    <None Remove="heirowSnap Project Z\**" />
+    <None Remove="heirowSnap Protocol\**" />
     <Page Remove="packages\**" />
     <Page Remove="Project Z Tower Defense\**" />
+    <Page Remove="heirowSnap Project Z\**" />
+    <Page Remove="heirowSnap Protocol\**" />
   </ItemGroup>
 
-  <!-- MonoGame DesktopGL (OpenGL) -->
+  <!-- MonoGame 3.8.5.1 native DX12 is the default. WindowsDX remains available
+       as a migration fallback through -p:ProjectZGraphicsBackend=DirectX11. -->
   <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
-    <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
-    <PackageReference Include="SocketJack" Version="1.2.3" />
-    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+    <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
+    <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
+    <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+    <PackageReference Include="SocketJack" Version="1.2.3" Condition="!Exists('$(SocketJackProject)')" />
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
+    <!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+  </ItemGroup>
+
+  <Target Name="ValidateProjectZGraphicsBackend" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11'"
+           Text="ProjectZGraphicsBackend must be DirectX12 or DirectX11." />
+  </Target>
+
+  <ItemGroup Condition="Exists('$(SocketJackProject)')">
+    <ProjectReference Include="$(SocketJackProject)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" />
   </ItemGroup>
 
   <!-- Project references retained as project references -->
 
   <!-- Keep resources -->
+  <PropertyGroup>
+    <XamlShaderProfile Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">DirectX_12</XamlShaderProfile>
+    <XamlShaderProfile Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">DirectX_11</XamlShaderProfile>
+  </PropertyGroup>
+  <Target Name="CompileProjectZXamlShaders" BeforeTargets="PrepareResources"
+          Inputs="Resources\XamlEffects.fx;.config\dotnet-tools.json"
+          Outputs="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx">
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$(MSBuildProjectDirectory)\$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx&quot; /Profile:$(XamlShaderProfile) /Defines:$(ProjectZGraphicsBackend.ToUpperInvariant())" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
   <ItemGroup>
-    <None Include="..\..\..\..\Downloads\256x256 UI framework(1).png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="..\SocketJack\SocketJack\License.txt">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
+    <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include=".github\copilot-instructions.md" />
     <None Include=".github\upgrades\scenarios\new-dotnet-version_64215c\plan.md" />
     <EmbeddedResource Include="Properties\Resources.resx">
@@ -78,7 +115,12 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="Resources\FXAA.mgfx">
+    <EmbeddedResource Include="Resources\FXAA.mgfx"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
+      <LogicalName>ProjectZ.Resources.FXAA.mgfx</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\FXAA.dx11.mgfx"
+                      Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">
       <LogicalName>ProjectZ.Resources.FXAA.mgfx</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
@@ -87,6 +129,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Update="THIRD-PARTY-NOTICES.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

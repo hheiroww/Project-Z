@@ -11,7 +11,7 @@
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Platforms>AnyCPU;x86</Platforms>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Project Z Extended Controls.sln.ide\**" />
@@ -21,18 +21,8 @@
     <None Remove="Project Z Extended Controls.v14.suo" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
-    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="NAudio">
-      <HintPath>bin\Debug\NAudio.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="NAudio.WindowsMediaFormat">
-      <HintPath>bin\Debug\NAudio.WindowsMediaFormat.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
+    <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Shared\Audio\ComplexTable.vb" />

@@ -74,6 +74,14 @@ Namespace [Shared].Drawing.UI.Primitives
         ''' Gets the wrapped text for rendering.
         ''' </summary>
         Private Property WrappedText As String = String.Empty
+        Public Property UseXamlTextLayout As Boolean
+        Public Property TextAlignment As HorizontalAlignment = HorizontalAlignment.Left
+        Friend ReadOnly Property XamlDesiredSize As Vector2
+            Get
+                Dim content = If(TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
+                Return Scene.MeasureText(Font, If(content, String.Empty)) + New Vector2(Padding.Left + Padding.Right, Padding.Top + Padding.Bottom)
+            End Get
+        End Property
 
         ''' <summary>
         ''' Prevents recursive updates when Size changes trigger RectangleChanged.
@@ -258,9 +266,16 @@ Namespace [Shared].Drawing.UI.Primitives
 
         Private Sub OnParentChanged() Handles Me.RectangleChanged
             If _TextWrapping <> TextWrapping.NoWrap Then
-                UpdateWrappedText()
+                Dim width = _MaxWidth
+                If width <= 0 AndAlso MaxSize.X < Single.MaxValue Then width = MaxSize.X
+                If width <= 0 AndAlso Parent IsNot Nothing Then width = Parent.Size.X - Parent.Padding.Left - Parent.Padding.Right - Margin.Left - Margin.Right
+                If width <> lastGeometryWrapWidth Then
+                    lastGeometryWrapWidth = width
+                    UpdateWrappedText()
+                End If
             End If
         End Sub
+        Private lastGeometryWrapWidth As Single = Single.NaN
 
 #End Region
 
@@ -327,10 +342,31 @@ Namespace [Shared].Drawing.UI.Primitives
             Return New IndexInformation(i, CharIndexToPoint(i), CharIndexToLineIndex(i))
         End Function
 
+        Private sanitizedSource As String
+        Private sanitizedText As String
+        Private sanitizedFont As SpriteFont
+
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
             Dim textToDraw As String = If(_TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
             If Not String.IsNullOrEmpty(textToDraw) Then
-                spriteBatch.DrawString(Scene.contentCollection.Fonts(Font), textToDraw, Position, ForegroundColor)
+                Dim currentFont = Scene.contentCollection.Fonts(Font)
+                If textToDraw <> sanitizedSource OrElse sanitizedFont IsNot currentFont Then
+                    sanitizedSource = textToDraw
+                    sanitizedFont = currentFont
+                    sanitizedText = Scene.SanitizeText(Font, textToDraw)
+                End If
+                If UseXamlTextLayout Then
+                    Dim at = Position + New Vector2(Padding.Left, Padding.Top)
+                    Dim width = Math.Max(0, Size.X - Padding.Left - Padding.Right)
+                    For Each line In sanitizedText.Replace(vbCr, "").Split(ChrW(10))
+                        Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - currentFont.MeasureString(line).X) / 2,
+                            If(TextAlignment = HorizontalAlignment.Right, width - currentFont.MeasureString(line).X, 0))
+                        spriteBatch.DrawString(currentFont, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor))
+                        at.Y += currentFont.LineSpacing
+                    Next
+                Else
+                    spriteBatch.DrawString(currentFont, sanitizedText, Position, ApplyOpacity(ForegroundColor))
+                End If
             End If
         End Sub
 

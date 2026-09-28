@@ -117,11 +117,11 @@ Namespace [Shared].Drawing.UI.Layout
                 If Not child.isVisible Then Continue For
 
                 If _Orientation = Orientation.Vertical Then
-                    child.Position = New Vector2(Padding.Left, Padding.Top + currentOffset)
+                    child.Position = New Vector2(Position.X + Padding.Left, Position.Y + Padding.Top + currentOffset)
                     currentOffset += child.Size.Y + _Spacing
                     maxCrossSize = Math.Max(maxCrossSize, child.Size.X)
                 Else
-                    child.Position = New Vector2(Padding.Left + currentOffset, Padding.Top)
+                    child.Position = New Vector2(Position.X + Padding.Left + currentOffset, Position.Y + Padding.Top)
                     currentOffset += child.Size.X + _Spacing
                     maxCrossSize = Math.Max(maxCrossSize, child.Size.Y)
                 End If
@@ -144,6 +144,10 @@ Namespace [Shared].Drawing.UI.Layout
             End If
 
             RaiseEvent LayoutUpdated()
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            ArrangeChildren()
         End Sub
 
         ''' <summary>

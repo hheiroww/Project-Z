@@ -1,6 +1,6 @@
 # Project Z Application — Visual Studio Project Template
 
-A Visual Studio project template for creating new KNI/MonoGame game applications using the **Project Z** shared framework (SceneManager, Scene, ContentContainer, etc.).
+A Visual Studio project template for creating new MonoGame game applications using the **Project Z** shared framework (SceneManager, Scene, ContentContainer, etc.).
 
 ---
 

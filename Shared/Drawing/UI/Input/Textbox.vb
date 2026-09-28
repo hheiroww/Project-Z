@@ -24,6 +24,7 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Vector2)
                 _TextPadding = -value
+                UpdateTextbox()
             End Set
         End Property
         Private _TextPadding As New Vector2(-2, -1)
@@ -83,12 +84,33 @@ Namespace [Shared].Drawing.UI.Input
                 Return _Text
             End Get
             Set(value As String)
-                RaiseEvent OnTextChanged(New TextChangedEventArgs(_Text, value))
+                value = If(value, String.Empty)
+                If _Text = value Then Return
+                Dim previous = _Text
                 _Text = value
+                _CaretPosition = Math.Min(_CaretPosition, _Text.Length)
+                _SelectionStart = Math.Min(_SelectionStart, _Text.Length)
+                _SelectionLength = Math.Min(_SelectionLength, _Text.Length - _SelectionStart)
                 UpdateTextbox()
+                RaiseEvent OnTextChanged(New TextChangedEventArgs(previous, value))
             End Set
         End Property
         Private _Text As String = String.Empty
+        ''' <summary>
+        ''' Optional character used when rendering sensitive text. The actual
+        ''' value remains available through <see cref="Text"/> while selection,
+        ''' caret movement, and editing continue to use the real string.
+        ''' </summary>
+        Public Property MaskCharacter As Char?
+            Get
+                Return _MaskCharacter
+            End Get
+            Set(value As Char?)
+                _MaskCharacter = value
+                UpdateTextbox()
+            End Set
+        End Property
+        Private _MaskCharacter As Char? = Nothing
         Public Property Font As String
             Get
                 Return _Font
@@ -126,31 +148,16 @@ Namespace [Shared].Drawing.UI.Input
 
 #Region "Internals"
 
-        Private LastCaretPos As Single = 0
         Private canNotUpdate As Boolean = False
-        Private Function GetCaretPosition() As Vector2
-            Dim ResolvedCaretPoint As Point = TextElement.CharIndexToPoint(CaretPosition)
-
-            Dim v As New Vector2(ResolvedCaretPoint.X, ResolvedCaretPoint.Y)
-
-            If LastCaretPos <> v.Y Then
-                Dim diff As Single = v.Y - LastCaretPos
-                LastCaretPos = v.Y
-            End If
-
-            Return v
-        End Function
-
-        Private Function GetSelectionVectors() As Vector2()
-            Dim Vectors As New List(Of Vector2)
-            Dim ResolvedStartPoint As Vector2 = TextElement.CharIndexToPoint(SelectionStart).ToVector2.Subtract(-TextPadding)
-            Dim CurrentPosition As New Vector2(ResolvedStartPoint.X, ResolvedStartPoint.Y)
-
-
-
-            Return Vectors.ToArray
-        End Function
-
+        Private inputLayout As TextInputLayout
+        Private layoutText, layoutFont As String
+        Private layoutWidth As Single = -1
+        Private textScroll As Vector2
+        Public ReadOnly Property CaretBounds As Rectangle
+            Get
+                Return Caret.Rectangle
+            End Get
+        End Property
         Private Function GetAlignment(RelativeTo As SceneElement) As Vector2
             Dim RelativeSizeY As Single = Math.Max(_FontCharHeight, RelativeTo.Size.Y)
             Select Case VerticalTextAlignment
@@ -171,45 +178,45 @@ Namespace [Shared].Drawing.UI.Input
             End Select
         End Function
 
-        Private Function GetLastLine() As String
-            Dim LastReturn As Integer = Text.LastIndexOf(vbLf)
-            Return If(LastReturn < 0, Nothing, Text.Remove(0, Text.LastIndexOf(vbLf)))
-        End Function
-
-        Private Function IsNewLineNeeded(widthControl As Single, text As String) As Boolean
-            Dim textSize As Vector2 = Scene.MeasureText(Font, text)
-
-            If textSize.X > widthControl - 20 Then
-                Return True
-            Else
-                Return False
-            End If
-
-        End Function
-
         Private Sub UpdateTextbox() Handles Me.RectangleChanged
-            If canNotUpdate Then Return
+            If canNotUpdate OrElse TextElement Is Nothing OrElse Caret Is Nothing OrElse Selection Is Nothing Then Return
 
             canNotUpdate = True
+            Try
+                Dim display = If(_MaskCharacter.HasValue, New String(_MaskCharacter.Value, Text.Length), Text)
+                Dim available = New Vector2(Math.Max(1, Size.X - TextPadding.X * 2 - 1), Math.Max(1, Size.Y - TextPadding.Y * 2))
+                Dim wrapWidth = If(AcceptsReturn, available.X, Single.MaxValue)
+                Dim lineHeight = CSng(Scene.contentCollection.Fonts(Font).LineSpacing)
+                If inputLayout Is Nothing OrElse display <> layoutText OrElse Font <> layoutFont OrElse wrapWidth <> layoutWidth Then
+                    inputLayout = New TextInputLayout(display, wrapWidth, lineHeight, Function(line) Scene.MeasureText(Font, line).X)
+                    layoutText = display
+                    layoutFont = Font
+                    layoutWidth = wrapWidth
+                    TextElement.TextWrapping = TextWrapping.NoWrap
+                    TextElement.Font = Font
+                    TextElement.Text = inputLayout.DisplayText
+                End If
+                Dim insertion = inputLayout.Points(Math.Min(CaretPosition, inputLayout.Points.Length - 1))
+                textScroll.X = Math.Max(0, Math.Min(textScroll.X, insertion.X))
+                textScroll.Y = Math.Max(0, Math.Min(textScroll.Y, insertion.Y))
+                textScroll.X = Math.Max(textScroll.X, insertion.X - available.X)
+                textScroll.Y = Math.Max(textScroll.Y, insertion.Y + lineHeight - available.Y)
+                Dim alignment = GetAlignment(TextElement)
+                If HorizontalTextAlignment = HorizontalAlignment.Left OrElse TextElement.Size.X > available.X Then alignment.X = TextPadding.X
+                If VerticalTextAlignment = VerticalAlignment.Top OrElse inputLayout.Height > available.Y Then alignment.Y = TextPadding.Y
+                TextElement.Position = Position + alignment - textScroll
+                Caret.Position = TextElement.Position + insertion
+                Caret.Size = New Vector2(1, lineHeight)
+                UpdateCaretVisibility()
+                Selection.ClearVectorPoints()
+            Finally
+                canNotUpdate = False
+            End Try
+        End Sub
 
-            ' Set Text Properties
-            TextElement.Text = Text
-            TextElement.Font = Font
-            TextElement.Position = GetAlignment(TextElement)
-
-            ' Set Caret Properties
-            Caret.Position = GetCaretPosition()
-            Caret.Size = New Vector2(1, Scene.MeasureText(Font, "A").Y)
-            Caret.BackgroundColor = Color.Transparent
-
-            ' Set Selection Properties
-            Selection.ClearVectorPoints()
-            If SelectionLength <> 0 Then
-                Selection.AddVectorPoints(GetSelectionVectors())
-            End If
-
-            canNotUpdate = False
-
+        Protected Overrides Sub AlignChildren()
+            ' Generic container layout would put the caret back at the origin.
+            UpdateTextbox()
         End Sub
 
 #End Region
@@ -227,49 +234,26 @@ Namespace [Shared].Drawing.UI.Input
         Public ForegroundProperty As ForegroundColorProperty
 
 #Region "Animation Instances"
-        Private WithEvents CaretFadeInAnimation As ColorAnimation
-        Private WithEvents CaretFadeOutAnimation As ColorAnimation
+        Private Const CaretBlinkIntervalMilliseconds As Long = 530
+        Private caretBlinkStarted As Long
 
         Private Sub ShowCaret()
-            If CaretFadeOutAnimation IsNot Nothing Then
-                If CaretFadeOutAnimation.Running Then
-                    CaretFadeOutAnimation.Stop()
-                End If
-            End If
-            If CaretFadeInAnimation Is Nothing Then
-                CaretFadeInAnimation = New ColorAnimation(
-                    New SineEase(EaseType.EaseInOut),
-                    Caret.BackgroundColor, _ForegroundColor,
-                    TimeSpan.FromSeconds(0.5), Scene.gameTime)
-                BindAnimation(Caret.BackgroundProperty, CaretFadeInAnimation)
-            End If
-            CaretFadeInAnimation.Start()
+            caretBlinkStarted = Environment.TickCount64
+            Caret.BackgroundColor = _ForegroundColor
         End Sub
 
         Private Sub HideCaret()
-            If CaretFadeInAnimation IsNot Nothing Then
-                If CaretFadeInAnimation.Running Then
-                    CaretFadeInAnimation.Stop()
-                End If
-            End If
-            If CaretFadeOutAnimation Is Nothing Then
-                CaretFadeOutAnimation = New ColorAnimation(
-                    New SineEase(EaseType.EaseInOut),
-                     Color.Transparent, Color.Transparent,
-                    TimeSpan.FromSeconds(0.25), Scene.gameTime)
-                BindAnimation(Caret.BackgroundProperty, CaretFadeOutAnimation)
-            End If
-            CaretFadeOutAnimation.Start()
+            Caret.BackgroundColor = Color.Transparent
         End Sub
 
-        Private Sub CaretFadeOutAnimation_OnAnimationFinished(sender As Object) Handles CaretFadeOutAnimation.OnAnimationFinished
-            If CanSelect And isSelected Then
-                ShowCaret()
+        Private Sub UpdateCaretVisibility()
+            If Not CanSelect OrElse Not isSelected Then
+                Caret.BackgroundColor = Color.Transparent
+                Return
             End If
-        End Sub
-
-        Private Sub CaretFadeInAnimation_OnAnimationFinished(sender As Object) Handles CaretFadeInAnimation.OnAnimationFinished
-            HideCaret()
+            Dim elapsed = Math.Max(0, Environment.TickCount64 - caretBlinkStarted)
+            Caret.BackgroundColor = If((elapsed \ CaretBlinkIntervalMilliseconds) Mod 2 = 0,
+                                       _ForegroundColor, Color.Transparent)
         End Sub
 
 #End Region
@@ -303,6 +287,11 @@ Namespace [Shared].Drawing.UI.Input
             spriteBatch.Settings = New SpriteBatchPropertySet(SpriteSortMode.Immediate, BlendState.AlphaBlend,
                                                              Nothing, Nothing,
                                                              New RasterizerState() With {.ScissorTestEnable = True})
+            ' These are visual parts of the textbox, not independent controls.
+            ' Let the parent textbox own pointer focus and keyboard selection.
+            TextElement.isMouseBypassEnabled = True
+            Caret.isMouseBypassEnabled = True
+            Selection.isMouseBypassEnabled = True
             Children.AddRange({TextElement, Caret, Selection})
             Clip = True
         End Sub
@@ -328,9 +317,11 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
+            UpdateCaretVisibility()
         End Sub
 
         Private Sub Textbox_OnKeyPress(Key As Keys, KeyboardState As KeyboardState) Handles Me.OnKeyPress
+            ShowCaret()
             Dim PreInputEvent As New PreTextInputEventArgs(Key, KeyboardState)
             RaiseEvent OnPreTextInput(PreInputEvent)
             If Not PreInputEvent.Cancel Then
@@ -343,6 +334,51 @@ Namespace [Shared].Drawing.UI.Input
                             SelectionStart = 0
                             SelectionLength = Text.Length
                             CaretPosition = SelectionStart + SelectionLength
+                            Execute = False
+                        Case Keys.C
+#If WINDOWS Then
+                            If SelectionLength > 0 AndAlso Not _MaskCharacter.HasValue Then
+                                Try
+                                    System.Windows.Forms.Clipboard.SetText(
+                                        Text.Substring(SelectionStart, Math.Min(SelectionLength, Text.Length - SelectionStart)))
+                                Catch
+                                End Try
+                            End If
+#End If
+                            Execute = False
+                        Case Keys.X
+#If WINDOWS Then
+                            If SelectionLength > 0 AndAlso Not _MaskCharacter.HasValue Then
+                                Try
+                                    System.Windows.Forms.Clipboard.SetText(
+                                        Text.Substring(SelectionStart, Math.Min(SelectionLength, Text.Length - SelectionStart)))
+                                Catch
+                                End Try
+                            End If
+#End If
+                            If SelectionLength > 0 Then
+                                Text = Text.Remove(SelectionStart, Math.Min(SelectionLength, Text.Length - SelectionStart))
+                                CaretPosition = SelectionStart
+                                SelectionLength = 0
+                            End If
+                            Execute = False
+                        Case Keys.V
+#If WINDOWS Then
+                            Try
+                                If System.Windows.Forms.Clipboard.ContainsText() Then
+                                    Dim pasted = System.Windows.Forms.Clipboard.GetText().Replace(vbCrLf, vbLf)
+                                    If Not AcceptsReturn Then pasted = pasted.Replace(vbCr, " ").Replace(vbLf, " ")
+                                    If SelectionLength > 0 Then
+                                        Text = Text.Remove(SelectionStart, Math.Min(SelectionLength, Text.Length - SelectionStart))
+                                        CaretPosition = SelectionStart
+                                        SelectionLength = 0
+                                    End If
+                                    Text = Text.Insert(Math.Min(CaretPosition, Text.Length), pasted)
+                                    CaretPosition += pasted.Length
+                                End If
+                            Catch
+                            End Try
+#End If
                             Execute = False
                     End Select
                 End If
@@ -360,21 +396,24 @@ Namespace [Shared].Drawing.UI.Input
                                 CaretPosition = SelectionStart
                             Else
                                 If Text.Length > 0 And CaretPosition > 0 Then
-                                    Dim CharCount As Integer = If(Text(CaretPosition - 1) = vbLf, 2, 1)
-                                    Text = Text.Remove(CaretPosition - CharCount, CharCount)
-                                    CaretPosition -= CharCount
+                                    Dim oldCaret = CaretPosition
+                                    Dim CharCount As Integer = If(oldCaret >= 2 AndAlso Text(oldCaret - 2) = ChrW(13) AndAlso Text(oldCaret - 1) = ChrW(10), 2, 1)
+                                    Text = Text.Remove(oldCaret - CharCount, CharCount)
+                                    CaretPosition = oldCaret - CharCount
                                 End If
                             End If
+                            SelectionLength = 0
                         Case Keys.Delete
                             If SelectionLength <> 0 Then
                                 Text = Text.Remove(SelectionStart, Math.Min(SelectionLength, Text.Length))
                                 CaretPosition = SelectionStart
                             Else
                                 If Text.Length > 0 And CaretPosition < Text.Length Then
-                                    Dim CharCount As Integer = If(Text(CaretPosition) = vbLf, 2, 1)
+                                    Dim CharCount As Integer = If(CaretPosition + 1 < Text.Length AndAlso Text(CaretPosition) = ChrW(13) AndAlso Text(CaretPosition + 1) = ChrW(10), 2, 1)
                                     Text = Text.Remove(CaretPosition, CharCount)
                                 End If
                             End If
+                            SelectionLength = 0
                         Case Keys.Left
                             If CaretPosition = 0 Then Exit Select
                             If SelectionLength <> 0 Then
@@ -384,7 +423,7 @@ Namespace [Shared].Drawing.UI.Input
                                 CaretPosition = SelectionStart
                                 Exit Select
                             Else
-                                CaretPosition -= If(Text(CaretPosition - 1) = vbLf, 2, 1)
+                                CaretPosition -= If(CaretPosition >= 2 AndAlso Text(CaretPosition - 2) = ChrW(13) AndAlso Text(CaretPosition - 1) = ChrW(10), 2, 1)
                             End If
                         Case Keys.Right
                             If Text = Nothing Then Exit Select
@@ -395,9 +434,15 @@ Namespace [Shared].Drawing.UI.Input
                                 CaretPosition = Text.Length
                                 Exit Select
                             ElseIf CaretPosition < Text.Length Then
-                                Dim CharCount As Integer = If(Text(Math.Min(Text.Length, CaretPosition)) = vbCr, 2, 1)
+                                Dim CharCount As Integer = If(CaretPosition + 1 < Text.Length AndAlso Text(CaretPosition) = ChrW(13) AndAlso Text(CaretPosition + 1) = ChrW(10), 2, 1)
                                 CaretPosition += CharCount
                             End If
+                        Case Keys.Home
+                            CaretPosition = 0
+                            SelectionLength = 0
+                        Case Keys.End
+                            CaretPosition = Text.Length
+                            SelectionLength = 0
                         Case Else
                             Dim newInput As String = SceneManager.TryConvertKeyboardInput(Key, KeyboardState)
                             If newInput <> String.Empty Then
@@ -409,11 +454,6 @@ Namespace [Shared].Drawing.UI.Input
                                     SelectionStart = 0
                                     SelectionLength = 0
                                 Else
-                                    Dim LastLine As String = GetLastLine()
-
-                                    If LastLine <> Nothing AndAlso IsNewLineNeeded(Size.X, LastLine) Then
-                                        newInput &= vbLf
-                                    End If
                                     Text = Text.Insert(Math.Min(CaretPosition, Text.Length), newInput)
                                     CaretPosition += newInput.Length
                                 End If
@@ -425,20 +465,16 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub Textbox_OnMouseLeftClick(p As Point) Handles Me.MouseLeftClick
-            Dim RelativePoint As Point = RelativeTo(TextElement)
-            Dim FixedPoint As New Point(RelativePoint.X + p.X + 3, RelativePoint.Y + p.Y)
-            CaretPosition = TextElement.PointToCharIndex(FixedPoint)
+            ShowCaret()
+            CaretPosition = inputLayout.HitTest(p.ToVector2() + Position - TextElement.Position, Scene.contentCollection.Fonts(Font).LineSpacing)
             SelectionStart = 0
             SelectionLength = 0
         End Sub
 
         Private Sub Textbox_OnMouseDrag(currentPoint As Point, startPoint As Point) Handles Me.MouseDrag
-            Dim RelativePoint As Point = RelativeTo(TextElement)
-            Dim FixedStartPoint As New Point(RelativePoint.X + startPoint.X + 3, RelativePoint.Y + startPoint.Y)
-            Dim StartIndex As Integer = TextElement.PointToCharIndex(FixedStartPoint)
-
-            Dim FixedEndPoint As New Point(RelativePoint.X + currentPoint.X + 3, RelativePoint.Y + currentPoint.Y)
-            Dim EndIndex As Integer = TextElement.PointToCharIndex(FixedEndPoint)
+            ShowCaret()
+            Dim StartIndex = inputLayout.HitTest(startPoint.ToVector2() + Position - TextElement.Position, Scene.contentCollection.Fonts(Font).LineSpacing)
+            Dim EndIndex = inputLayout.HitTest(currentPoint.ToVector2() + Position - TextElement.Position, Scene.contentCollection.Fonts(Font).LineSpacing)
 
             If StartIndex > EndIndex Then
                 SelectionStart = EndIndex

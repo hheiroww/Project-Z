@@ -9,7 +9,6 @@ Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports ProjectZ.Shared.Drawing.UI.Input
 Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports ProjectZ.Shared.XNA
-Imports TriangleNet
 Imports Microsoft.Xna.Framework.Input
 Imports ProjectZ.Shared.Animations
 Imports ProjectZ.Shared.Animations.Easing

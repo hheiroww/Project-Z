@@ -2,7 +2,7 @@
             xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
     <Name>Project Z Application</Name>
-    <Description>A KNI/MonoGame game application using the Project Z framework with scene management, content loading, and sprite rendering.</Description>
+    <Description>A MonoGame game application using the Project Z framework with scene management, content loading, and sprite rendering.</Description>
     <ProjectType>VisualBasic</ProjectType>
     <SortOrder>1000</SortOrder>
     <DefaultName>MyGameApp</DefaultName>

@@ -2,7 +2,7 @@
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 
-Imports TriangleNet
+Imports ProjectZ.Shared.Drawing.UI.Advanced
 
 Namespace [Shared].Drawing.UI.Primitives
 
@@ -100,7 +100,7 @@ Namespace [Shared].Drawing.UI.Primitives
             End If
         End Sub
 
-        Private Sub CircleElement_Trangulated(newMesh As Mesh) Handles Me.Trangulated
+        Private Sub CircleElement_Trangulated(newMesh As PolygonMesh) Handles Me.Trangulated
 
         End Sub
     End Class

@@ -1,12 +1,12 @@
 ﻿Imports System.Runtime.CompilerServices
 Imports Microsoft.Xna.Framework
-Imports TriangleNet.Topology
+Imports ProjectZ.Shared.Drawing.UI.Advanced
 
 
 Public Module TriangleExtension
 
     <Extension()>
-    Public Function Contains(t As Triangle, p As Point) As Boolean
+    Public Function Contains(t As PolygonTriangle, p As Point) As Boolean
         Dim p0 As Vector2 = ToXNAVector2(t.GetVertex(0))
         Dim p1 As Vector2 = ToXNAVector2(t.GetVertex(1))
         Dim p2 As Vector2 = ToXNAVector2(t.GetVertex(2))

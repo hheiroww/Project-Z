@@ -30,12 +30,13 @@ Namespace [Shared].Animations
         Protected ReadOnly Property time As Double
             Get
                 Dim difference As Long = GetDifference()
-                Dim v As Double = difference / Duration.Ticks
-                If difference >= Duration.Ticks Then
+                If Duration.Ticks <= 0 Then
                     [Stop]()
-                    RaiseOnFinished(Me)
+                    Return 1.0R
                 End If
-                Return v
+                Dim value = Math.Max(0.0R, Math.Min(1.0R, difference / CDbl(Duration.Ticks)))
+                If difference >= Duration.Ticks Then [Stop]()
+                Return value
             End Get
         End Property
 
@@ -65,6 +66,7 @@ Namespace [Shared].Animations
         End Sub
 
         Public Sub Start()
+            If gameTime Is Nothing Then gameTime = New GameTime()
             Me.StartTick = gameTime.TotalGameTime.Ticks
             _Running = True
         End Sub

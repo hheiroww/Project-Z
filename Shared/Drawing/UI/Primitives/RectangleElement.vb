@@ -1,4 +1,4 @@
-﻿Imports Microsoft.Xna.Framework
+Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 Imports ProjectZ.Shared.Animations.Properties
 
@@ -12,6 +12,20 @@ Namespace [Shared].Drawing.UI.Primitives
 
         Protected Friend Texture As Texture2D
         Public Overridable Property BackgroundColor As New Color(60, 60, 60)
+        Public Property BackgroundBrush As XamlGradientBrush
+        Public Property CornerRadii As CornerRadii
+        ''' <summary>Uniform-radius shorthand. Use CornerRadii for independent XAML corners.</summary>
+        Public Property CornerRadius As Single
+            Get
+                Return CornerRadii.TopLeft
+            End Get
+            Set(value As Single)
+                CornerRadii = New CornerRadii(value)
+            End Set
+        End Property
+        Public Property BorderColor As Color = Color.Transparent
+        Public Property BorderThickness As Single
+        Private roundedBrush As XamlGradientBrush
         Public Overridable Property isResizable As AlignmentType = AlignmentType.None
 
         Protected Friend Property Color As Color
@@ -64,8 +78,48 @@ Namespace [Shared].Drawing.UI.Primitives
 #End Region
 
         Protected Friend Overrides Sub Draw(gameTime As Microsoft.Xna.Framework.GameTime)
+            DrawBackground(BackgroundColor)
+        End Sub
+
+        Protected Sub DrawBackground(fill As Color, Optional useBackgroundBrush As Boolean = True, Optional overrideBrush As XamlGradientBrush = Nothing)
+            If Not CornerRadii.IsEmpty OrElse BorderThickness > 0 OrElse overrideBrush IsNot Nothing OrElse (useBackgroundBrush AndAlso BackgroundBrush IsNot Nothing) Then
+                Dim brush = If(overrideBrush, If(useBackgroundBrush, BackgroundBrush, Nothing))
+                If brush Is Nothing Then
+                    If roundedBrush Is Nothing Then
+                        roundedBrush = New XamlGradientBrush()
+                        roundedBrush.Stops.Add(New XamlGradientStop())
+                    End If
+                    roundedBrush.Stops(0).Color = fill
+                    brush = roundedBrush
+                End If
+                ' Generate in layout units, then transform the entire surface,
+                ' including its corners and stroke, just as WPF does.
+                spriteBatch.Draw(brush.GetTexture(Scene.graphicsDevice, CInt(Size.X), CInt(Size.Y), CornerRadii, BorderThickness, BorderColor), Rectangle, ApplyOpacity(Color.White))
+                DrawFocusIndicator()
+                Return
+            End If
             If Texture Is Nothing Then Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
-            spriteBatch.Draw(Texture, Rectangle, BackgroundColor)
+            spriteBatch.Draw(Texture, Rectangle, ApplyOpacity(fill))
+            DrawFocusIndicator()
+        End Sub
+
+        Private Sub DrawFocusIndicator()
+            If Not isSelected OrElse Not CanSelect Then Return
+            If Texture Is Nothing Then Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+            Dim r = Rectangle
+            Dim focusColor = ApplyOpacity(New Color(130, 190, 255))
+            spriteBatch.Draw(Texture, New Rectangle(r.X, r.Y, r.Width, 2), focusColor)
+            spriteBatch.Draw(Texture, New Rectangle(r.X, r.Bottom - 2, r.Width, 2), focusColor)
+            spriteBatch.Draw(Texture, New Rectangle(r.X, r.Y, 2, r.Height), focusColor)
+            spriteBatch.Draw(Texture, New Rectangle(r.Right - 2, r.Y, 2, r.Height), focusColor)
+        End Sub
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                BackgroundBrush?.Dispose()
+                roundedBrush?.Dispose()
+            End If
+            MyBase.Dispose(disposing)
         End Sub
 
         Private Sub RectangleElement_MouseMove(currentPoint As Point, lastPoint As Point) Handles Me.MouseMove

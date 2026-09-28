@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <AssemblyName>ProjectZ.Vst</AssemblyName>
+    <RootNamespace>ProjectZ.Vst</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <DefineConstants Condition="Exists('..\..\SocketJack\LlmRuntime\LlmRuntime.csproj')">$(DefineConstants);SOCKETJACK_LLM_RUNTIME</DefineConstants>
+    <DeployVst3OnBuild Condition="'$(DeployVst3OnBuild)' == ''">true</DeployVst3OnBuild>
+    <Vst3InstallDirectory Condition="'$(Vst3InstallDirectory)' == ''">C:\Program Files\Common Files\VST3\Project Z Granulizer Synth</Vst3InstallDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AudioPlugSharpVst3" Version="0.7.9" />
+    <PackageReference Include="AudioPlugSharpWPF" Version="0.7.9" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+
+  <!-- Keep FL Studio's standard VST3 location synchronized after every
+       successful build. If FL has the DLLs locked, stage the newest bundle
+       and finish deployment automatically when FL exits. -->
+  <Target Name="DeployProjectZGranulizerVst3"
+          AfterTargets="Build"
+          Condition="'$(OS)' == 'Windows_NT' and '$(DeployVst3OnBuild)' == 'true'">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Deploy-Vst3.ps1&quot; -SourceDirectory &quot;$(TargetDir).&quot; -DestinationDirectory &quot;$(Vst3InstallDirectory)&quot; -GraphicsBackend &quot;$(ProjectZGraphicsBackend)&quot;" />
+  </Target>
+
+  <Target Name="RemoveLegacyGraphicsBackendAssemblies"
+          AfterTargets="CopyFilesToOutputDirectory">
+    <ItemGroup>
+      <_LegacyGraphicsBackendAssembly Include="$(TargetDir)Kni.Platform.dll;$(TargetDir)Xna.Framework*.dll" />
+      <_LegacyGraphicsBackendAssembly Include="$(TargetDir)SharpDX*.dll"
+                                     Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
+    </ItemGroup>
+    <Delete Files="@(_LegacyGraphicsBackendAssembly)" />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Project Z Windows.vbproj" />
+    <ProjectReference Include="..\..\SocketJack\LlmRuntime\LlmRuntime.csproj"
+                      Condition="Exists('..\..\SocketJack\LlmRuntime\LlmRuntime.csproj')" />
+  </ItemGroup>
+
+  <!-- PluginScene.xaml is both a normal WPF Page (for the Visual Studio XAML
+       designer) and a raw embedded resource (for Project Z's runtime parser). -->
+  <ItemGroup>
+    <EmbeddedResource Include="PluginScene.xaml">
+      <LogicalName>ProjectZ.Vst.PluginScene.xaml</LogicalName>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Project Z Tower Defense\Content\Fonts\**\*.xnb">
+      <Link>Content\Fonts\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\THIRD-PARTY-NOTICES.md">
+      <Link>THIRD-PARTY-NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

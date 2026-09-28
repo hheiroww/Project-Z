@@ -86,6 +86,13 @@ Namespace [Shared].Drawing.UI.Input
         End Property
         Private _FillColor As New Color(0, 120, 215)
 
+        ' Stops cover the whole track, not the current fill: low audio levels stay green.
+        Public Property FillGradientStops As New List(Of ProgressGradientStop)()
+        Public Property GradientStart As Vector2 = Vector2.Zero
+        Public Property GradientEnd As Vector2 = Vector2.UnitX
+        Private gradientTexture As Texture2D
+        Private gradientKey As String
+
         ''' <summary>
         ''' Gets or sets the track (background) color.
         ''' </summary>
@@ -103,7 +110,7 @@ Namespace [Shared].Drawing.UI.Input
         ''' <summary>
         ''' Gets or sets the border color.
         ''' </summary>
-        Public Property BorderColor As Color
+        Public Shadows Property BorderColor As Color
             Get
                 Return _BorderColor
             End Get
@@ -117,7 +124,7 @@ Namespace [Shared].Drawing.UI.Input
         ''' <summary>
         ''' Gets or sets the border thickness.
         ''' </summary>
-        Public Property BorderThickness As Single = 1.0F
+        Public Shadows Property BorderThickness As Single = 1.0F
 
         ''' <summary>
         ''' Gets or sets whether to show the percentage text.
@@ -220,8 +227,6 @@ Namespace [Shared].Drawing.UI.Input
                 .isVisible = False
             }
 
-            Children.Add(BorderElement)
-            Children.Add(ProgressFill)
             Children.Add(PercentageText)
             UpdateProgress()
         End Sub
@@ -282,6 +287,71 @@ Namespace [Shared].Drawing.UI.Input
             End If
         End Sub
 
+        Protected Friend Overrides Sub Draw(gameTime As GameTime)
+            MyBase.Draw(gameTime)
+            Dim outer = Rectangle
+            Dim border = Math.Max(0, CInt(BorderThickness))
+            Dim inner As New Rectangle(outer.X + border, outer.Y + border,
+                                       Math.Max(0, outer.Width - border * 2), Math.Max(0, outer.Height - border * 2))
+            If border > 0 Then
+                spriteBatch.Draw(Texture, outer, ApplyOpacity(BorderColor))
+                spriteBatch.Draw(Texture, inner, ApplyOpacity(TrackColor))
+            End If
+            If inner.Width = 0 OrElse inner.Height = 0 Then Return
+            Dim start = If(IsIndeterminate, Math.Max(0.0F, _indeterminateOffset), 0.0F)
+            Dim finish = If(IsIndeterminate, Math.Min(1.0F, _indeterminateOffset + _indeterminateWidth), CSng(Math.Clamp(Percentage / 100, 0, 1)))
+            Dim left = CInt(inner.Width * start)
+            Dim right = CInt(inner.Width * finish)
+            If right <= left Then Return
+            Dim destination As New Rectangle(inner.X + left, inner.Y, right - left, inner.Height)
+            If FillGradientStops.Count = 0 Then
+                spriteBatch.Draw(Texture, destination, ApplyOpacity(FillColor))
+                Return
+            End If
+            Dim key = inner.Width.ToString() & ":" & inner.Height.ToString() & ":" & GradientStart.ToString() & GradientEnd.ToString() &
+                String.Join(";", FillGradientStops.Select(Function(s) s.Offset.ToString(Globalization.CultureInfo.InvariantCulture) & ":" & s.Color.PackedValue.ToString()))
+            If gradientTexture Is Nothing OrElse key <> gradientKey Then
+                gradientTexture?.Dispose()
+                gradientTexture = New Texture2D(Scene.graphicsDevice, inner.Width, inner.Height)
+                Dim pixels(inner.Width * inner.Height - 1) As Color
+                Dim direction = GradientEnd - GradientStart
+                Dim length = direction.LengthSquared()
+                For y = 0 To inner.Height - 1
+                    For x = 0 To inner.Width - 1
+                        Dim point As New Vector2(x / CSng(Math.Max(1, inner.Width - 1)), y / CSng(Math.Max(1, inner.Height - 1)))
+                        Dim offset = If(length > 0, Vector2.Dot(point - GradientStart, direction) / length, 0)
+                        pixels(y * inner.Width + x) = SampleGradient(offset)
+                    Next
+                Next
+                gradientTexture.SetData(pixels)
+                gradientKey = key
+            End If
+            spriteBatch.Draw(gradientTexture, destination, New Rectangle(left, 0, right - left, inner.Height), ApplyOpacity(Color.White))
+        End Sub
+
+        Public Function SampleGradient(offset As Single) As Color
+            Dim stops = FillGradientStops.OrderBy(Function(s) s.Offset).ToArray()
+            If stops.Length = 0 Then Return FillColor
+            If offset <= stops(0).Offset Then Return stops(0).Color
+            For i = 1 To stops.Length - 1
+                If offset <= stops(i).Offset Then
+                    Dim span = stops(i).Offset - stops(i - 1).Offset
+                    Return Color.Lerp(stops(i - 1).Color, stops(i).Color, If(span <= 0, 1, (offset - stops(i - 1).Offset) / span))
+                End If
+            Next
+            Return stops(stops.Length - 1).Color
+        End Function
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                gradientTexture?.Dispose()
+                gradientTexture = Nothing
+                BorderElement?.Dispose()
+                ProgressFill?.Dispose()
+            End If
+            MyBase.Dispose(disposing)
+        End Sub
+
         ''' <summary>
         ''' Increases the value by the specified amount.
         ''' </summary>
@@ -299,5 +369,10 @@ Namespace [Shared].Drawing.UI.Input
 #End Region
 
     End Class
+
+    Public Structure ProgressGradientStop
+        Public Property Offset As Single
+        Public Property Color As Color
+    End Structure
 
 End Namespace

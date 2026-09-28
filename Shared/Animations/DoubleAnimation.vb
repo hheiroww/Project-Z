@@ -11,12 +11,9 @@ Namespace [Shared].Animations
         End Function
 
         Public Overrides Function Value(t As Double) As Object
-            If Running Then
-                lastValue = Interpolate(easeFunction.Ease(t), 0.0, 1.0, CDbl([From]), CDbl([To]))
-                Return lastValue
-            Else
-                Return lastValue
-            End If
+            lastValue = Interpolate(easeFunction.Ease(Math.Max(0.0R, Math.Min(1.0R, t))),
+                                    0.0R, 1.0R, CDbl([From]), CDbl([To]))
+            Return lastValue
         End Function
 
         Public Sub New(EaseFunction As EaseFunction, [From] As Double, [To] As Double, Duration As TimeSpan, gameTime As GameTime)

@@ -36,20 +36,25 @@ Namespace [Shared].XNA
             End Get
             Set(value As SpriteBatchPropertySet)
                 _Settings = value
-                _HasSettings = _Settings Is Nothing
+                _HasSettings = _Settings IsNot Nothing
             End Set
         End Property
         Private _Settings As SpriteBatchPropertySet
         Private _HasSettings As Boolean = False
 
         Public Property isRendering As Boolean = False
+        Friend Property RenderOffset As Vector2
 
         Public Overloads Sub Begin()
             If isRendering Then Return
             If _HasSettings Then
                 Settings.Begin(SpriteBatch)
             Else
-                SpriteBatch.Begin()
+                ' Linear sampling is the correct UI default. Point sampling makes
+                ' scaled images, glyphs and imported XAML assets visibly jagged.
+                SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend,
+                                  SamplerState.LinearClamp, DepthStencilState.None,
+                                  RasterizerState.CullNone, Nothing, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
             End If
             isRendering = True
         End Sub
@@ -66,12 +71,12 @@ Namespace [Shared].XNA
         End Sub
 
         Public Overloads Sub Begin(SpriteSortMode As SpriteSortMode, BlendState As BlendState, SamplerState As SamplerState, DepthStencilState As DepthStencilState, RasterizerState As RasterizerState)
-            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState)
+            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Nothing, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
             isRendering = True
         End Sub
 
         Public Overloads Sub Begin(SpriteSortMode As SpriteSortMode, BlendState As BlendState, SamplerState As SamplerState, DepthStencilState As DepthStencilState, RasterizerState As RasterizerState, Effect As Effect)
-            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect)
+            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
             isRendering = True
         End Sub
 

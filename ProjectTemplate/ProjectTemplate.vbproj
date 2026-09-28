@@ -6,7 +6,7 @@
     <RootNamespace>$safeprojectname$</RootNamespace>
     <AssemblyName>$projectname$</AssemblyName>
     <UseWindowsForms>True</UseWindowsForms>
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -18,8 +18,7 @@
     <None Remove="My Project\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
-    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
   </ItemGroup>
   <!--
     TODO: Add a reference to the Project Z shared library.

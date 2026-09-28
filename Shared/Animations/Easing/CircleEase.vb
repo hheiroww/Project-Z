@@ -8,9 +8,10 @@
                 Case Easing.EaseType.EaseIn
                     Return 1 - Math.Sqrt(1 - t ^ 2)
                 Case Easing.EaseType.EaseOut
-                    Return 1 - Math.Sqrt(1 - (Math.Sqrt(t ^ 2)))
+                    Return Math.Sqrt(1 - ((t - 1) ^ 2))
                 Case Easing.EaseType.EaseInOut
-                    Return 1 - Math.Sqrt(1 - t ^ (1 - (Math.Sqrt(1 - t ^ 2)) / 2))
+                    If t < 0.5R Then Return (1 - Math.Sqrt(1 - ((2 * t) ^ 2))) / 2
+                    Return (Math.Sqrt(1 - ((-2 * t + 2) ^ 2)) + 1) / 2
                 Case Else
                     Return t
             End Select

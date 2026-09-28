@@ -18,6 +18,12 @@ Namespace [Shared].Drawing.UI
 #Region "Properties"
 
         Public isUserInvalidated As Boolean = False
+        ' Optional declarative layout adapter; native controls retain their own layout.
+        Public Property ImportedLayout As Action
+        ' Opt-in virtualization for fixed-size items such as a file gallery.
+        ' Keep item positions current, but arrange descendants only near view.
+        Public Property VirtualizationViewport As SceneElement
+        Friend Property IsLayoutVirtualized As Boolean
 
         Public Property isLoaded As Boolean = False
 
@@ -39,6 +45,7 @@ Namespace [Shared].Drawing.UI
                 Return _Position
             End Get
             Set(value As Vector2)
+                If value = _Position Then Return
                 Dim OldPosition As Vector2 = _Position
                 _Position = value
                 RaiseEvent PositionChanged(OldPosition, _Position)
@@ -51,12 +58,40 @@ Namespace [Shared].Drawing.UI
                 Return _Size
             End Get
             Set(value As Vector2)
+                If value = _Size Then Return
                 Dim oldSize As Vector2 = _Size
                 _Size = value
                 RaiseEvent SizeChanged(oldSize, _Size)
             End Set
         End Property
         Private _Size As Vector2
+
+        ''' <summary>
+        ''' WPF RenderTransform compatibility values. They affect the rendered
+        ''' and hit-test rectangle without changing layout Size/Position, so a
+        ''' hover storyboard cannot make the parent panel reflow.
+        ''' </summary>
+        Public Property RenderScale As Vector2
+            Get
+                Return _RenderScale
+            End Get
+            Set(value As Vector2)
+                _RenderScale = New Vector2(Math.Max(0.001F, value.X), Math.Max(0.001F, value.Y))
+                SetRectangleProperty()
+            End Set
+        End Property
+        Private _RenderScale As Vector2 = Vector2.One
+
+        Public Property RenderTranslation As Vector2
+            Get
+                Return _RenderTranslation
+            End Get
+            Set(value As Vector2)
+                _RenderTranslation = value
+                SetRectangleProperty()
+            End Set
+        End Property
+        Private _RenderTranslation As Vector2 = Vector2.Zero
 
         Public Property Padding As Thickness
             Get
@@ -109,11 +144,30 @@ Namespace [Shared].Drawing.UI
                 Return _zIndex
             End Get
             Set(value As Integer)
+                If _zIndex = value Then Return
                 _zIndex = value
+                Scene?.InvalidateRenderOrder()
                 RaiseEvent IndexChanged()
             End Set
         End Property
         Private _zIndex As Integer = 0
+
+        ''' <summary>
+        ''' Renders this element and its descendants in Project-Z's popup layer.
+        ''' The layer stays above ordinary controls even when ordinary content is
+        ''' added later (for example, asynchronously loaded gallery thumbnails).
+        ''' </summary>
+        Public Property IsOverlay As Boolean
+            Get
+                Return _IsOverlay
+            End Get
+            Set(value As Boolean)
+                If _IsOverlay = value Then Return
+                _IsOverlay = value
+                Scene?.InvalidateRenderOrder()
+            End Set
+        End Property
+        Private _IsOverlay As Boolean
 
         Public Property isEnabled As Boolean = True
 
@@ -136,6 +190,10 @@ Namespace [Shared].Drawing.UI
         Private _isSelected As Boolean = False
 
         Public Property CanSelect As Boolean = False
+        ''' <summary>Include this selectable control in keyboard navigation.</summary>
+        Public Property TabStop As Boolean = True
+        ''' <summary>Lower values come first; ties follow scene render order.</summary>
+        Public Property TabIndex As Integer = 0
         Public Property isMouseOver As Boolean
             Get
                 Return _MouseOver
@@ -251,7 +309,31 @@ Namespace [Shared].Drawing.UI
         End Property
         Private _Rectangle As New Rectangle(0, 0, 0, 0)
 
-        Public Property isVisible As Boolean = True
+        Public Property isVisible As Boolean
+            Get
+                Return visibleValue
+            End Get
+            Set(value As Boolean)
+                If value = visibleValue Then Return
+                visibleValue = value
+                RaiseEvent VisibilityChanged()
+            End Set
+        End Property
+        Private visibleValue As Boolean = True
+        Public Event VisibilityChanged()
+
+        ''' <summary>WPF-compatible opacity, inherited multiplicatively from visual parents.</summary>
+        Public Property Opacity As Single = 1.0F
+
+        Protected Friend Function ApplyOpacity(color As Color) As Color
+            Dim effective = Math.Clamp(Opacity, 0.0F, 1.0F)
+            Dim ancestor = Parent
+            While ancestor IsNot Nothing
+                effective *= Math.Clamp(ancestor.Opacity, 0.0F, 1.0F)
+                ancestor = ancestor.Parent
+            End While
+            Return New Color(color.R, color.G, color.B, CByte(Math.Clamp(CInt(color.A * effective), 0, 255)))
+        End Function
 
         Public Property GUID As String = ""
 
@@ -261,6 +343,7 @@ Namespace [Shared].Drawing.UI
         Protected Friend Parent As SceneElement
 
         Public Property Clip As Boolean = False
+        Public Property VisualEffect As Primitives.XamlNativeEffect
 
 #End Region
 
@@ -284,6 +367,7 @@ Namespace [Shared].Drawing.UI
 
         Private Sub _Children_ChildAdded(c As SceneElement) Handles _Children.ChildAdded
             AddHandler c.Invalidated, AddressOf OnPreviewInvalidated
+            Scene?.InvalidateRenderOrder()
             If Scene.Elements.Contains(Me) Then
                 Scene.AddElement(c)
             End If
@@ -291,14 +375,16 @@ Namespace [Shared].Drawing.UI
 
         Private Sub _Children_ChildRemoved(c As SceneElement) Handles _Children.ChildRemoved
             RemoveHandler c.Invalidated, AddressOf OnPreviewInvalidated
-            If Scene.Elements.Contains(Me) Then
-                Scene.RemoveElement(c)
-            End If
+            Scene?.InvalidateRenderOrder()
+            Scene?.RemoveElement(c)
         End Sub
 
         Protected Friend Sub OnPreviewInvalidated(sender As SceneElement)
             RaiseEvent PreviewInvalidated(sender)
-            ValidationCheck()
+            ' Coalesce mutations until the scene's root layout pass. Immediate
+            ' recursive validation here turns a scroll into repeated tree walks
+            ' for every moved child, before drawing has even started.
+            _Valid = False
         End Sub
 
         Public Sub OnUserInvalidated()
@@ -336,6 +422,7 @@ Namespace [Shared].Drawing.UI
         Public Event MouseLeftClick(p As Point)
         Public Event MouseLeftDown(p As Point)
         Public Event MouseLeftUp(p As Point)
+        Public Event MouseWheel(delta As Integer, p As Point)
         Public Event DragDrop(p As Point, Element As SceneElement)
         Public Event DragOver(p As Point, Element As SceneElement)
 
@@ -356,6 +443,10 @@ Namespace [Shared].Drawing.UI
 
         Protected Friend Sub OnMouseRightClick(p As Point)
             RaiseEvent MouseRightClick(p)
+        End Sub
+
+        Protected Friend Sub OnMouseWheel(delta As Integer, p As Point)
+            RaiseEvent MouseWheel(delta, p)
         End Sub
 
         Protected Friend Sub OnMouseMove(currentPoint As Point, lastPoint As Point)
@@ -425,11 +516,21 @@ Namespace [Shared].Drawing.UI
 #Region "Container Functionality"
 
         Public Sub ValidationCheck()
-            If _isCheckingValidation Then Return
+            If _isCheckingValidation OrElse disposedValue Then Return
             _isCheckingValidation = True
             Try
-                If Not Valid Then Validate()
-                Children.ForEach(Sub(c) If c IsNot Nothing Then c.ValidationCheck())
+                ' Composite controls update internal child geometry from events such
+                ' as RectangleChanged and ValueChanged. Re-run the parent layout so
+                ' those local coordinates are resolved into scene coordinates before
+                ' every draw, even when the parent was previously marked valid.
+                Validate()
+                Dim viewport = If(VirtualizationViewport Is Nothing, Rectangle.Empty, VirtualizationViewport.Rectangle)
+                viewport.Inflate(64, 64)
+                For Each child In Children
+                    If child Is Nothing Then Continue For
+                    child.IsLayoutVirtualized = VirtualizationViewport IsNot Nothing AndAlso Not child.Rectangle.Intersects(viewport)
+                    If child.isVisible AndAlso Not child.IsLayoutVirtualized Then child.ValidationCheck()
+                Next
             Finally
                 _isCheckingValidation = False
             End Try
@@ -444,7 +545,11 @@ Namespace [Shared].Drawing.UI
             If _isValidating Then Return
             _isValidating = True
             Try
-                AlignChildren()
+                If ImportedLayout IsNot Nothing Then
+                    ImportedLayout.Invoke()
+                Else
+                    AlignChildren()
+                End If
                 Valid = True
             Finally
                 _isValidating = False
@@ -467,7 +572,7 @@ Namespace [Shared].Drawing.UI
                    (OrientationReserve = DisplayReservation.FloatY)
         End Function
 
-        Private Sub AlignChildren()
+        Protected Overridable Sub AlignChildren()
             ' Order, Size, and Position Children
             Dim CurrentPosition As New Vector2(Padding.Left, Padding.Top)
             Children.ForEach(Sub(c) AlignChild(c, CurrentPosition))
@@ -542,8 +647,7 @@ Namespace [Shared].Drawing.UI
         Public Sub BringToFront()
             If Scene Is Nothing Then Return
             If Not Scene.ContainsElement(Me) Then Return
-            Scene.RemoveElement(Me)
-            Scene.AddElement(Me)
+            Scene.BringElementToFront(Me)
         End Sub
 
         ''' <summary>
@@ -596,23 +700,36 @@ Namespace [Shared].Drawing.UI
 
         Protected Friend MustOverride Sub Draw(gameTime As GameTime)
 
+
         Protected Friend Overridable Function ContainsPoint(p As Point) As Boolean
             Return Rectangle.Contains(p)
         End Function
 
+        Public Shared RenderExceptionCount As Long
+        Public Shared FirstRenderException As String
         Protected Friend Overridable Overloads Sub doDraw(gameTime As GameTime)
+            If disposedValue Then Return
             Try
-                spriteBatch.Begin()
+                spriteBatch.RenderOffset = If(Scene Is Nothing, Vector2.Zero, Scene.EffectRenderOffset)
+                Dim rasterizer = spriteBatch.GraphicsDevice.RasterizerState
+                If rasterizer IsNot Nothing AndAlso rasterizer.ScissorTestEnable Then
+                    spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend,
+                                      SamplerState.LinearClamp, DepthStencilState.None, rasterizer)
+                Else
+                    spriteBatch.Begin()
+                End If
                 Draw(gameTime)
                 spriteBatch.End()
             Catch ex As Exception
-
+                RenderExceptionCount += 1
+                If FirstRenderException Is Nothing Then FirstRenderException = ex.ToString()
             End Try
         End Sub
 
         Public Overridable Sub Tick(gameTime As GameTime)
+            If disposedValue Then Return
             Try
-                Timeline.Tick(gameTime)
+                Timeline?.Tick(gameTime)
             Catch ex As Exception
 
             End Try
@@ -634,6 +751,10 @@ Namespace [Shared].Drawing.UI
         End Function
 
         Public Overloads Sub BindAnimation(TargetProperty As ElementProperty, Animation As AnimationBase)
+            ' A rebuilt scene can retire the element currently under the pointer.
+            ' Its synthetic MouseLeave arrives after RemoveElement has detached and
+            ' disposed the timeline; ignore that stale animation request.
+            If Timeline Is Nothing OrElse TargetProperty Is Nothing OrElse Animation Is Nothing Then Return
             Timeline.AddChild(Animation, TargetProperty)
         End Sub
 
@@ -641,11 +762,43 @@ Namespace [Shared].Drawing.UI
             Timeline.RemoveChild(Animation)
         End Sub
 
-        Private Overloads Sub SetRectangleProperty() Handles Me.SizeChanged, Me.PositionChanged, Me.AlignmentChanged
+        Public Sub StopBoundAnimation(Animation As AnimationBase)
+            Timeline?.StopChild(Animation)
+        End Sub
+
+        Private Sub LayoutGeometryChanged() Handles Me.SizeChanged, Me.PositionChanged, Me.AlignmentChanged
+            ' Child positions are absolute and will be arranged separately.
+            ' Moving an unscaled parent does not change their transform; walking
+            ' its entire subtree here repeats the work at every tree level.
+            SetRectangleProperty(RenderScale <> Vector2.One)
+        End Sub
+
+        Private Overloads Sub SetRectangleProperty(Optional updateDescendants As Boolean = True)
             Dim oldRect As Rectangle = Rectangle
-            _Rectangle = New Rectangle(CInt(Position.X), CInt(Position.Y), CInt(Size.X), CInt(Size.Y))
-            RaiseEvent RectangleChanged()
-            If oldRect <> _Rectangle Then Valid = False
+            Dim width = Math.Max(0.0F, Size.X * RenderScale.X)
+            Dim height = Math.Max(0.0F, Size.Y * RenderScale.Y)
+            Dim x = Position.X + RenderTranslation.X - ((width - Size.X) / 2.0F)
+            Dim y = Position.Y + RenderTranslation.Y - ((height - Size.Y) / 2.0F)
+            Dim ancestor = Parent
+            While ancestor IsNot Nothing
+                Dim center = ancestor.Position + ancestor.Size / 2.0F
+                x = center.X + (x - center.X) * ancestor.RenderScale.X + ancestor.RenderTranslation.X
+                y = center.Y + (y - center.Y) * ancestor.RenderScale.Y + ancestor.RenderTranslation.Y
+                width *= ancestor.RenderScale.X
+                height *= ancestor.RenderScale.Y
+                ancestor = ancestor.Parent
+            End While
+            _Rectangle = New Rectangle(CInt(Math.Round(x)), CInt(Math.Round(y)),
+                                       CInt(Math.Round(width)), CInt(Math.Round(height)))
+            If oldRect <> _Rectangle Then
+                RaiseEvent RectangleChanged()
+                Valid = False
+                If updateDescendants AndAlso Children IsNot Nothing Then
+                    For Each child In Children
+                        child.SetRectangleProperty()
+                    Next
+                End If
+            End If
         End Sub
 
         Public Function RelativeTo(Element As SceneElement) As Point
@@ -691,6 +844,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Private Sub init()
+            If Scene Is Nothing OrElse Not Scene.EnableDesignTimeControls Then Return
             If Not isPrototype AndAlso Not Me.GetType.IsSubclassOf(GetType(PrototypeElement)) Then
                 ProtoButton = New PrototypeElement(Scene, Me)
                 With ProtoButton
@@ -720,11 +874,22 @@ Namespace [Shared].Drawing.UI
 
 #Region "IDisposable Support"
         Private disposedValue As Boolean ' To detect redundant calls
+        Public ReadOnly Property IsDisposed As Boolean
+            Get
+                Return disposedValue
+            End Get
+        End Property
 
         ' IDisposable
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not Me.disposedValue Then
+                Me.disposedValue = True
                 If disposing Then
+                    VisualEffect?.Dispose()
+                    ' Detach the complete registered tree BEFORE clearing its
+                    ' children. Otherwise their parent links disappear while
+                    ' stale flat-list entries keep ticking/drawing every frame.
+                    Scene?.RemoveElement(Me)
                     ' Dispose managed resources
                     ' Dispose children first
                     For Each child In _Children

@@ -135,7 +135,7 @@ Namespace [Shared].Drawing.UI.Input
         ''' <summary>
         ''' Gets or sets the border color.
         ''' </summary>
-        Public Property BorderColor As Color
+        Public Shadows Property BorderColor As Color
             Get
                 Return _BorderColor
             End Get

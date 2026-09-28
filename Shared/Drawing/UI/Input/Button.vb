@@ -29,6 +29,24 @@ Namespace [Shared].Drawing.UI.Input
             End Set
         End Property
         Private _AutoSize As ButtonAutoSize = ButtonAutoSize.XY
+
+        ''' <summary>
+        ''' Keeps an explicitly sized button on one line, expanding only when
+        ''' its text would otherwise wrap or be clipped.
+        ''' </summary>
+        Public Property AutoSizeWidthOnTextOverflow As Boolean
+            Get
+                Return _AutoSizeWidthOnTextOverflow
+            End Get
+            Set(value As Boolean)
+                _AutoSizeWidthOnTextOverflow = value
+                If TextElement IsNot Nothing Then
+                    TextElement.TextWrapping = If(value, TextWrapping.NoWrap, TextWrapping.Wrap)
+                    Button_Changed()
+                End If
+            End Set
+        End Property
+        Private _AutoSizeWidthOnTextOverflow As Boolean
         Private _OriginalSize As Vector2
 
         Public Property isAnimated As Boolean = False
@@ -110,6 +128,8 @@ Namespace [Shared].Drawing.UI.Input
         Public Property MouseOverBackgroundProperty As New MouseOverBackgroundColorProperty(Me)
 
         Public Property MouseDownBackgroundProperty As New MouseDownBackgroundColorProperty(Me)
+        Public Property MouseOverBackgroundBrush As XamlGradientBrush
+        Public Property MouseDownBackgroundBrush As XamlGradientBrush
 
         Public Property ForegroundProperty As New ForegroundColorProperty(TextElement)
 
@@ -156,7 +176,13 @@ Namespace [Shared].Drawing.UI.Input
             If CanChange AndAlso TextElement IsNot Nothing Then
                 CanChange = False
                 If AutoSize <> ButtonAutoSize.None Then DoAutoSize()
+                TextElement.Font = Font
+                TextElement.TextWrapping = If(AutoSizeWidthOnTextOverflow, TextWrapping.NoWrap, TextWrapping.Wrap)
                 TextElement.Text = Text
+                If AutoSizeWidthOnTextOverflow Then
+                    Dim requiredWidth = Scene.MeasureText(Font, Text).X + Padding.Left + Padding.Right + 10
+                    If requiredWidth > Size.X Then Size = New Vector2(requiredWidth, Size.Y)
+                End If
                 CanChange = True
             End If
         End Sub
@@ -193,12 +219,14 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub Init()
+            CanSelect = True
             ' Create TextElement after base constructor has set Scene and spriteBatch
             TextElement = New TextElement(Scene, spriteBatch.SpriteBatch) With {
                 .HorizontalAlign = HorizontalAlignment.Center,
                 .VerticalAlign = VerticalAlignment.Center,
                 .isMouseBypassEnabled = True,
-                .ForegroundColor = _ForegroundColor
+                .ForegroundColor = _ForegroundColor,
+                .TextWrapping = If(_AutoSizeWidthOnTextOverflow, TextWrapping.NoWrap, TextWrapping.Wrap)
             }
             Children.Add(TextElement)
             Clip = True
@@ -211,14 +239,23 @@ Namespace [Shared].Drawing.UI.Input
 
             If isMouseDown Then
                 DrawColor = MouseDownBackgroundColor
-            ElseIf isMouseOver Then
+            ElseIf isMouseOver OrElse isSelected Then
                 DrawColor = MouseOverBackgroundColor
             Else
                 DrawColor = BackgroundColor
             End If
 
-            spriteBatch.Draw(Texture, Rectangle, DrawColor)
+            Dim stateBrush = If(isMouseDown, MouseDownBackgroundBrush, If(isMouseOver, MouseOverBackgroundBrush, BackgroundBrush))
+            DrawBackground(DrawColor, Not isMouseDown AndAlso Not isMouseOver, stateBrush)
             TextElement.Draw(gameTime)
+        End Sub
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then
+                MouseOverBackgroundBrush?.Dispose()
+                MouseDownBackgroundBrush?.Dispose()
+            End If
+            MyBase.Dispose(disposing)
         End Sub
 
     End Class
