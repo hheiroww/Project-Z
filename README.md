@@ -1,4 +1,4 @@
-# Project Z
+# ⚡ Project Z 2.5
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -8,9 +8,9 @@ Build expressive desktop tools, creative applications, and game interfaces with 
 ![XAML](https://img.shields.io/badge/UI-XAML-35e7c4?style=for-the-badge&labelColor=061b16)
 ![Windows](https://img.shields.io/badge/.NET-8_WINDOWS-78bfff?style=for-the-badge&labelColor=061b16)
 
-**[Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](docs/FEATURES.md)**
+**[Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)**
 
-![Real heirowSnap Project Z gallery with dark green styling, rounded image tiles, and native shader effects](./Images/showcase/heirowsnap-gallery.png)
+![Real heirowSnap Project Z gallery with dark green styling, rounded image tiles, and native shader effects](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/heirowsnap-gallery.png)
 
 *heirowSnap, ported to Project Z: original XAML styling brought into a native DX12 scene.*
 
@@ -31,7 +31,90 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **Source preview:** these features describe this source update relative to published `master` at `e01a0ae`. The NuGet package may lag behind; build from source for the DX12 feature set.
+> **📦 Release 2.5.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+
+## 📦 Install 2.5.0
+
+```powershell
+dotnet add package ProjectZ --version 2.5.0
+```
+
+[![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
+[![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
+
+**🔐 Dependency refresh:** ProjectZ 2.5.0 references SocketJack **2026.13.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication.
+
+## 🧭 Expand the feature guide
+
+<details open>
+<summary><strong>⚡ Native DirectX 12 · scenes and rendering</strong></summary>
+
+MonoGame 3.8.5.1 supplies the native DX12 backend while preserving the familiar `Microsoft.Xna.Framework` drawing API. Render targets, FXAA, viewport resizing, and shared-device tool windows support desktop applications and interactive scenes. Select `ProjectZGraphicsBackend=DirectX11` when testing the WindowsDX fallback; the distributed package uses DX12.
+
+</details>
+
+<details>
+<summary><strong>🧱 XAML · resources, layout and controls</strong></summary>
+
+Import supported windows, named controls, resource dictionaries, and item templates into the scene graph. Grid, Canvas, WrapPanel, DockPanel, UniformGrid, scrolling, gradients, masks, and independent corner radii provide layout and styling. The separate XAML code generator produces VB named-control and event scaffolding. This is a supported XAML subset, not complete WPF compatibility.
+
+</details>
+
+<details>
+<summary><strong>✨ GPU effects · blur, shadow and color</strong></summary>
+
+Effects can apply to individual controls or subtrees. Blur, shadows, inversion, and chromatic effects integrate with XAML and animatable properties. Build tooling compiles `Resources/XamlEffects.fx` for the selected graphics backend. Existing WPF shader binaries are not automatically converted; consult the third-party notices for adapter licensing.
+
+</details>
+
+<details>
+<summary><strong>🎞️ Animation · storyboards and input triggers</strong></summary>
+
+Use double/color keyframes, discrete corner-radius changes, easing, repeating tracks, and load/hover/click triggers. Start a named storyboard after attaching the imported tree. Animation targets include scale, translation, and effect properties.
+
+</details>
+
+<details>
+<summary><strong>🖱️ Input · scaling, transformed hit testing and editing</strong></summary>
+
+Mouse coordinates map from native client space into render space during resizing and display scaling. Hit testing respects transforms, visibility, and clipping. Controls support mouse buttons, hover, drag, wheel routing, keyboard repeat, editable text, selection, clipboard shortcuts, and password fields. Kinetic scrolling uses bounded impulses and time-based deceleration. Touch, pen, IME, and accessibility-provider parity are not implied.
+
+</details>
+
+<details>
+<summary><strong>🎬 Media · inline audio and video</strong></summary>
+
+Video frames become scene textures with synchronized audio, play/pause/seek, looping, clipping, and bounded decode sizes. Media and capture applications may require FFmpeg and additional application configuration.
+
+</details>
+
+<details>
+<summary><strong>🧊 3D surfaces · meshes, cameras and models</strong></summary>
+
+`Surface3DElement` brings XYZW meshes, cameras, materials, OBJ/FBX import, textures, wireframe, and custom shaders into the UI. The NuGet package includes the internal model-import assembly and declares its public dependencies.
+
+</details>
+
+<details>
+<summary><strong>🪟 Desktop composition · windows and native integration</strong></summary>
+
+Borderless/resizable hosts and shared-device tool windows connect the scene system to desktop workflows. DWM composition requests depend on the host window and OS configuration; they do not guarantee transparent blur in every application. The heirowSnap source example demonstrates tray menus, shortcuts, notifications, and capture controls.
+
+</details>
+
+<details>
+<summary><strong>🎹 Creative projects · VST3, MIDI and design tools</strong></summary>
+
+The separate VST3 project combines granular synthesis, MIDI, a native editor, and deployment tooling. The XAML design surface and sample applications demonstrate creative workflows. Installing the framework NuGet package does not install a plugin; plugin deployment is explicit.
+
+</details>
+
+<details>
+<summary><strong>📸 heirowSnap showcase · an application built on Project Z</strong></summary>
+
+The source port demonstrates galleries, account/file/chat flows, clipboard history, capture controls, notifications, and imported theme resources. The images below show local rendering and UI; remote calling and streaming still require independent two-client validation. These application features are not bundled as a ready-to-run app in the framework package.
+
+</details>
 
 ## heirowSnap built with Project Z
 
@@ -39,17 +122,17 @@ The port brings an existing WPF application's linked XAML and theme resources in
 
 ### Your theme, carried across
 
-![DX12 rounded corners, gradients, button states, blur, shadow, and resource styling](./Images/showcase/xaml-effects.png)
+![DX12 rounded corners, gradients, button states, blur, shadow, and resource styling](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/xaml-effects.png)
 
 *Native surfaces, gradient brushes, state styling, and GPU effects.*
 
 ### A complete desktop settings surface
 
-![heirowSnap native settings with configurable keyboard shortcuts](./Images/showcase/heirowsnap-settings.png)
+![heirowSnap native settings with configurable keyboard shortcuts](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/heirowsnap-settings.png)
 
 *Project Z controls, tabs, shortcuts, and the existing settings model.*
 
-![Native recording toolbar with timer, audio level, Pause, and Stop/save](./Images/showcase/heirowsnap-recorder.png)
+![Native recording toolbar with timer, audio level, Pause, and Stop/save](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/heirowsnap-recorder.png)
 
 *Small windows share the same visual language: recording controls, notifications, settings, and tray surfaces.*
 
@@ -59,7 +142,7 @@ The port brings an existing WPF application's linked XAML and theme resources in
 - **Capture:** screenshots, video/audio recording, pause/resume, region indicators, audio levels, and native recording controls.
 - **Desktop polish:** same-process settings, custom tray menus, animated notifications, and preservation of existing configuration fields.
 
-These are real development captures of the port and its DX12 graphics probe. They illustrate rendering and local UI; remote calling and streaming require separate two-client validation. [Capture provenance](Images/showcase/README.md).
+These are real development captures of the port and its DX12 graphics probe. They illustrate rendering and local UI; remote calling and streaming require separate two-client validation. [Capture provenance](https://github.com/hheiroww/Project-Z/blob/master/Images/showcase/README.md).
 
 ## Bring your XAML
 
@@ -123,7 +206,7 @@ Application and merged dictionaries, local overrides, `BasedOn` styles, solid br
 
 Effects capture subtrees into reusable GPU render targets and respect ancestor scroll clipping. Storyboards can animate blur radius, shadow depth, opacity, color, and chromatic amount. `RegisterEffectAdapter` extends the mappings.
 
-The supported WPFPixelShaderLibrary inversion and linear/spastic chromatic adapters use the original shader calculations. Generic chromatic effects and WPF box blur use approximations. Arbitrary compiled WPF `.ps` files are not automatically converted. [Shader details and licensing](docs/FEATURES.md#xaml-resource-brushes-and-effects).
+The supported WPFPixelShaderLibrary inversion and linear/spastic chromatic adapters use the original shader calculations. Generic chromatic effects and WPF box blur use approximations. Arbitrary compiled WPF `.ps` files are not automatically converted. [Shader details and licensing](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md#xaml-resource-brushes-and-effects).
 
 ### Motion stays in the markup
 
@@ -172,6 +255,16 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
+The framework Release build also creates `bin/Release/ProjectZ.2.5.0.nupkg`.
+The project and assembly version is `2.5.0.0`; NuGet normalizes the package version
+to `2.5.0`. The package includes the internal model-import DLL and restores its
+public dependencies, including SocketJack, from NuGet. Local SocketJack source
+development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
+building a package for distribution.
+
+Solution builds do not install the VST plugin. To explicitly build and deploy it,
+use `dotnet build "Project Z VST/Project Z VST.csproj" -c Release -p:DeployVst3OnBuild=true`.
+
 **For heirowSnap**, provide the original wShare checkout. `WShareRoot` defaults to `%USERPROFILE%\source\repos\wShare`; legacy settings also references `InputHelper.dll` in the adjacent AI.NET output. See the [project file](heirowSnap%20Legacy%20Settings/heirowSnap%20Legacy%20Settings.vbproj) for the expected path.
 
 ```powershell
@@ -198,11 +291,11 @@ Network workflows need a configured service/account; recording and thumbnail wor
 
 ## Go deeper
 
-- [Backends, composition, inline video, and 3D](docs/FEATURES.md#graphics-backends-and-3d-surfaces)
-- [Rounded corners, XAML resources, and effects](docs/FEATURES.md#rounded-xaml-surfaces)
-- [Desktop integration and focused smoke checks](docs/FEATURES.md#heirowsnap-desktop-integration)
-- [VST3 editor and deployment](Project%20Z%20VST/README.md)
-- [Third-party notices](THIRD-PARTY-NOTICES.md)
+- [Backends, composition, inline video, and 3D](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md#graphics-backends-and-3d-surfaces)
+- [Rounded corners, XAML resources, and effects](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md#rounded-xaml-surfaces)
+- [Desktop integration and focused smoke checks](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md#heirowsnap-desktop-integration)
+- [VST3 editor and deployment](https://github.com/hheiroww/Project-Z/blob/master/Project%20Z%20VST/README.md)
+- [Third-party notices](https://github.com/hheiroww/Project-Z/blob/master/THIRD-PARTY-NOTICES.md)
 
 Contributions and reproducible issues are welcome. For rendering problems, include the backend, GPU/driver, display scaling, and a small XAML example.
 
@@ -210,4 +303,4 @@ Contributions and reproducible issues are welcome. For rendering problems, inclu
 
 **Project Z · Declarative UI with a native GPU canvas.**
 
-Built with MonoGame, .NET, SocketJack, and the libraries in [third-party notices](THIRD-PARTY-NOTICES.md). Imported WPFPixelShaderLibrary adapters include GPL-3.0 material; review the notices and bundled license before redistribution.
+Built with MonoGame, .NET, SocketJack, and the libraries in [third-party notices](https://github.com/hheiroww/Project-Z/blob/master/THIRD-PARTY-NOTICES.md). Imported WPFPixelShaderLibrary adapters include GPL-3.0 material; review the notices and bundled license before redistribution.

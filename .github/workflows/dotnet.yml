@@ -1,0 +1,56 @@
+name: Build and publish ProjectZ
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Wait for SocketJack dependency to be indexed
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content 'Project Z Windows.vbproj'
+          $version = ($project.Project.ItemGroup.PackageReference | Where-Object Include -eq 'SocketJack').Version
+          for ($attempt = 1; $attempt -le 20; $attempt++) {
+            $index = Invoke-RestMethod 'https://api.nuget.org/v3-flatcontainer/socketjack/index.json'
+            if ($index.versions -contains $version) { break }
+            if ($attempt -eq 20) { throw "SocketJack $version is not yet available from NuGet." }
+            Write-Host "Waiting for NuGet to index SocketJack $version ($attempt/20)."
+            Start-Sleep -Seconds 30
+          }
+      - name: Restore and audit direct and transitive dependencies
+        run: dotnet restore "Project Z Windows.vbproj" -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
+      - name: Build Release package
+        run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
+      - name: Preserve package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-nuget
+          path: bin/Release/ProjectZ.*.nupkg
+          if-no-files-found: error
+      - name: NuGet Trusted Publishing
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Pathogenix
+      - name: Push ProjectZ to NuGet
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $packages = @(Get-ChildItem bin/Release/ProjectZ.*.nupkg | Where-Object Name -NotLike '*.symbols.nupkg')
+          if ($packages.Count -ne 1) { throw "Expected exactly one ProjectZ package." }
+          dotnet nuget push $packages[0].FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
