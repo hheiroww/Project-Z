@@ -16,15 +16,15 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2.5.0.0</Version>
+	<Version>2.5.1.0</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>Native DX12, XAML scenes, GPU effects, animation, scaled input, inline media, and 3D model import. Updates SocketJack to 2026.13.0 with SSH.NET 2026.0.0, adds dependency audit gates and NuGet Trusted Publishing.</PackageReleaseNotes>
+    <PackageReleaseNotes>Native DX12, XAML scenes, GPU effects, animation, scaled input, inline media, and 3D model import. Updates SocketJack to 2026.13.1 with SSH.NET 2026.0.0, adds dependency audit gates and NuGet Trusted Publishing.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
 	<PackageProjectUrl>https://github.com/hheiroww/Project-Z</PackageProjectUrl>
 	<ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
 	<!-- Published packages must not depend on an unpublished sibling checkout. -->
@@ -71,7 +71,7 @@
     <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-    <PackageReference Include="SocketJack" Version="2026.13.0" Condition="!Exists('$(SocketJackProject)')" />
+    <PackageReference Include="SocketJack" Version="2026.13.1" Condition="!Exists('$(SocketJackProject)')" />
     <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
     <PackageReference Include="LibTessDotNet" Version="1.1.15" />
     <!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
@@ -139,7 +139,7 @@
     <Folder Include="Shared\Drawing\Designer\DesignTime\" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="README.md">
+    <None Update="README.NuGet.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

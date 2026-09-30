@@ -44,77 +44,57 @@ dotnet add package ProjectZ --version 2.5.1
 
 **🔐 Dependency refresh:** ProjectZ 2.5.1 references SocketJack **2026.13.1**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication.
 
-## 🧭 Expand the feature guide
+## 🧭 Feature guide
 
-<details open>
-<summary><strong>⚡ Native DirectX 12 · scenes and rendering</strong></summary>
+### ⚡ Native DirectX 12 · scenes and rendering
 
 MonoGame 3.8.5.1 supplies the native DX12 backend while preserving the familiar `Microsoft.Xna.Framework` drawing API. Render targets, FXAA, viewport resizing, and shared-device tool windows support desktop applications and interactive scenes. Select `ProjectZGraphicsBackend=DirectX11` when testing the WindowsDX fallback; the distributed package uses DX12.
 
-</details>
 
-<details>
-<summary><strong>🧱 XAML · resources, layout and controls</strong></summary>
+### 🧱 XAML · resources, layout and controls
 
 Import supported windows, named controls, resource dictionaries, and item templates into the scene graph. Grid, Canvas, WrapPanel, DockPanel, UniformGrid, scrolling, gradients, masks, and independent corner radii provide layout and styling. The separate XAML code generator produces VB named-control and event scaffolding. This is a supported XAML subset, not complete WPF compatibility.
 
-</details>
 
-<details>
-<summary><strong>✨ GPU effects · blur, shadow and color</strong></summary>
+### ✨ GPU effects · blur, shadow and color
 
 Effects can apply to individual controls or subtrees. Blur, shadows, inversion, and chromatic effects integrate with XAML and animatable properties. Build tooling compiles `Resources/XamlEffects.fx` for the selected graphics backend. Existing WPF shader binaries are not automatically converted; consult the third-party notices for adapter licensing.
 
-</details>
 
-<details>
-<summary><strong>🎞️ Animation · storyboards and input triggers</strong></summary>
+### 🎞️ Animation · storyboards and input triggers
 
 Use double/color keyframes, discrete corner-radius changes, easing, repeating tracks, and load/hover/click triggers. Start a named storyboard after attaching the imported tree. Animation targets include scale, translation, and effect properties.
 
-</details>
 
-<details>
-<summary><strong>🖱️ Input · scaling, transformed hit testing and editing</strong></summary>
+### 🖱️ Input · scaling, transformed hit testing and editing
 
 Mouse coordinates map from native client space into render space during resizing and display scaling. Hit testing respects transforms, visibility, and clipping. Controls support mouse buttons, hover, drag, wheel routing, keyboard repeat, editable text, selection, clipboard shortcuts, and password fields. Kinetic scrolling uses bounded impulses and time-based deceleration. Touch, pen, IME, and accessibility-provider parity are not implied.
 
-</details>
 
-<details>
-<summary><strong>🎬 Media · inline audio and video</strong></summary>
+### 🎬 Media · inline audio and video
 
 Video frames become scene textures with synchronized audio, play/pause/seek, looping, clipping, and bounded decode sizes. Media and capture applications may require FFmpeg and additional application configuration.
 
-</details>
 
-<details>
-<summary><strong>🧊 3D surfaces · meshes, cameras and models</strong></summary>
+### 🧊 3D surfaces · meshes, cameras and models
 
 `Surface3DElement` brings XYZW meshes, cameras, materials, OBJ/FBX import, textures, wireframe, and custom shaders into the UI. The NuGet package includes the internal model-import assembly and declares its public dependencies.
 
-</details>
 
-<details>
-<summary><strong>🪟 Desktop composition · windows and native integration</strong></summary>
+### 🪟 Desktop composition · windows and native integration
 
 Borderless/resizable hosts and shared-device tool windows connect the scene system to desktop workflows. DWM composition requests depend on the host window and OS configuration; they do not guarantee transparent blur in every application. The heirowSnap source example demonstrates tray menus, shortcuts, notifications, and capture controls.
 
-</details>
 
-<details>
-<summary><strong>🎹 Creative projects · VST3, MIDI and design tools</strong></summary>
+### 🎹 Creative projects · VST3, MIDI and design tools
 
 The separate VST3 project combines granular synthesis, MIDI, a native editor, and deployment tooling. The XAML design surface and sample applications demonstrate creative workflows. Installing the framework NuGet package does not install a plugin; plugin deployment is explicit.
 
-</details>
 
-<details>
-<summary><strong>📸 heirowSnap showcase · an application built on Project Z</strong></summary>
+### 📸 heirowSnap showcase · an application built on Project Z
 
 The source port demonstrates galleries, account/file/chat flows, clipboard history, capture controls, notifications, and imported theme resources. The images below show local rendering and UI; remote calling and streaming still require independent two-client validation. These application features are not bundled as a ready-to-run app in the framework package.
 
-</details>
 
 ## heirowSnap built with Project Z
 
@@ -265,7 +245,7 @@ building a package for distribution.
 Solution builds do not install the VST plugin. To explicitly build and deploy it,
 use `dotnet build "Project Z VST/Project Z VST.csproj" -c Release -p:DeployVst3OnBuild=true`.
 
-**For heirowSnap**, provide the original wShare checkout. `WShareRoot` defaults to `%USERPROFILE%\source\repos\wShare`; legacy settings also references `InputHelper.dll` in the adjacent AI.NET output. See the [project file](heirowSnap%20Legacy%20Settings/heirowSnap%20Legacy%20Settings.vbproj) for the expected path.
+**For heirowSnap**, provide the original wShare checkout. `WShareRoot` defaults to `%USERPROFILE%\source\repos\wShare`; legacy settings also references `InputHelper.dll` in the adjacent AI.NET output. See the [project file](https://github.com/hheiroww/Project-Z/blob/master/heirowSnap%20Legacy%20Settings/heirowSnap%20Legacy%20Settings.vbproj) for the expected path.
 
 ```powershell
 dotnet build "heirowSnap Project Z\heirowSnap Project Z.vbproj" -c Release -p:WShareRoot="C:\src\wShare"
