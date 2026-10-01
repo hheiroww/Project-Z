@@ -14,16 +14,17 @@ Namespace [Shared].Drawing
             Dim scissor = device.ScissorRectangle
             Dim rasterizer = device.RasterizerState
             Dim wasBegun = hasBegun
+            Dim physicalViewport = Quality.ScaleRectangle(viewport)
             If wasBegun Then spriteBatch.End() : hasBegun = False
-            If effectCanvas Is Nothing OrElse effectCanvas.Width <> viewport.Width OrElse effectCanvas.Height <> viewport.Height Then
+            If effectCanvas Is Nothing OrElse effectCanvas.Width <> physicalViewport.Width OrElse effectCanvas.Height <> physicalViewport.Height Then
                 effectCanvas?.Dispose()
-                effectCanvas = New RenderTarget2D(device, viewport.Width, viewport.Height, False, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents)
+                effectCanvas = New RenderTarget2D(device, physicalViewport.Width, physicalViewport.Height, False, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents)
             End If
             If effectCompositeBatch Is Nothing Then effectCompositeBatch = New SpriteBatch(device)
             Try
                 device.SetRenderTarget(effectCanvas)
                 device.Clear(BackgroundColor)
-                device.ScissorRectangle = New Rectangle(0, 0, viewport.Width, viewport.Height)
+                device.ScissorRectangle = physicalViewport
                 DrawEffectRange(ordered, 0, ordered.Count, device, viewport, forceClip, Nothing)
             Finally
                 EffectRenderOffset = Vector2.Zero
@@ -33,7 +34,7 @@ Namespace [Shared].Drawing
                 device.ScissorRectangle = scissor
             End Try
             effectCompositeBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone)
-            effectCompositeBatch.Draw(effectCanvas, viewport, Color.White)
+            effectCompositeBatch.Draw(effectCanvas, physicalViewport, Color.White)
             effectCompositeBatch.End()
             If wasBegun Then spriteBatch.Begin() : hasBegun = True
         End Sub
@@ -68,9 +69,10 @@ Namespace [Shared].Drawing
                     Try
                         EffectRenderOffset = New Vector2(bounds.X, bounds.Y)
                         Dim startIndex = index, endIndex = last
-                        texture = fx.Render(device, bounds.Width, bounds.Height,
+                        Dim physicalBounds = Quality.ScaleRectangle(bounds)
+                        texture = fx.Render(device, physicalBounds.Width, physicalBounds.Height,
                             Sub()
-                                device.ScissorRectangle = New Rectangle(0, 0, bounds.Width, bounds.Height)
+                                device.ScissorRectangle = New Rectangle(0, 0, physicalBounds.Width, physicalBounds.Height)
                                 device.RasterizerState = RasterizerState.CullNone
                                 DrawEffectRange(ordered, startIndex, endIndex, device, bounds, forceClip, element)
                             End Sub)
@@ -90,6 +92,7 @@ Namespace [Shared].Drawing
                         ancestor = ancestor.Parent
                     End While
                     clip.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
+                    clip = Quality.ScaleRectangle(clip)
                     clip = Rectangle.Intersect(clip, previousScissor)
                     If clip.Width > 0 AndAlso clip.Height > 0 Then
                         If _scissorRasterizerState Is Nothing Then _scissorRasterizerState = New RasterizerState With {.ScissorTestEnable = True, .CullMode = CullMode.None}
@@ -97,7 +100,7 @@ Namespace [Shared].Drawing
                         device.ScissorRectangle = clip
                         Dim destination = bounds
                         destination.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
-                        fx.Composite(device, texture, destination)
+                        fx.Composite(device, texture, Quality.ScaleRectangle(destination))
                         device.RasterizerState = previousRasterizer
                         device.ScissorRectangle = previousScissor
                     End If

@@ -36,6 +36,15 @@ float4 SoftSample(float2 uv) {
 }
 float4 PortedEffect(SpriteInput input) : PS_TARGET {
     float2 uv = input.TexCoord;
+    if (Mode > 6.5) {
+        // Exact box resolve of the 2/4/8/16 subpixel grid, including alpha.
+        float4 total = 0;
+        [unroll] for (int y = 0; y < 4; ++y)
+            [unroll] for (int x = 0; x < 4; ++x)
+                if (x < BlurStep.x && y < BlurStep.y)
+                    total += SAMPLE(uv + (float2(x, y) + 0.5 - BlurStep * 0.5) * TexelSize);
+        return total / (BlurStep.x * BlurStep.y) * input.Color;
+    }
     if (Mode > 5.5) {
         float a = saturate(Amount) / 8;
         float f = saturate(Angle) * 6.28318530;

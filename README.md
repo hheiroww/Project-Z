@@ -1,4 +1,4 @@
-# ⚡ Project Z 2.5
+# ⚡ Project Z 2.6
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -20,6 +20,7 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 
 | New capability | What you can build with it |
 | :--- | :--- |
+| **Vector text renderer** | TTF/OTF outlines tessellated into GPU triangles, with matching selection and caret metrics. |
 | **Native DX12 renderer** | Hardware-rendered scenes, reusable render targets, FXAA, synchronized viewport resizing, and a build-selectable DX11 fallback. |
 | **XAML UI porting** | Import existing windows, named controls, resource dictionaries, and item templates into native elements. Generate VB event scaffolding from XAML. |
 | **XAML shader support** | GPU blur, shadows, inversion, and chromatic effects on controls and subtrees, with animatable effect properties. |
@@ -31,18 +32,43 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.5.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2.6.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.5.1
+## 📦 Install 2.6.0
 
 ```powershell
-dotnet add package ProjectZ --version 2.5.1
+dotnet add package ProjectZ --version 2.6.0
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-**🔐 Dependency refresh:** ProjectZ 2.5.1 references SocketJack **2026.13.1**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication.
+**🔐 Dependency refresh:** ProjectZ 2.6.0 references SocketJack **2026.14.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
+
+
+## ✒️ New in 2.6: vector text and precise editing
+
+![Vector font outlines with multiline text selection rendered by Project-Z](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/vector-text-selection.png)
+
+Windows text now uses **real font outlines rendered as GPU triangles**. WPF shapes text from a TTF/OTF file, and LibTessDotNet tessellates the outlines, including glyph holes, for the existing DX12/DX11 device. Text measurement, caret positioning, hit testing and selection share the same metrics.
+
+<details open>
+<summary><strong>✒️ Font outlines · editing · antialiasing</strong></summary>
+
+- **Outline rendering:** default Segoe UI sizes load from Windows' installed `segoeui.ttf`; the vector path does not sample a glyph bitmap atlas.
+- **Custom fonts:** register a TTF or OTF with `LoadVectorFont`, then assign its key to a text control. Point sizes use 96/72 logical pixels per point.
+- **Consistent editing:** drag and keyboard selection, multiline highlights, clipboard shortcuts, word navigation and replacement use the rendered font metrics.
+- **Quality controls:** DX12 spatial supersampling smooths geometric edges; DX11 uses supported hardware MSAA. Filtering applies to textures, not vector glyph triangles.
+- **Compatibility:** existing SpriteFont assets remain the fallback when no matching vector font is loaded or the default font file is absent. Vector shaping currently targets Windows.
+
+```vb
+content.LoadVectorFont("EditorFont", "C:\Fonts\MyFont.ttf", 12)
+textbox.Font = "EditorFont"
+```
+
+[Text rendering and selection](https://github.com/hheiroww/Project-Z/blob/master/docs/TEXT_INPUT.md) · [Graphics quality and backend behavior](https://github.com/hheiroww/Project-Z/blob/master/docs/GRAPHICS_QUALITY.md)
+
+</details>
 
 ## 🧭 Expand the feature guide
 
@@ -255,9 +281,9 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2.5.1.nupkg`.
-The project and assembly version is `2.5.1.0`; NuGet normalizes the package version
-to `2.5.1`. The package includes the internal model-import DLL and restores its
+The framework Release build also creates `bin/Release/ProjectZ.2.6.0.nupkg`.
+The project and assembly version is `2.6.0.0`; NuGet normalizes the package version
+to `2.6.0`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
 building a package for distribution.

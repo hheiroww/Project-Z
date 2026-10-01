@@ -1,4 +1,4 @@
-﻿#Region "Using Statements"
+#Region "Using Statements"
 Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
@@ -32,6 +32,7 @@ Namespace [Shared].Drawing
         End Property
 
         Private _MouseState As MouseState
+        Friend Property CurrentKeyboardState As KeyboardState
         Public Property SpriteSettings As XNA.SpriteBatchPropertySet
         Public isInitialized As Boolean = False
         Public Property isCursorVisible As Boolean = False
@@ -220,7 +221,7 @@ Namespace [Shared].Drawing
                 End If
             End If
             If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
-                If LastSelected.CanSelect Then
+                If LastSelected.CanSelect AndAlso LastSelected IsNot Element Then
                     LastSelected.isSelected = False
                     If Element IsNot Nothing AndAlso Element.isEnabled Then
                         If Element.CanSelect AndAlso Not Element.isSelected Then
@@ -392,6 +393,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyPress(Key As Keys, KeyboardState As KeyboardState)
+            CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then Return
             RaiseEvent OnKeyPress(Key, KeyboardState)
             If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
@@ -404,6 +406,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyDown(Key As Keys, KeyboardState As KeyboardState)
+            CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then
                 MoveFocus(KeyboardState.IsKeyDown(Keys.LeftShift) OrElse KeyboardState.IsKeyDown(Keys.RightShift))
                 Return
@@ -423,6 +426,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyUp(Key As Keys, KeyboardState As KeyboardState)
+            CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then Return
             If KeyboardButton IsNot Nothing AndAlso Key = KeyboardButtonKey Then
                 Dim target = KeyboardButton
@@ -447,7 +451,15 @@ Namespace [Shared].Drawing
         Protected Friend WhitePlain As Texture2D
 
         Public Function MeasureText(Font As String, Text As String) As Vector2
+            Dim vectorFont As VectorFont = Nothing
+            If contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.Measure(Text)
             Return contentCollection.Fonts(Font).MeasureString(SanitizeText(Font, Text))
+        End Function
+
+        Public Function TextLineSpacing(font As String) As Integer
+            Dim vectorFont As VectorFont = Nothing
+            If contentCollection.VectorFonts.TryGetValue(font, vectorFont) Then Return vectorFont.LineSpacing
+            Return contentCollection.Fonts(font).LineSpacing
         End Function
 
         ''' <summary>
@@ -459,6 +471,7 @@ Namespace [Shared].Drawing
 
         Public Function SanitizeText(Font As String, text As String) As String
             If String.IsNullOrEmpty(text) Then Return If(text, String.Empty)
+            If contentCollection.VectorFonts.ContainsKey(Font) Then Return text
             Dim spriteFont = contentCollection.Fonts(Font)
             Dim supported As HashSet(Of Char) = Nothing
             If Not fontCharacters.TryGetValue(spriteFont, supported) Then
@@ -496,12 +509,9 @@ Namespace [Shared].Drawing
                 If Not IsEffectivelyVisible(element) OrElse Not IsEffectivelyEnabled(element) Then Continue For
                 If Not element.isMouseBypassEnabled Then Return element
 
-                Dim parent = element.Parent
-                While parent IsNot Nothing
-                    If IsEffectivelyVisible(parent) AndAlso IsEffectivelyEnabled(parent) AndAlso
-                       Not parent.isMouseBypassEnabled AndAlso parent.ContainsPoint(p) Then Return parent
-                    parent = parent.Parent
-                End While
+                ' Ancestors already have their own slots in this render list.
+                ' A bypassed overlay must not promote its parent ahead of an
+                ' interactive sibling underneath it (for example a close button).
             Next
             Return Nothing
         End Function
@@ -689,7 +699,7 @@ Namespace [Shared].Drawing
             Dim profileStarted = If(EnableFrameProfiling, Diagnostics.Stopwatch.GetTimestamp(), 0L)
             ' Cache graphics device reference outside the loop
             Dim gd As GraphicsDevice = spriteBatch.GraphicsDevice
-            Dim viewportRect As New Rectangle(0, 0, gd.Viewport.Width, gd.Viewport.Height)
+            Dim viewportRect As New Rectangle(0, 0, CInt(gd.Viewport.Width / Quality.RenderScale.X), CInt(gd.Viewport.Height / Quality.RenderScale.Y))
             Dim ordered = GetRenderOrderedElements()
 
             ' The scene stores descendants in a flat draw list, but layout is a
@@ -862,6 +872,8 @@ Namespace [Shared].Drawing
                 ' stores children in a flat render list, so derive the complete
                 ' ancestor mask for each draw instead of relying on recursion.
                 Dim globalScissor = previousScissor
+                globalScissor = New Rectangle(CInt(globalScissor.X / Quality.RenderScale.X), CInt(globalScissor.Y / Quality.RenderScale.Y),
+                    CInt(globalScissor.Width / Quality.RenderScale.X), CInt(globalScissor.Height / Quality.RenderScale.Y))
                 globalScissor.Offset(CInt(EffectRenderOffset.X), CInt(EffectRenderOffset.Y))
                 clipRect = Rectangle.Intersect(clipRect, globalScissor)
 
@@ -890,7 +902,7 @@ Namespace [Shared].Drawing
                 End If
 
                 clipRect.Offset(-CInt(EffectRenderOffset.X), -CInt(EffectRenderOffset.Y))
-                gd.ScissorRectangle = clipRect
+                gd.ScissorRectangle = Quality.ScaleRectangle(clipRect)
                 needsClipRestore = True
             End If
 
@@ -943,11 +955,13 @@ Namespace [Shared].Drawing
 
             Dim newWidth As Integer = graphicsDevice.PresentationParameters.BackBufferWidth
             Dim newHeight As Integer = graphicsDevice.PresentationParameters.BackBufferHeight
+            Dim samples = Quality.SupportedSamples(graphicsDevice, Quality.AntiAliasingSamples)
+            If Quality.AntiAliasingTechnique = "SSAA" Then samples = 0
 
             ' Only recreate if size changed
             If renderTarget IsNot Nothing AndAlso
                renderTarget.Width = newWidth AndAlso
-               renderTarget.Height = newHeight Then
+               renderTarget.Height = newHeight AndAlso renderTarget.MultiSampleCount = samples Then
                 Return
             End If
 
@@ -959,13 +973,24 @@ Namespace [Shared].Drawing
                                               newWidth,
                                               newHeight,
                                               False, graphicsDevice.PresentationParameters.BackBufferFormat,
-                                              DepthFormat.Depth24Stencil8)
+                                              DepthFormat.Depth24Stencil8, samples, RenderTargetUsage.DiscardContents)
         End Sub
 
         Public Function DrawToRenderTarget() As RenderTarget2D
             If UseRenderTarget Then
+                Dim prior = graphicsDevice.GetRenderTargets()
                 ' Ensure render target matches current back buffer size
                 UpdateRenderTargetSize()
+
+                If Quality.AntiAliasingTechnique = "SSAA" AndAlso Quality.AntiAliasingSamples > 0 Then
+                    Try
+                        graphicsDevice.SetRenderTarget(renderTarget)
+                        DrawWithQuality(gameTime, True)
+                    Finally
+                        If prior.Length = 0 Then graphicsDevice.SetRenderTarget(Nothing) Else graphicsDevice.SetRenderTargets(prior)
+                    End Try
+                    Return renderTarget
+                End If
 
                 graphicsDevice.SetRenderTarget(renderTarget)
                 graphicsDevice.Clear(BackgroundColor)
@@ -988,7 +1013,7 @@ Namespace [Shared].Drawing
                     spriteBatch.End()
                 End If
 
-                graphicsDevice.SetRenderTarget(Nothing)
+                If prior.Length = 0 Then graphicsDevice.SetRenderTarget(Nothing) Else graphicsDevice.SetRenderTargets(prior)
 
                 Exit Function
             End If
@@ -997,8 +1022,12 @@ Namespace [Shared].Drawing
 
         Public Overridable Sub Draw(gameTime As GameTime)
             If Not isInitialized Then Return
+            DrawWithQuality(gameTime)
+        End Sub
 
-            If UseRenderTarget Then
+        Private Sub DrawCore(gameTime As GameTime, Optional bypassRenderTarget As Boolean = False)
+
+            If UseRenderTarget AndAlso Not bypassRenderTarget Then
                 Dim Texture As RenderTarget2D = DrawToRenderTarget()
                 If Not hasBegun Then
                     hasBegun = True
@@ -1258,6 +1287,9 @@ Namespace [Shared].Drawing
                     End If
 
                     renderTarget?.Dispose()
+                    qualityTarget?.Dispose()
+                    qualityBatch?.Dispose()
+                    qualityResolve?.Dispose()
                     effectCanvas?.Dispose()
                     effectCompositeBatch?.Dispose()
                     WhitePlain?.Dispose()

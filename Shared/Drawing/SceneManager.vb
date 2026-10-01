@@ -888,6 +888,7 @@ Namespace [Shared].Drawing
             StartPoint = Point.Zero
             ExternalLastPoint = New Point(-1, -1)
             ExternalKeys.Clear()
+            If ActiveScene IsNot Nothing Then ActiveScene.CurrentKeyboardState = New KeyboardState()
             If ActiveScene IsNot Nothing Then
                 SetExternalMouseState(ExternalLastPoint)
                 ActiveScene.CancelPointerInput()

@@ -714,7 +714,7 @@ Namespace [Shared].Drawing.UI
                 Dim rasterizer = spriteBatch.GraphicsDevice.RasterizerState
                 If rasterizer IsNot Nothing AndAlso rasterizer.ScissorTestEnable Then
                     spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend,
-                                      SamplerState.LinearClamp, DepthStencilState.None, rasterizer)
+                                      Scene.Quality.Sampler, DepthStencilState.None, rasterizer)
                 Else
                     spriteBatch.Begin()
                 End If

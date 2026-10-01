@@ -44,17 +44,23 @@ Namespace [Shared].XNA
 
         Public Property isRendering As Boolean = False
         Friend Property RenderOffset As Vector2
+        Private ReadOnly Property RenderTransform As Matrix
+            Get
+                Dim scale = Drawing.GraphicsQuality.ForDevice(GraphicsDevice).RenderScale
+                Return Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0) * Matrix.CreateScale(scale.X, scale.Y, 1)
+            End Get
+        End Property
 
         Public Overloads Sub Begin()
             If isRendering Then Return
             If _HasSettings Then
                 Settings.Begin(SpriteBatch)
             Else
-                ' Linear sampling is the correct UI default. Point sampling makes
-                ' scaled images, glyphs and imported XAML assets visibly jagged.
+                ' Device quality is shared across windows; glyphs keep smooth
+                ' coverage with bilinear, trilinear, or anisotropic filtering.
                 SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend,
-                                  SamplerState.LinearClamp, DepthStencilState.None,
-                                  RasterizerState.CullNone, Nothing, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
+                                  Drawing.GraphicsQuality.ForDevice(GraphicsDevice).Sampler, DepthStencilState.None,
+                                  RasterizerState.CullNone, Nothing, RenderTransform)
             End If
             isRendering = True
         End Sub
@@ -66,17 +72,18 @@ Namespace [Shared].XNA
         End Sub
 
         Public Overloads Sub Begin(SpriteSortMode As SpriteSortMode, BlendState As BlendState)
-            SpriteBatch.Begin(SpriteSortMode, BlendState)
+            SpriteBatch.Begin(SpriteSortMode, BlendState, Drawing.GraphicsQuality.ForDevice(GraphicsDevice).Sampler,
+                DepthStencilState.None, RasterizerState.CullNone, Nothing, RenderTransform)
             isRendering = True
         End Sub
 
         Public Overloads Sub Begin(SpriteSortMode As SpriteSortMode, BlendState As BlendState, SamplerState As SamplerState, DepthStencilState As DepthStencilState, RasterizerState As RasterizerState)
-            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Nothing, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
+            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Nothing, RenderTransform)
             isRendering = True
         End Sub
 
         Public Overloads Sub Begin(SpriteSortMode As SpriteSortMode, BlendState As BlendState, SamplerState As SamplerState, DepthStencilState As DepthStencilState, RasterizerState As RasterizerState, Effect As Effect)
-            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect, Matrix.CreateTranslation(-RenderOffset.X, -RenderOffset.Y, 0))
+            SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect, RenderTransform)
             isRendering = True
         End Sub
 

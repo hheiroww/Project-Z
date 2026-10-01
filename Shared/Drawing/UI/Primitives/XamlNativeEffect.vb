@@ -68,23 +68,24 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return scratch
             End If
             Dim radius = Math.Clamp(Me.Radius, 0, 100)
-            Pass(device, source, scratch, 1, New Vector2(radius / 4 / width, 0))
+            Dim scale = GraphicsQuality.ForDevice(device).RenderScale
+            Pass(device, source, scratch, 1, New Vector2(radius * scale.X / 4 / width, 0))
             If Kind = XamlEffectKind.DropShadow Then
                 shader.Parameters("OriginalTexture").SetValue(source)
                 shader.Parameters("ShadowColor").SetValue(New Vector4(Color.ToVector3(), Math.Clamp(Opacity, 0, 1) * Color.A / 255.0F))
                 Dim radians = MathHelper.ToRadians(Direction)
-                shader.Parameters("ShadowOffset").SetValue(New Vector2(MathF.Cos(radians) * ShadowDepth / width, -MathF.Sin(radians) * ShadowDepth / height))
+                shader.Parameters("ShadowOffset").SetValue(New Vector2(MathF.Cos(radians) * ShadowDepth * scale.X / width, -MathF.Sin(radians) * ShadowDepth * scale.Y / height))
                 ' The original must remain available at t1 while composing the shadow.
                 Return scratch
             End If
-            Pass(device, scratch, source, 1, New Vector2(0, radius / 4 / height))
+            Pass(device, scratch, source, 1, New Vector2(0, radius * scale.Y / 4 / height))
             Return source
         End Function
 
         Friend Sub Composite(device As GraphicsDevice, texture As Texture2D, destination As Rectangle)
             If Kind = XamlEffectKind.DropShadow Then
                 shader.Parameters("Mode").SetValue(2.0F)
-                shader.Parameters("BlurStep").SetValue(New Vector2(0, Math.Clamp(Radius, 0, 100) / 4 / texture.Height))
+                shader.Parameters("BlurStep").SetValue(New Vector2(0, Math.Clamp(Radius, 0, 100) * GraphicsQuality.ForDevice(device).RenderScale.Y / 4 / texture.Height))
                 batch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, device.RasterizerState, shader)
             Else
                 batch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, device.RasterizerState)

@@ -23,6 +23,12 @@ Namespace [Shared].Drawing.UI.Primitives
         WrapWithOverflow
     End Enum
 
+    Public Enum TextTrimming
+        None
+        CharacterEllipsis
+        WordEllipsis
+    End Enum
+
     <Serializable>
     Public Class TextElement
         Inherits SceneElement
@@ -76,10 +82,32 @@ Namespace [Shared].Drawing.UI.Primitives
         Private Property WrappedText As String = String.Empty
         Public Property UseXamlTextLayout As Boolean
         Public Property TextAlignment As HorizontalAlignment = HorizontalAlignment.Left
+        Public Property TextTrimming As TextTrimming = TextTrimming.None
+        Public Property LineHeight As Single = Single.NaN
+        Public Property BlockLineHeight As Boolean
+
+        Private ReadOnly Property XamlLineSpacing As Single
+            Get
+                If BlockLineHeight AndAlso Single.IsFinite(LineHeight) AndAlso LineHeight > 0 Then Return LineHeight
+                Dim vectorFont As VectorFont = Nothing
+                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.LineSpacing
+                Return Scene.contentCollection.Fonts(Font).LineSpacing
+            End Get
+        End Property
+
+        Public Function MeasureXamlText(availableWidth As Single) As Vector2
+            MaxWidth = Math.Max(1, availableWidth - Padding.Left - Padding.Right)
+            Return Vector2.Min(XamlDesiredSize, MaxSize)
+        End Function
+
         Friend ReadOnly Property XamlDesiredSize As Vector2
             Get
                 Dim content = If(TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
-                Return Scene.MeasureText(Font, If(content, String.Empty)) + New Vector2(Padding.Left + Padding.Right, Padding.Top + Padding.Bottom)
+                Dim measured = Scene.MeasureText(Font, If(content, String.Empty))
+                If BlockLineHeight AndAlso Not String.IsNullOrEmpty(content) Then
+                    measured.Y = content.Replace(vbCr, "").Split(ChrW(10)).Length * XamlLineSpacing
+                End If
+                Return measured + New Vector2(Padding.Left + Padding.Right, Padding.Top + Padding.Bottom)
             End Get
         End Property
 
@@ -346,9 +374,58 @@ Namespace [Shared].Drawing.UI.Primitives
         Private sanitizedText As String
         Private sanitizedFont As SpriteFont
 
+        ' Use the arranged rectangle, not just the unconstrained wrapped string.
+        ' WPF MaxHeight/TextTrimming must affect drawing as well as measurement.
+        Private Function FitXamlText(content As String) As String
+            Dim lines = content.Replace(vbCr, "").Split(ChrW(10))
+            Dim width = Math.Max(0, Math.Min(Size.X, MaxSize.X) - Padding.Left - Padding.Right)
+            Dim height = Math.Max(0, Math.Min(Size.Y, MaxSize.Y) - Padding.Top - Padding.Bottom)
+            Dim count = Math.Min(lines.Length, CInt(Math.Floor((height + 0.01F) / Math.Max(1, XamlLineSpacing))))
+            If count <= 0 Then Return String.Empty
+            Dim result As New List(Of String)
+            For index = 0 To count - 1
+                Dim line = lines(index)
+                Dim overflow = Scene.MeasureText(Font, line).X > width OrElse (index = count - 1 AndAlso count < lines.Length)
+                If overflow AndAlso TextTrimming <> TextTrimming.None Then
+                    Const ellipsis As String = "…"
+                    While line.Length > 0 AndAlso Scene.MeasureText(Font, line & ellipsis).X > width
+                        line = line.Substring(0, line.Length - 1)
+                    End While
+                    If TextTrimming = TextTrimming.WordEllipsis AndAlso line.LastIndexOf(" "c) > 0 Then line = line.Substring(0, line.LastIndexOf(" "c))
+                    line = If(Scene.MeasureText(Font, ellipsis).X <= width, line.TrimEnd() & ellipsis, String.Empty)
+                End If
+                result.Add(line)
+            Next
+            Return String.Join(vbLf, result)
+        End Function
+
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
             Dim textToDraw As String = If(_TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
+            If UseXamlTextLayout AndAlso Not String.IsNullOrEmpty(textToDraw) AndAlso
+               (TextTrimming <> TextTrimming.None OrElse MaxSize.Y < Single.MaxValue) Then textToDraw = FitXamlText(textToDraw)
             If Not String.IsNullOrEmpty(textToDraw) Then
+                Dim vectorFont As VectorFont = Nothing
+                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then
+                    spriteBatch.End()
+                    Try
+                        If UseXamlTextLayout Then
+                            Dim at = Position + New Vector2(Padding.Left, Padding.Top)
+                            Dim width = Math.Max(0, Size.X - Padding.Left - Padding.Right)
+                            For Each line In textToDraw.Replace(vbCr, "").Split(ChrW(10))
+                                Dim lineWidth = vectorFont.Measure(line).X
+                                Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - lineWidth) / 2,
+                                    If(TextAlignment = HorizontalAlignment.Right, width - lineWidth, 0))
+                                vectorFont.Draw(spriteBatch.GraphicsDevice, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset)
+                                at.Y += XamlLineSpacing
+                            Next
+                        Else
+                            vectorFont.Draw(spriteBatch.GraphicsDevice, textToDraw, Position, ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset)
+                        End If
+                    Finally
+                        spriteBatch.Begin()
+                    End Try
+                    Return
+                End If
                 Dim currentFont = Scene.contentCollection.Fonts(Font)
                 If textToDraw <> sanitizedSource OrElse sanitizedFont IsNot currentFont Then
                     sanitizedSource = textToDraw
@@ -362,7 +439,7 @@ Namespace [Shared].Drawing.UI.Primitives
                         Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - currentFont.MeasureString(line).X) / 2,
                             If(TextAlignment = HorizontalAlignment.Right, width - currentFont.MeasureString(line).X, 0))
                         spriteBatch.DrawString(currentFont, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor))
-                        at.Y += currentFont.LineSpacing
+                        at.Y += XamlLineSpacing
                     Next
                 Else
                     spriteBatch.DrawString(currentFont, sanitizedText, Position, ApplyOpacity(ForegroundColor))

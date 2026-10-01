@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2.5.1.0</Version>
+	<Version>2.6.0.0</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>Native DX12, XAML scenes, GPU effects, animation, scaled input, inline media, and 3D model import. Updates SocketJack to 2026.13.1 with SSH.NET 2026.0.0, adds dependency audit gates and NuGet Trusted Publishing.</PackageReleaseNotes>
+    <PackageReleaseNotes>Vector text from TTF/OTF outlines rendered as GPU triangles on DX12/DX11, matching caret and selection metrics, improved text editing and hit testing, and configurable antialiasing/filtering. Updates SocketJack to 2026.14.0 with default authentication gates and SSH.NET 2026.0.0.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -71,7 +71,7 @@
     <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-    <PackageReference Include="SocketJack" Version="2026.13.1" Condition="!Exists('$(SocketJackProject)')" />
+    <PackageReference Include="SocketJack" Version="2026.14.0" Condition="!Exists('$(SocketJackProject)')" />
     <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
     <PackageReference Include="LibTessDotNet" Version="1.1.15" />
     <!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
@@ -107,7 +107,7 @@
   </PropertyGroup>
   <Target Name="CompileProjectZXamlShaders" BeforeTargets="PrepareResources" Inputs="Resources\XamlEffects.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx">
     <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" />
-    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$(MSBuildProjectDirectory)\$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx&quot; /Profile:$(XamlShaderProfile) /Defines:$(ProjectZGraphicsBackend.ToUpperInvariant())" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(ProjectZGraphicsBackend.ToUpperInvariant())" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
   <ItemGroup>
     <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />

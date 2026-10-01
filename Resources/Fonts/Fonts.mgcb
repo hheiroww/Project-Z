@@ -1,0 +1,53 @@
+/outputDir:../../artifacts/fonts
+/intermediateDir:../../artifacts/fonts-obj
+/platform:Windows
+/profile:HiDef
+/compress:False
+#begin SegoeUI_10.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_10.spritefont
+#begin SegoeUI_12.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_12.spritefont
+#begin SegoeUI_14.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_14.spritefont
+#begin SegoeUI_18.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_18.spritefont
+#begin SegoeUI_24.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_24.spritefont
+#begin SegoeUI_36.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_36.spritefont
+#begin SegoeUI_48.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_48.spritefont
+#begin SegoeUI_72.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Color
+/build:SegoeUI_72.spritefont

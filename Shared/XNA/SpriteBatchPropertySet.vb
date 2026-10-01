@@ -32,10 +32,12 @@ Namespace [Shared].XNA
         Private _UseEffect As Boolean = False
 
         Public Sub Begin(SpriteBatch As SpriteBatch)
+            Dim scale = Drawing.GraphicsQuality.ForDevice(SpriteBatch.GraphicsDevice).RenderScale
+            Dim transform = Microsoft.Xna.Framework.Matrix.CreateScale(scale.X, scale.Y, 1)
             If UseEffect Then
-                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect)
+                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect, transform)
             Else
-                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState)
+                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Nothing, transform)
             End If
         End Sub
 

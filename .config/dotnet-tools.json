@@ -4,7 +4,17 @@
   "tools": {
     "dotnet-mgfxc": {
       "version": "3.8.5.1",
-      "commands": ["mgfxc"]
+      "commands": [
+        "mgfxc"
+      ],
+      "rollForward": false
+    },
+    "dotnet-mgcb": {
+      "version": "3.8.5.1",
+      "commands": [
+        "mgcb"
+      ],
+      "rollForward": false
     }
   }
 }

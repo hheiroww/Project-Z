@@ -16,6 +16,14 @@ Namespace [Shared].Content
         Public Property Content As ContentManager
 
         Public Property Fonts As New Dictionary(Of String, SpriteFont)
+        Public ReadOnly Property VectorFonts As New Dictionary(Of String, VectorFont)
+
+        Public Sub LoadVectorFont(name As String, fontFile As String, pointSize As Single)
+            Dim font As New VectorFont(fontFile, pointSize)
+            Dim previous As VectorFont = Nothing
+            If VectorFonts.TryGetValue(name, previous) Then previous.Dispose()
+            VectorFonts(name) = font
+        End Sub
 
         Public Property Textures As New Dictionary(Of String, Texture2D)
 
@@ -52,6 +60,12 @@ Namespace [Shared].Content
                     Fonts.Add(IO.Path.GetFileNameWithoutExtension(FontPath), Font)
                 Next
             Next
+            Dim segoeFile = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeui.ttf")
+            If IO.File.Exists(segoeFile) Then
+                For Each size In {10, 12, 14, 18, 24, 36, 48, 72}
+                    LoadVectorFont("SegoeUI_" & size, segoeFile, size)
+                Next
+            End If
             '#End If
         End Sub
 #If WINDOWS Then

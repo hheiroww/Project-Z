@@ -247,7 +247,8 @@ Namespace [Shared].Drawing.UI.Input
 
             Dim stateBrush = If(isMouseDown, MouseDownBackgroundBrush, If(isMouseOver, MouseOverBackgroundBrush, BackgroundBrush))
             DrawBackground(DrawColor, Not isMouseDown AndAlso Not isMouseOver, stateBrush)
-            TextElement.Draw(gameTime)
+            ' The scene renders the registered text child after this background.
+            ' Drawing it here as well doubles its coverage and nests its batch.
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)

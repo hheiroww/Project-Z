@@ -133,6 +133,8 @@ Namespace [Shared].Drawing.UI.Primitives
         ' Begin is called to tell the PrimitiveBatch what kind of primitives will be
         ' drawn, and to prepare the graphics card to render those primitives.
         Public Sub Begin(primitiveType__1 As PrimitiveType)
+            Dim scale = GraphicsQuality.ForDevice(device).RenderScale
+            basicEffect.Projection = Matrix.CreateOrthographicOffCenter(0, device.Viewport.Width / scale.X, device.Viewport.Height / scale.Y, 0, 0, 1)
             If hasBegun Then
                 Throw New InvalidOperationException("End must be called before Begin can be called again.")
             End If
