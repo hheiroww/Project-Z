@@ -41,6 +41,12 @@ try {
  }
  Run @('build','tests/WpfImport/BuildTime/Off/Off.csproj','-p:ProjectZXamlMode=CodeBehindOnly') 1
  Run @('build','tests/WpfImport/BuildTime/Off/Off.csproj','-p:ProjectZEnableXaml=true','-p:ProjectZXamlMode=Disabled')
+ # A settings change must refresh IntelliSense even when old generated files exist.
+ $modeProject = 'tests/WpfImport/BuildTime/DesignerOnly/cs/DesignerOnly.csproj'
+ Run @('build',$modeProject,'-c','ModeSwitch','-p:ProjectZXamlMode=DesignerAndCodeBehind','-p:GeneratePackageOnBuild=false')
+ Run @('msbuild',$modeProject,'-t:Compile','-p:Configuration=ModeSwitch','-p:ProjectZXamlMode=DesignerOnly','-p:DesignTimeBuild=true','-p:SkipCompilerExecution=true','-p:ProvideCommandLineArgs=true','-p:BuildProjectReferences=false','-p:GeneratePackageOnBuild=false')
+ $modeFolder = 'tests/WpfImport/BuildTime/DesignerOnly/cs/obj/ModeSwitch/net8.0-windows7.0/ProjectZXaml'
+ if((Get-Content "$modeFolder/mode" -Raw).Trim() -ne 'DesignerOnly' -or (Get-Item "$modeFolder/original-items").Length -ne 0) { throw 'Design-time mode change retained converted code-behind.' }
  # Match VS: references already built, consumer cleaned and built separately.
  Run @('build','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','-p:GeneratePackageOnBuild=false')
  Run @('clean','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','-p:BuildProjectReferences=false','-v:q')

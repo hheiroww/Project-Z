@@ -85,7 +85,7 @@ Unchanged builds reuse the output. Editing a view regenerates it, and **Clean** 
 
 ### 🛡️ Keep existing manual changes
 
-For a hand-adapted application such as heirowSnap, leave **XAML conversion mode** unchecked. Its existing code continues to build normally.
+For a hand-adapted application such as heirowSnap, set **XAML conversion mode** to **Disabled**. Its existing code continues to build normally.
 
 To convert selected new views, enable the setting and use **Excluded XAML files** for views that should keep their current build behavior. Exclusions accept semicolon-separated paths or patterns, such as `Views\Manual\**\*.xaml`. Each project controls its own setting.
 
