@@ -47,5 +47,14 @@ try {
  if(@(Get-ChildItem tests/WpfImport/BuildTime/cs/obj/Release/net8.0-windows7.0 -Recurse -Filter '*.design.cs').Count) { throw 'Clean left generated designer files.' }
  Run $arguments
  if((Get-FileHash $manual).Hash -ne $before) { throw 'Hand-edited code changed.' }
+ foreach($language in @('cs','vb')) {
+  $project = "tests/WpfImport/BuildTime/$language/BuildTime." + $(if($language -eq 'cs'){'csproj'}else{'vbproj'})
+  Run @('restore',$project)
+  Run @('clean',$project,'-c','DesignTimeCheck','-v:q')
+  Run @('msbuild',$project,'-t:Compile','-p:Configuration=DesignTimeCheck','-p:DesignTimeBuild=true','-p:SkipCompilerExecution=true','-p:ProvideCommandLineArgs=true','-p:BuildProjectReferences=false','-p:GeneratePackageOnBuild=false')
+  $manifest = "tests/WpfImport/BuildTime/$language/obj/DesignTimeCheck/net8.0-windows7.0/ProjectZXaml/compile-items"
+  if(!(Test-Path $manifest) -or !(Get-Content $manifest | Where-Object {$_ -like "*.design.$language"})) { throw 'Fresh design-time build did not produce the converted designer.' }
+ }
+ Write-Output 'PASS fresh C#/VB design-time configurations bootstrap converted view types.'
  Write-Output 'PASS .NET 8/.NET 10 C#/VB generation, no-op builds, XAML changes, diagnostics, Clean, opt-out and exclusions.'
 } finally { Pop-Location }

@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2.8.0.0</Version>
+	<Version>2.8.1.0</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2.8 adds optional source tooling for build-time XAML conversion, a Project-Z settings page, and generated .design.cs/.design.vb files under obj. Disabled by default to preserve manual ports. C#/VB consumer builds and native runtime checks cover .NET 8 and .NET 10.</PackageReleaseNotes>
+    <PackageReleaseNotes>2.8.1 adds opt-in selection and Copy for display text, enforces read-only text boxes without Cut/Paste, and bootstraps generated C#/VB view types for fresh Visual Studio design-time configurations.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>

@@ -44,7 +44,7 @@ public static class XamlSupport
                 if (!Capabilities.Properties.Contains(attr.Name.LocalName) && !Capabilities.Events.Contains(attr.Name.LocalName)) Error(attr, "Unsupported XAML property/event " + attr.Name.LocalName);
                 string[]? owners = attr.Name.LocalName switch
                 {
-                    "Text" => ["TextBox", "TextBlock"], "ItemsSource" or "SelectedIndex" or "SelectedItem" => ["ListBox", "ComboBox"],
+                    "Text" => ["TextBox", "TextBlock"], "IsReadOnly" => ["TextBox"], "ItemsSource" or "SelectedIndex" or "SelectedItem" => ["ListBox", "ComboBox"],
                     "IsChecked" => ["CheckBox", "RadioButton"], "Minimum" or "Maximum" or "Value" => ["ProgressBar", "Slider"], "Command" or "CommandParameter" => ["Button"],
                     "Orientation" => ["StackPanel", "WrapPanel", "Separator"], "Title" => ["Window"], "Content" => ["Button", "CheckBox", "RadioButton", "Label"],
                     "Password" => ["PasswordBox"], "GroupName" => ["RadioButton"], "Header" => ["GroupBox", "Expander"], "IsExpanded" => ["Expander"], "ItemWidth" or "ItemHeight" => ["WrapPanel"],

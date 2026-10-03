@@ -43,7 +43,7 @@ Matching `.xaml.cs`/`.xaml.vb` and `.Designer.cs`/`.Designer.vb` files are selec
 3. Compiles converted copies of the selected code-behind together with those generated partials.
 4. Copies the view markup required at runtime to the output directory.
 
-No separate import command is required after setup. Unchanged builds reuse the generated files. Editing a selected view regenerates it; unsupported markup fails the build with diagnostics. `Clean` removes generated files and the next build recreates them. Build once to populate the generated files used by design-time compilation; they are build output, not files to edit by hand.
+No separate import command is required after setup. Unchanged builds reuse the generated files. Editing a selected view regenerates it; unsupported markup fails the build with diagnostics. `Clean` removes generated files and the next build recreates them. When Visual Studio opens a configuration without generated files, the tooling runs an initial build to prepare the converted types for IntelliSense. Later design-time builds reuse that output. Generated files are build output, not files to edit by hand.
 
 The process uses the same bounded WPF compatibility layer as the [source importer](WPF-IMPORT.md). It does not replace `App.xaml` startup or promise complete WPF/WinForms compatibility. Use the full project importer for an application startup conversion. Excluding a view leaves its normal build behavior intact, so existing WPF pages still require their normal WPF project setup.
 

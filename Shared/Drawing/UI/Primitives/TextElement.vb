@@ -1,4 +1,4 @@
-﻿Imports Microsoft.Xna.Framework
+Imports Microsoft.Xna.Framework
 Imports ProjectZ.Shared.Content
 Imports Microsoft.Xna.Framework.Graphics
 Imports System.Text
@@ -30,7 +30,7 @@ Namespace [Shared].Drawing.UI.Primitives
     End Enum
 
     <Serializable>
-    Public Class TextElement
+    Partial Public Class TextElement
         Inherits SceneElement
 
 #Region "Properties"
@@ -40,7 +40,8 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return _Text
             End Get
             Set(value As String)
-                _Text = value
+                If _Text <> If(value, String.Empty) Then ClearTextSelection()
+                _Text = If(value, String.Empty)
                 UpdateWrappedText()
                 RaiseEvent TextChanged()
             End Set
@@ -409,6 +410,7 @@ Namespace [Shared].Drawing.UI.Primitives
             Dim textToDraw As String = If(_TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
             If UseXamlTextLayout AndAlso Not String.IsNullOrEmpty(textToDraw) AndAlso
                (TextTrimming <> TextTrimming.None OrElse MaxSize.Y < Single.MaxValue) Then textToDraw = FitXamlText(textToDraw)
+            DrawTextSelection(textToDraw)
             If Not String.IsNullOrEmpty(textToDraw) Then
                 Dim vectorFont As VectorFont = Nothing
                 If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then

@@ -23,6 +23,14 @@
   <Target Name="ProjectZLocateXaml">
     <PropertyGroup><_ProjectZXamlDirectory>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZXaml'))</_ProjectZXamlDirectory></PropertyGroup>
   </Target>
+  <!-- A freshly opened configuration needs generated types before IntelliSense consumes it. -->
+  <Target Name="ProjectZBootstrapDesignTime" BeforeTargets="ResolveReferences"
+          DependsOnTargets="ProjectZCollectXaml;ProjectZLocateXaml"
+          Condition="'$(DesignTimeBuild)' == 'true' and '$(ProjectZEnableXaml)' == 'true' and '@(ProjectZXaml)' != '' and !Exists('$(_ProjectZXamlDirectory)/compile-items') and '$(ProjectZDesignBootstrap)' != 'true'">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build"
+             Properties="DesignTimeBuild=false;BuildProjectReferences=true;SkipCompilerExecution=false;ProvideCommandLineArgs=false;GeneratePackageOnBuild=false;ProjectZDesignBootstrap=true"
+             RemoveProperties="BuildingProject;CompileDesignTime;NonExistentFile" />
+  </Target>
   <Target Name="ProjectZPrepareXaml" DependsOnTargets="ProjectZLocateXaml;ResolveReferences" Condition="'$(ProjectZEnableXaml)' == 'true' and '@(ProjectZXaml)' != '' and '$(DesignTimeBuild)' != 'true'">
     <PropertyGroup>
       <_ProjectZXamlDirectory>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZXaml'))</_ProjectZXamlDirectory>
@@ -38,17 +46,20 @@
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/implicit-usings" Lines="$(ImplicitUsings)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/constants" Lines="$(DefineConstants)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <MSBuild Projects="$(ProjectZXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" />
+    <!-- Record tool content after the nested build, even when MSBuild cached its old timestamp. -->
+    <GetFileHash Files="$(ProjectZXamlTool)"><Output TaskParameter="Hash" PropertyName="_ProjectZXamlToolHash" /></GetFileHash>
+    <WriteLinesToFile File="$(_ProjectZXamlDirectory)/tool-version" Lines="$(_ProjectZXamlToolHash)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <ReadLinesFromFile File="$(_ProjectZXamlDirectory)/generated-items" Condition="Exists('$(_ProjectZXamlDirectory)/generated-items')"><Output TaskParameter="Lines" ItemName="_ProjectZPreviousGeneratedSources" /></ReadLinesFromFile>
   </Target>
   <Target Name="ProjectZGenerateXaml" DependsOnTargets="ProjectZPrepareXaml"
           Condition="'$(ProjectZEnableXaml)' == 'true' and '@(ProjectZXaml)' != '' and '$(DesignTimeBuild)' != 'true'"
-          Inputs="@(Compile);@(ProjectZXaml);@(ProjectZXamlSource);@(ReferencePath);$(ProjectZXamlTool);$(MSBuildThisFileFullPath);$(_ProjectZXamlDirectory)/sources;$(_ProjectZXamlDirectory)/pages;$(_ProjectZXamlDirectory)/convert-sources;$(_ProjectZXamlDirectory)/references;$(_ProjectZXamlDirectory)/language;$(_ProjectZXamlDirectory)/framework;$(_ProjectZXamlDirectory)/namespace;$(_ProjectZXamlDirectory)/implicit-usings;$(_ProjectZXamlDirectory)/constants"
+          Inputs="@(Compile);@(ProjectZXaml);@(ProjectZXamlSource);@(ReferencePath);$(ProjectZXamlToolProject);$(MSBuildThisFileFullPath);$(_ProjectZXamlDirectory)/sources;$(_ProjectZXamlDirectory)/pages;$(_ProjectZXamlDirectory)/convert-sources;$(_ProjectZXamlDirectory)/references;$(_ProjectZXamlDirectory)/language;$(_ProjectZXamlDirectory)/framework;$(_ProjectZXamlDirectory)/namespace;$(_ProjectZXamlDirectory)/implicit-usings;$(_ProjectZXamlDirectory)/constants;$(_ProjectZXamlDirectory)/tool-version"
           Outputs="$(_ProjectZXamlDirectory)/compile-items;$(_ProjectZXamlDirectory)/original-items;$(_ProjectZXamlDirectory)/generated-items;@(_ProjectZPreviousGeneratedSources)">
     <Exec Command="dotnet &quot;$(ProjectZXamlTool)&quot; build-views &quot;$(_ProjectZXamlDirectory)&quot;" />
     <ReadLinesFromFile File="$(_ProjectZXamlDirectory)/generated-items"><Output TaskParameter="Lines" ItemName="_ProjectZWrittenFiles" /></ReadLinesFromFile>
     <Touch Files="@(_ProjectZWrittenFiles)" ForceTouch="true" />
   </Target>
-  <Target Name="ProjectZApplyXaml" BeforeTargets="CoreCompile" DependsOnTargets="ProjectZLocateXaml;ProjectZGenerateXaml"
+  <Target Name="ProjectZApplyXaml" BeforeTargets="CoreCompile" DependsOnTargets="ProjectZCollectXaml;ProjectZLocateXaml;ProjectZGenerateXaml"
           Condition="'$(ProjectZEnableXaml)' == 'true' and '@(ProjectZXaml)' != ''">
     <ReadLinesFromFile File="$(_ProjectZXamlDirectory)/original-items" Condition="Exists('$(_ProjectZXamlDirectory)/original-items')"><Output TaskParameter="Lines" ItemName="_ProjectZOriginalSources" /></ReadLinesFromFile>
     <ReadLinesFromFile File="$(_ProjectZXamlDirectory)/compile-items" Condition="Exists('$(_ProjectZXamlDirectory)/compile-items')"><Output TaskParameter="Lines" ItemName="_ProjectZGeneratedSources" /></ReadLinesFromFile>

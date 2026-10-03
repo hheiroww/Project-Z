@@ -122,6 +122,7 @@ public class TextBox : Control
     public TextBox() : this(new Native.Textbox(Application.Current.Scene)) { }
     internal TextBox(SceneElement native) : base(native) { Listen("OnTextChanged", _ => { Changed(nameof(Text)); TextChanged?.Invoke(this, new() { Source = this, OriginalSource = this }); }); }
     public string Text { get => ((Native.Textbox)NativeElement).Text; set => ((Native.Textbox)NativeElement).Text = value; }
+    public bool IsReadOnly { get => ((Native.Textbox)NativeElement).IsReadOnly; set => ((Native.Textbox)NativeElement).IsReadOnly = value; }
 }
 public class TextBlock : Control
 {

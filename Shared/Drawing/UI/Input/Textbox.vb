@@ -17,6 +17,18 @@ Namespace [Shared].Drawing.UI.Input
         Inherits RectangleElement
 
 #Region "Properties"
+        ''' <summary>Allows selection and copy while preventing user edits. Code may still set Text.</summary>
+        Private readOnlyValue As Boolean
+        Public Property IsReadOnly As Boolean
+            Get
+                Return readOnlyValue
+            End Get
+            Set(value As Boolean)
+                readOnlyValue = value
+                If editMenu IsNot Nothing Then editMenu.IsOpen = False
+            End Set
+        End Property
+
 
         Public Property TextPadding As Vector2
             Get
@@ -349,11 +361,16 @@ Namespace [Shared].Drawing.UI.Input
         Private editMenu As ContextMenu
 
         Private Sub OpenEditMenu(point As Point) Handles Me.MouseRightClick
+            If editMenu IsNot Nothing Then
+                Scene.RemoveElement(editMenu)
+                editMenu.Dispose()
+                editMenu = Nothing
+            End If
             If editMenu Is Nothing Then
                 editMenu = New ContextMenu(Scene) With {
-                    .Size = New Vector2(168, If(TypeOf Me Is PasswordBox, 72, 136)),
+                    .Size = New Vector2(168, If(IsReadOnly OrElse TypeOf Me Is PasswordBox, 72, 136)),
                     .BackgroundColor = New Color(17, 23, 28)}
-                Dim labels = If(TypeOf Me Is PasswordBox, {"Paste", "Select all"}, {"Cut", "Copy", "Paste", "Select all"})
+                Dim labels = If(IsReadOnly, If(TypeOf Me Is PasswordBox, {"Select all"}, {"Copy", "Select all"}), If(TypeOf Me Is PasswordBox, {"Paste", "Select all"}, {"Cut", "Copy", "Paste", "Select all"}))
                 For Each value In labels
                     Dim label = value
                     Dim item As New MenuItem(Scene) With {.Header = label, .AutoSize = ButtonAutoSize.None,
@@ -367,7 +384,7 @@ Namespace [Shared].Drawing.UI.Input
                                                             Case "Paste" : PasteClipboard()
                                                             Case "Select all" : SelectAll()
                                                         End Select
-                                                        isSelected = True
+                                                        Scene.FocusElement(Me)
                                                     End Sub
                     editMenu.AddItem(item)
                 Next
@@ -396,12 +413,14 @@ Namespace [Shared].Drawing.UI.Input
         End Function
 
         Public Function CutSelection() As Boolean
+            If IsReadOnly Then Return False
             If Not CopySelection() Then Return False
             ReplaceSelection(String.Empty)
             Return True
         End Function
 
         Public Function PasteClipboard() As Boolean
+            If IsReadOnly Then Return False
 #If WINDOWS Then
             Try
                 If Not System.Windows.Forms.Clipboard.ContainsText() Then Return False
@@ -416,6 +435,7 @@ Namespace [Shared].Drawing.UI.Input
         End Function
 
         Public Sub ReplaceSelection(value As String)
+            If IsReadOnly Then Return
             value = If(value, String.Empty)
             If Not AcceptsReturn Then value = value.Replace(vbCrLf, " ").Replace(vbCr, " ").Replace(vbLf, " ")
             Dim start = If(SelectionLength > 0, SelectionStart, CaretPosition)
@@ -523,6 +543,7 @@ Namespace [Shared].Drawing.UI.Input
                     point.Y += If(Key = Keys.Up, -1, 1) * Scene.TextLineSpacing(Font)
                     MoveCaret(inputLayout.HitTest(point, Scene.TextLineSpacing(Font)), shift)
                 Case Keys.Back, Keys.Delete
+                    If IsReadOnly Then Return
                     If SelectionLength = 0 Then
                         Dim destination = If(Key = Keys.Back, If(control, WordPosition(CaretPosition, True), PreviousPosition(CaretPosition)),
                             If(control, WordPosition(CaretPosition, False), NextPosition(CaretPosition)))

@@ -139,6 +139,8 @@ Namespace [Shared].Drawing.Designer
         End Function
 
         Public Property ImplicitStoryboardTriggersEnabled As Boolean = True
+        ''' <summary>Enable copying display text, except text nested in interactive controls.</summary>
+        Public Property TextSelectionEnabled As Boolean
 
         ''' <summary>Attach legacy layout after an in-memory compatibility import.</summary>
         Public Sub AttachImportedLayout()
@@ -957,6 +959,13 @@ Namespace [Shared].Drawing.Designer
 
         Private Function CreateText(xmlElement As XmlElement) As SceneElement
             Dim text As New TextElement(_scene)
+            Dim selectable = TextSelectionEnabled
+            Dim ancestor = xmlElement.ParentNode
+            While ancestor IsNot Nothing
+                If {"Button", "MenuItem", "TextBox", "PasswordBox", "ComboBox", "CheckBox", "RadioButton", "ToggleButton"}.Contains(ancestor.LocalName) Then selectable = False
+                ancestor = ancestor.ParentNode
+            End While
+            text.IsTextSelectionEnabled = GetAttributeBoolean(xmlElement, "IsTextSelectionEnabled", selectable)
             text.UseXamlTextLayout = True
             Dim alignment As HorizontalAlignment
             If [Enum].TryParse(xmlElement.GetAttribute("TextAlignment"), True, alignment) Then text.TextAlignment = alignment
@@ -1096,6 +1105,7 @@ Namespace [Shared].Drawing.Designer
 
         Private Function CreateTextBox(xmlElement As XmlElement) As SceneElement
             Dim textBox As New Textbox(_scene)
+            textBox.IsReadOnly = GetAttributeBoolean(xmlElement, "IsReadOnly", False)
             textBox.Text = GetAttributeString(xmlElement, "Text", "")
             textBox.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", textBox.ForegroundColor)
             textBox.BackgroundColor = GetAttributeColor(xmlElement, "Background", textBox.BackgroundColor)
