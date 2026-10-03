@@ -83,7 +83,7 @@ Namespace [Shared].Content
             Return result
         End Function
 
-        Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2)
+        Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2, Optional textScale As Single = 1)
             If String.IsNullOrWhiteSpace(text) Then Return
             Dim vertices = Triangles(text)
             If vertices.Length = 0 Then Return
@@ -98,7 +98,7 @@ Namespace [Shared].Content
                 Next
             End If
             Dim scale = Drawing.GraphicsQuality.ForDevice(device).RenderScale
-            effect.World = Matrix.CreateTranslation(position.X - offset.X, position.Y - offset.Y, 0) * Matrix.CreateScale(scale.X, scale.Y, 1)
+            effect.World = Matrix.CreateScale(textScale, textScale, 1) * Matrix.CreateTranslation(position.X - offset.X, position.Y - offset.Y, 0) * Matrix.CreateScale(scale.X, scale.Y, 1)
             effect.Projection = Matrix.CreateOrthographicOffCenter(0, device.Viewport.Width, device.Viewport.Height, 0, 0, 1)
             Dim rasterizer = device.RasterizerState
             Dim blend = device.BlendState

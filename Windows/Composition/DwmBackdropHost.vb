@@ -16,6 +16,9 @@ Namespace Windows.Composition
         Private Const SwpShowWindow As UInteger = &H40UI
         Private ReadOnly owner As IntPtr
         Private ReadOnly backdrop As Form
+        Private ReadOnly ownerWindow As OwnerWindowObserver
+        Private synchronizing As Boolean
+        Public ReadOnly Property NativePositionUpdateCount As Long
         Private disposed As Boolean
         Private lastBounds As Global.System.Drawing.Rectangle
         Private lastVisible As Boolean
@@ -102,7 +105,7 @@ Namespace Windows.Composition
                 .FormBorderStyle = FormBorderStyle.None,
                 .ShowInTaskbar = False,
                 .StartPosition = FormStartPosition.Manual,
-                .Text = "heirowSnap DWM backdrop",
+                .Text = "Project-Z DWM backdrop",
                 .Enabled = False
             }
             backdrop.Show()
@@ -114,6 +117,7 @@ Namespace Windows.Composition
                 .FallbackAccentBlur = True,
                 .ExtendFrameIntoClientArea = True
             })
+            ownerWindow = New OwnerWindowObserver(owner, Me)
             Tick()
         End Sub
 
@@ -246,7 +250,24 @@ Namespace Windows.Composition
         End Sub
 
         Public Sub Tick()
-            If disposed OrElse Not IsWindow(owner) Then Return
+            If disposed OrElse synchronizing OrElse Not IsWindow(owner) Then Return
+            synchronizing = True
+            Try
+                SynchronizeOwnerWindow()
+            Finally
+                synchronizing = False
+            End Try
+        End Sub
+
+        Private Shared Function NextVisibleWindow(window As IntPtr) As IntPtr
+            Dim following = GetWindow(window, 2UI)
+            While following <> IntPtr.Zero AndAlso Not IsWindowVisible(following)
+                following = GetWindow(following, 2UI)
+            End While
+            Return following
+        End Function
+
+        Private Sub SynchronizeOwnerWindow()
             Dim visible = IsWindowVisible(owner) AndAlso Not IsIconic(owner)
             If Not visible Then
                 If lastVisible Then backdrop.Hide()
@@ -257,18 +278,47 @@ Namespace Windows.Composition
             Dim rect As NativeRect
             If Not GetWindowRect(owner, rect) Then Return
             Dim bounds = Global.System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom)
+            If lastVisible AndAlso backdrop.Visible AndAlso bounds = lastBounds AndAlso
+               NextVisibleWindow(owner) = backdrop.Handle Then Return
             If Not backdrop.Visible Then backdrop.Show()
-            If bounds <> lastBounds Then backdrop.Bounds = bounds
             ' Insert immediately below the DX12 HWND without stealing focus.
             LastPositionSucceeded = SetWindowPos(backdrop.Handle, owner, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
                                                  SwpNoActivate Or SwpShowWindow)
-            lastBounds = bounds
-            lastVisible = True
+            If LastPositionSucceeded Then
+                _NativePositionUpdateCount += 1
+                lastBounds = bounds
+                lastVisible = True
+            End If
         End Sub
+
+        ' Windows enters a modal message loop during caption dragging/resizing.
+        ' The Game update loop may not run there. Follow the committed native
+        ' position synchronously instead of leaving the acrylic HWND behind.
+        Private NotInheritable Class OwnerWindowObserver
+            Inherits NativeWindow
+            Private ReadOnly host As DwmBackdropHost
+
+            Public Sub New(handle As IntPtr, host As DwmBackdropHost)
+                Me.host = host
+                AssignHandle(handle)
+            End Sub
+
+            Protected Overrides Sub WndProc(ByRef message As Message)
+                Dim kind = message.Msg
+                MyBase.WndProc(message)
+                Select Case kind
+                    Case &H47, &H18, &H5, &H232 ' WINDOWPOSCHANGED, SHOWWINDOW, SIZE, EXITSIZEMOVE
+                        host.Tick()
+                    Case &H82 ' NCDESTROY
+                        If Not host.disposed AndAlso Not host.backdrop.IsDisposed Then host.backdrop.Hide()
+                End Select
+            End Sub
+        End Class
 
         Public Sub Dispose() Implements IDisposable.Dispose
             If disposed Then Return
             disposed = True
+            ownerWindow?.ReleaseHandle()
             If Not backdrop.IsDisposed Then backdrop.Dispose()
         End Sub
 
@@ -282,6 +332,9 @@ Namespace Windows.Composition
 
         <DllImport("user32.dll")>
         Private Shared Function GetWindowRect(hwnd As IntPtr, ByRef rect As NativeRect) As Boolean
+        End Function
+        <DllImport("user32.dll")>
+        Private Shared Function GetWindow(hwnd As IntPtr, command As UInteger) As IntPtr
         End Function
         <DllImport("user32.dll")>
         Private Shared Function GetClientRect(hwnd As IntPtr, ByRef rect As NativeRect) As Boolean

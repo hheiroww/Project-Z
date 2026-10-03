@@ -16,12 +16,12 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2.6.1.0</Version>
+	<Version>2.7.0.0</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>Vector text from TTF/OTF outlines rendered as GPU triangles on DX12/DX11, matching caret and selection metrics, improved text editing and hit testing, and configurable antialiasing/filtering. Updates SocketJack to 2026.14.1 with default authentication gates and SSH.NET 2026.0.0.</PackageReleaseNotes>
-	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
+    <PackageReleaseNotes>2.7 adds the HTML5 scene engine and native host integration, WPF import tooling and compatibility sources, vector text and control refinements, and SocketJack 2026.15.0. MutableTcpServer protocols must now be explicitly enabled.</PackageReleaseNotes>
+	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
@@ -35,6 +35,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
+    <Compile Remove="tests\WpfImport\**;artifacts\**" />
+    <Page Remove="tests\WpfImport\**;artifacts\**" />
+    <EmbeddedResource Remove="tests\WpfImport\**;artifacts\**" />
     <Compile Remove="obj\**" />
     <Compile Remove="packages\**" />
     <Compile Remove="Project Z Application\**" />
@@ -71,9 +75,10 @@
     <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
     <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-    <PackageReference Include="SocketJack" Version="2026.14.1" Condition="!Exists('$(SocketJackProject)')" />
+    <PackageReference Include="SocketJack" Version="2026.15.0" Condition="!Exists('$(SocketJackProject)')" />
     <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
     <PackageReference Include="LibTessDotNet" Version="1.1.15" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
     <PackageReference Include="System.Net.Http" Version="4.3.4" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
@@ -137,6 +142,19 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Shared\Drawing\Designer\DesignTime\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Project Z HTML5\index.html" />
+    <None Remove="Project Z HTML5\styles.css" />
+    <None Remove="Project Z HTML5\src\**\*.js" />
+    <Content Include="Project Z HTML5\index.html;Project Z HTML5\styles.css">
+      <Pack>True</Pack>
+      <PackagePath>contentFiles\any\any\Project Z HTML5\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+    </Content>
+    <Content Include="Project Z HTML5\src\**\*.js">
+      <Pack>True</Pack>
+      <PackagePath>contentFiles\any\any\Project Z HTML5\src\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Update="README.NuGet.md">

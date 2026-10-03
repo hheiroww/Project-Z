@@ -20,6 +20,13 @@ Namespace [Shared].Drawing.UI
         Public isUserInvalidated As Boolean = False
         ' Optional declarative layout adapter; native controls retain their own layout.
         Public Property ImportedLayout As Action
+        ''' <summary>Optional compatibility routing before native input handlers. True consumes the event.</summary>
+        Public Property ImportedInputFilter As Func(Of String, Object(), Boolean)
+        Private _importedPointerSuppressed As Boolean
+
+        Public Function FilterImportedInput(name As String, ParamArray values As Object()) As Boolean
+            Return ImportedInputFilter IsNot Nothing AndAlso ImportedInputFilter(name, values)
+        End Function
         ' Opt-in virtualization for fixed-size items such as a file gallery.
         ' Keep item positions current, but arrange descendants only near view.
         Public Property VirtualizationViewport As SceneElement
@@ -427,6 +434,8 @@ Namespace [Shared].Drawing.UI
         Public Event DragOver(p As Point, Element As SceneElement)
 
         Protected Friend Sub OnMouseLeftDown(p As Point)
+            _importedPointerSuppressed = FilterImportedInput("MouseLeftButtonDown", p)
+            If _importedPointerSuppressed Then Return
             _MouseDown = True
             _MouseDownPosition = Position
             RaiseEvent MouseLeftDown(p)
@@ -434,10 +443,13 @@ Namespace [Shared].Drawing.UI
 
         Protected Friend Sub OnMouseLeftUp(p As Point)
             _MouseDown = False
+            If FilterImportedInput("MouseLeftButtonUp", p) Then _importedPointerSuppressed = True
+            If _importedPointerSuppressed Then Return
             RaiseEvent MouseLeftUp(p)
         End Sub
 
         Protected Friend Sub OnMouseLeftClick(p As Point)
+            If _importedPointerSuppressed Then Return
             RaiseEvent MouseLeftClick(p)
         End Sub
 
@@ -446,6 +458,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Protected Friend Sub OnMouseWheel(delta As Integer, p As Point)
+            If FilterImportedInput("MouseWheel", delta, p) Then Return
             RaiseEvent MouseWheel(delta, p)
         End Sub
 
@@ -697,6 +710,12 @@ Namespace [Shared].Drawing.UI
 #End Region
 
         Private Timeline As Timeline
+
+        Public ReadOnly Property HasActiveAnimations As Boolean
+            Get
+                Return Timeline IsNot Nothing AndAlso Timeline.HasActiveAnimations
+            End Get
+        End Property
 
         Protected Friend MustOverride Sub Draw(gameTime As GameTime)
 

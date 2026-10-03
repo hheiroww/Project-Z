@@ -63,6 +63,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "import") return ProjectImporter.Run(args[1..]);
         if (args.Length != 2)
         {
             Console.Error.WriteLine("Usage: ProjectZ.XamlCodegen <legacy-xaml-root> <generated-output-root>");
@@ -78,6 +79,10 @@ internal static class Program
         }
 
         Directory.CreateDirectory(outputRoot);
+        var sourceProjects = Directory.EnumerateFiles(inputRoot, "*.vbproj", SearchOption.TopDirectoryOnly).ToArray();
+        var defaultNamespace = sourceProjects.Length == 1
+            ? XDocument.Load(sourceProjects[0]).Descendants().FirstOrDefault(e => e.Name.LocalName == "RootNamespace")?.Value ?? "ProjectZImported"
+            : "ProjectZImported";
         var generated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var failures = new List<string>();
 
@@ -94,7 +99,7 @@ internal static class Program
                 var outputPath = Path.Combine(outputRoot, fileName);
                 var preserved = ReadPreservedCustomCode(outputPath);
                 var relative = Path.GetRelativePath(inputRoot, xamlPath);
-                var source = Generate(document.Root, className, relative, preserved);
+                var source = Generate(document.Root, className, relative, preserved, defaultNamespace, new DirectoryInfo(inputRoot).Name);
                 WriteIfChanged(outputPath, source);
                 generated.Add(Path.GetFullPath(outputPath));
                 Console.WriteLine($"Project-Z XAML: {relative} -> {fileName}");
@@ -120,9 +125,9 @@ internal static class Program
         return 1;
     }
 
-    private static string Generate(XElement root, string xamlClass, string relativePath, string customCode)
+    private static string Generate(XElement root, string xamlClass, string relativePath, string customCode, string defaultNamespace, string sourceDirectory)
     {
-        var (nameSpace, shortName) = SplitClassName(xamlClass);
+        var (nameSpace, shortName) = SplitClassName(xamlClass, defaultNamespace);
         var named = root.DescendantsAndSelf()
             .Select(e => (Element: e, Name: e.Attribute(Xaml + "Name")?.Value ?? e.Attribute("Name")?.Value))
             .Where(x => !string.IsNullOrWhiteSpace(x.Name))
@@ -158,7 +163,7 @@ internal static class Program
         sb.AppendLine("        Public Property ProjectZEventHandler As Action(Of String, SceneElement, Object)");
         sb.AppendLine();
         sb.AppendLine("        Public Sub InitializeProjectZ(scene As Scene, Optional xamlPath As String = Nothing)");
-        sb.AppendLine($"            If String.IsNullOrWhiteSpace(xamlPath) Then xamlPath = IO.Path.Combine(AppContext.BaseDirectory, \"LegacyXaml\", \"wView\", \"{VbString(relativePath)}\")");
+        sb.AppendLine($"            If String.IsNullOrWhiteSpace(xamlPath) Then xamlPath = IO.Path.Combine(AppContext.BaseDirectory, \"LegacyXaml\", \"{VbString(sourceDirectory)}\", \"{VbString(relativePath)}\")");
         sb.AppendLine("            _projectZParser = New SceneXamlParser(scene)");
         sb.AppendLine("            _ProjectZRoot = _projectZParser.ParseLegacyWindow(xamlPath)");
         sb.AppendLine("            BindProjectZEvents()");
@@ -266,16 +271,16 @@ internal static class Program
         return eventName switch
         {
             "MouseEnter" or "MouseLeave" or "Loaded" => $"                AddHandler {local}.{eventName}, Sub() DispatchProjectZEvent(\"{VbString(handler)}\", {local}, Nothing)",
-            "MouseMove" or "SizeChanged" => $"                AddHandler {local}.{eventName}, Sub(a, b) {dispatch}",
+            "MouseMove" or "SizeChanged" => $"                AddHandler {local}.{eventName}, Sub(a, b) DispatchProjectZEvent(\"{VbString(handler)}\", {local}, New Object() {{a, b}})",
             "MouseWheel" => $"                AddHandler {local}.{eventName}, Sub(delta, point) DispatchProjectZEvent(\"{VbString(handler)}\", {local}, New Object() {{delta, point}})",
             _ => $"                AddHandler {local}.{eventName}, Sub(data) {dispatch}"
         };
     }
 
-    private static (string Namespace, string Name) SplitClassName(string value)
+    private static (string Namespace, string Name) SplitClassName(string value, string defaultNamespace)
     {
         var parts = value.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1) return ("heirowSnap", parts[0]);
+        if (parts.Length == 1) return (defaultNamespace, parts[0]);
         return (string.Join('.', parts[..^1]), parts[^1]);
     }
 

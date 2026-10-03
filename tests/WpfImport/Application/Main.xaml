@@ -1,0 +1,3 @@
+<Window x:Class="ApplicationSample.Main" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Imported application" Width="640" Height="400" Loaded="Ready">
+  <TextBlock Text="Original WPF application code running in Project-Z" Width="620" Height="40" />
+</Window>

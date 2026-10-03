@@ -10,6 +10,15 @@ Namespace [Shared].Drawing.UI.Input
     Public Class PasswordBox
         Inherits Textbox
 
+        Public Property IsPasswordRevealed As Boolean
+            Get
+                Return Not MaskCharacter.HasValue
+            End Get
+            Set(value As Boolean)
+                MaskCharacter = If(value, CType(Nothing, Char?), CType(ChrW(&H2022), Char?))
+            End Set
+        End Property
+
         Public Property Password As String
             Get
                 Return Text

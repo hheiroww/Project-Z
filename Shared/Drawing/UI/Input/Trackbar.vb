@@ -17,7 +17,9 @@ Namespace [Shared].Drawing.UI.Input
                 Return _Value
             End Get
             Set(value As Double)
-                _Value = Math.Max(_MinimumValue, Math.Min(value, _MaximumValue))
+                Dim bounded = Math.Max(_MinimumValue, Math.Min(value, _MaximumValue))
+                If _Value = bounded Then Return
+                _Value = bounded
                 RaiseEvent ValueChanged(_Value)
             End Set
         End Property
@@ -29,7 +31,9 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Double)
                 _MinimumValue = value
-                Me._Value = Math.Max(_MinimumValue, value)
+                If _MaximumValue < value Then _MaximumValue = value
+                Me.Value = _Value
+                SetInternalChildProperties()
             End Set
         End Property
         Private _MinimumValue As Double = 0
@@ -40,7 +44,9 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Double)
                 _MaximumValue = value
-                Me._Value = Math.Min(_MaximumValue, value)
+                If _MinimumValue > value Then _MinimumValue = value
+                Me.Value = _Value
+                SetInternalChildProperties()
             End Set
         End Property
         Private _MaximumValue As Double = 100
@@ -78,20 +84,14 @@ Namespace [Shared].Drawing.UI.Input
 #Region "Event Handlers"
 
         Private Sub Trackbar_MouseMove(currentPoint As Point, lastPoint As Point)
-            If MouseDownCheck() Then
-                Dim RelativeX As Double = CDbl(currentPoint.X - (Position.X + Slider.Size.X / 2))
-                Dim TranslatedValue As Double = Animations.DoubleAnimation.Interpolate(RelativeX, Padding.Left, Size.X - (Slider.Size.X + Padding.Left + Padding.Right), MinimumValue, MaximumValue)
-                If FixedInterval Then
-                    TranslatedValue = Math.Round(TranslatedValue)
-                    If TranslatedValue Mod 2 <> 0 Then
-                        Value = TranslatedValue - 1
-                    Else
-                        Value = TranslatedValue
-                    End If
-                Else
-                    Value = TranslatedValue
-                End If
-            End If
+            If MouseDownCheck() Then SetPointerValue(currentPoint.X)
+        End Sub
+
+        Private Sub SetPointerValue(x As Single)
+            Dim span = Math.Max(1, Size.X - Slider.Size.X - Padding.Left - Padding.Right)
+            Dim fraction = Math.Clamp((x - Position.X - Padding.Left - Slider.Size.X / 2) / span, 0, 1)
+            Dim selected = MinimumValue + fraction * (MaximumValue - MinimumValue)
+            Value = If(FixedInterval, Math.Round(selected), selected)
         End Sub
 
         Private Sub SetInternalChildProperties() Handles Me.RectangleChanged, Me.ValueChanged
@@ -102,7 +102,7 @@ Namespace [Shared].Drawing.UI.Input
             ' Slider
             Dim TranslatedX As Double = Animations.DoubleAnimation.Interpolate(Value, MinimumValue, MaximumValue, 0, Size.X - (Slider.Size.X + Padding.Left + Padding.Right))
             If Double.IsNaN(TranslatedX) Then TranslatedX = 8
-            Slider.Size = New Vector2(36)
+            Slider.Size = New Vector2(16, Math.Max(16, Size.Y))
             Slider.Margin = New Thickness(CInt(TranslatedX), CInt(Slider.Size.Y / 2 - Size.Y / 2), 0, 0)
 
             ' Display Text
@@ -168,6 +168,9 @@ Namespace [Shared].Drawing.UI.Input
 
             Children.AddRange({SliderBar, Slider, DisplayText})
             AddHandler Scene.OnMouseMove, AddressOf Trackbar_MouseMove
+            AddHandler MouseLeftDown, Sub(p) SetPointerValue(Position.X + p.X)
+            AddHandler SliderBar.MouseLeftDown, Sub(p) SetPointerValue(SliderBar.Position.X + p.X)
+            AddHandler Slider.MouseLeftDown, Sub(p) SetPointerValue(Slider.Position.X + p.X)
         End Sub
 
 #End Region
@@ -185,9 +188,9 @@ Namespace [Shared].Drawing.UI.Input
             MyBase.Draw(gameTime)
         End Sub
 
-        Protected Overrides Sub Finalize()
-            MyBase.Finalize()
-            RemoveHandler Scene.OnMouseMove, AddressOf Trackbar_MouseMove
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then RemoveHandler Scene.OnMouseMove, AddressOf Trackbar_MouseMove
+            MyBase.Dispose(disposing)
         End Sub
     End Class
 

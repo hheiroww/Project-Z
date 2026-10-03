@@ -279,21 +279,25 @@ Namespace [Shared].Drawing.UI.Input
             RaiseEvent Unchecked()
         End Sub
 
+        Protected Overrides Sub AlignChildren()
+            UpdateLayout()
+        End Sub
+
         Private Sub UpdateLayout() Handles Me.RectangleChanged
             ' Skip if child elements are not yet initialized
             If OuterCircle Is Nothing Then Return
 
             Dim yCenter As Single = (Size.Y - CircleSize) / 2.0F
 
-            OuterCircle.Position = New Vector2(0, yCenter)
+            OuterCircle.Position = New Vector2(Position.X, Position.Y + yCenter)
             OuterCircle.Size = New Vector2(CircleSize, CircleSize)
 
             Dim innerSize As Single = CircleSize * 0.5F
             Dim innerOffset As Single = (CircleSize - innerSize) / 2.0F
-            InnerCircle.Position = New Vector2(innerOffset, yCenter + innerOffset)
+            InnerCircle.Position = New Vector2(Position.X + innerOffset, Position.Y + yCenter + innerOffset)
             InnerCircle.Size = New Vector2(innerSize, innerSize)
 
-            ContentText.Position = New Vector2(CircleSize + 8.0F, 0)
+            ContentText.Position = New Vector2(Position.X + CircleSize + 8.0F, Position.Y + Math.Max(0, (Size.Y - ContentText.Size.Y) / 2))
         End Sub
 
         Private Sub UpdateCheckVisual()

@@ -232,6 +232,9 @@ Namespace [Shared].Drawing.UI.Input
     Public Class ListBox
         Inherits RectangleElement
 
+        ''' <summary>Optional native item visuals, used by imported live DataTemplates.</summary>
+        Public Property ItemVisualFactory As Func(Of Integer, SceneElement)
+
         Private _items As New List(Of String)
         Private _selectedIndex As Integer = -1
         Private _itemElements As New List(Of RectangleElement)
@@ -335,6 +338,7 @@ Namespace [Shared].Drawing.UI.Input
             ' Clear existing elements
             For Each elem In _itemElements
                 Children.Remove(elem)
+                elem.Dispose()
             Next
             _itemElements.Clear()
 
@@ -355,7 +359,12 @@ Namespace [Shared].Drawing.UI.Input
                     .isMouseBypassEnabled = True
                 }
 
-                itemBg.Children.Add(itemText)
+                If ItemVisualFactory IsNot Nothing Then
+                    itemBg.Children.Add(ItemVisualFactory(i))
+                    itemText.Dispose()
+                Else
+                    itemBg.Children.Add(itemText)
+                End If
                 _itemElements.Add(itemBg)
                 Children.Add(itemBg)
 
@@ -478,6 +487,7 @@ Namespace [Shared].Drawing.UI.Input
             For i As Integer = 0 To _tabs.Count - 1
                 Dim index As Integer = i
                 Dim header As New Button(Scene)
+                header.CornerRadii = New CornerRadii(4, 4, 0, 0)
                 header.AutoSize = ButtonAutoSize.None
                 header.Text = _tabs(i).Header
                 header.Position = New Vector2(Position.X + i * tabWidth, Position.Y)
@@ -835,6 +845,7 @@ Namespace [Shared].Drawing.UI.Input
         Private _headerButton As Button
         Private _contentContainer As RectangleElement
         Private _headerHeight As Single = 28.0F
+        Private _expandedHeight As Single = 150.0F
 
         Public Event ExpandedChanged(sender As Expander, isExpanded As Boolean)
 
@@ -855,7 +866,10 @@ Namespace [Shared].Drawing.UI.Input
                 Return _isExpanded
             End Get
             Set(value As Boolean)
+                If _isExpanded = value Then Return
+                If Not value Then _expandedHeight = Math.Max(Size.Y, _headerHeight)
                 _isExpanded = value
+                If value Then Size = New Vector2(Size.X, _expandedHeight)
                 UpdateExpansion()
                 RaiseEvent ExpandedChanged(Me, _isExpanded)
             End Set
@@ -923,14 +937,20 @@ Namespace [Shared].Drawing.UI.Input
             UpdateLayout()
         End Sub
 
+        Protected Overrides Sub AlignChildren()
+            UpdateLayout()
+        End Sub
+
         Private Sub UpdateLayout()
             If _headerButton IsNot Nothing Then
+                _headerButton.AutoSize = ButtonAutoSize.None
+                _headerButton.Position = Position
                 _headerButton.Size = New Vector2(Size.X, _headerHeight)
             End If
 
             If _contentContainer IsNot Nothing Then
-                _contentContainer.Position = New Vector2(0, _headerHeight)
-                _contentContainer.Size = New Vector2(Size.X, Size.Y - _headerHeight)
+                _contentContainer.Position = New Vector2(Position.X, Position.Y + _headerHeight)
+                _contentContainer.Size = New Vector2(Size.X, Math.Max(0, Size.Y - _headerHeight))
             End If
 
             If Not _isExpanded Then
@@ -1080,6 +1100,11 @@ Namespace [Shared].Drawing.UI.Input
             }
             Children.Add(_contentArea)
         End Sub
+        Protected Overrides Sub AlignChildren()
+            _headerText.Position = New Vector2(Position.X + 10, Position.Y + 2)
+            _contentArea.Position = New Vector2(Position.X + 4, Position.Y + _headerHeight)
+            _contentArea.Size = New Vector2(Math.Max(0, Size.X - 8), Math.Max(0, Size.Y - _headerHeight - 4))
+        End Sub
     End Class
 
     ''' <summary>
@@ -1182,6 +1207,16 @@ Namespace [Shared].Drawing.UI.Input
             If _valueText IsNot Nothing Then
                 _valueText.Text = _value.ToString("F2")
             End If
+        End Sub
+        Protected Overrides Sub AlignChildren()
+            Dim buttonWidth = Math.Min(24.0F, Size.X)
+            _valueText.Position = New Vector2(Position.X + 4, Position.Y + 4)
+            _upButton.AutoSize = ButtonAutoSize.None
+            _downButton.AutoSize = ButtonAutoSize.None
+            _upButton.Position = New Vector2(Position.X + Size.X - buttonWidth, Position.Y)
+            _downButton.Position = New Vector2(Position.X + Size.X - buttonWidth, Position.Y + Size.Y / 2)
+            _upButton.Size = New Vector2(buttonWidth, Size.Y / 2)
+            _downButton.Size = _upButton.Size
         End Sub
     End Class
 

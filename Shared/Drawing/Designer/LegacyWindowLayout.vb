@@ -26,7 +26,9 @@ Namespace [Shared].Drawing.Designer
                     Dim text = DirectCast(item, TextElement)
                     text.isMouseBypassEnabled = True
                     Dim size = Number(xml, "FontSize", 12)
-                    text.Font = "SegoeUI_" & If(size <= 10, "10", If(size <= 12, "12", "14"))
+                    Dim resourceSize = If(size <= 10, 10, If(size <= 12, 12, 14))
+                    text.FontScale = size * 0.75F / resourceSize
+                    text.Font = "SegoeUI_" & resourceSize
                     text.Text = text.Text.Replace("✕", "x").Replace("▾", "v").Replace("…", "...")
                     AddHandler text.TextChanged, Sub() revision += 1
                 End If
@@ -70,8 +72,7 @@ Namespace [Shared].Drawing.Designer
             Dim desired As Vector2
             If TypeOf item Is TextElement Then
                 Dim text = DirectCast(item, TextElement)
-                text.MaxWidth = Math.Max(1, available - text.Padding.Left - text.Padding.Right)
-                desired = text.XamlDesiredSize
+                desired = text.MeasureXamlText(available)
             ElseIf TypeOf item Is ImageElement Then
                 Dim image = DirectCast(item, ImageElement)
                 If image.Texture IsNot Nothing Then
@@ -79,6 +80,12 @@ Namespace [Shared].Drawing.Designer
                     desired = New Vector2(image.Texture.Width * ratio, image.Texture.Height * ratio)
                 End If
             ElseIf TypeOf item Is Button Then
+                desired = New Vector2(available, 28)
+            ElseIf TypeOf item Is RadioButton OrElse TypeOf item Is CheckBox Then
+                desired = New Vector2(available, 28)
+            ElseIf TypeOf item Is Separator Then
+                desired = New Vector2(available, 1)
+            ElseIf TypeOf item Is Trackbar OrElse TypeOf item Is ProgressBar Then
                 desired = New Vector2(available, 28)
             ElseIf TypeOf item Is Textbox Then
                 desired = New Vector2(available, 30)

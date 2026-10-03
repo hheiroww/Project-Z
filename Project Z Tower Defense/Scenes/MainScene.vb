@@ -769,7 +769,7 @@ Partial Public Class MainScene
         Server.SendBroadcast(state)
     End Sub
 
-    Private Sub SendGameStateToConnection(connection As SocketJack.Net.TcpConnection)
+    Private Sub SendGameStateToConnection(connection As SocketJack.Net.NetworkConnection)
         If connection Is Nothing Then Return
         Dim state As New GameStateMessage With {
             .Enemies = Enemies.Select(Function(enemy) New EnemyState With {

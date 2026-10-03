@@ -140,6 +140,22 @@ Namespace [Shared].Drawing.Designer
 
         Public Property ImplicitStoryboardTriggersEnabled As Boolean = True
 
+        ''' <summary>Attach legacy layout after an in-memory compatibility import.</summary>
+        Public Sub AttachImportedLayout()
+            Dim layout As New LegacyWindowLayout(_scene, _xmlElements)
+            layout.Attach()
+        End Sub
+
+        ''' <summary>Keep imported layout metadata in sync with code-behind property changes.</summary>
+        Public Sub SetImportedProperty(element As SceneElement, propertyName As String, value As String)
+            For Each pair In _xmlElements
+                If pair.Value Is element Then
+                    pair.Key.SetAttribute(propertyName, value)
+                    Return
+                End If
+            Next
+        End Sub
+
         Public Function ParseLegacyWindow(filePath As String) As SceneElement
             Dim root = ParseFile(filePath)
             Dim layout As New LegacyWindowLayout(_scene, _xmlElements)
@@ -365,6 +381,18 @@ Namespace [Shared].Drawing.Designer
                             Else
                                 Throw New InvalidDataException("ScrollViewer supports one content element. Wrap multiple controls in a Panel.")
                             End If
+                        ElseIf TypeOf element Is Expander Then
+                            Dim container = DirectCast(element, Expander)
+                            If container.Content IsNot Nothing Then Throw New InvalidDataException("Expander supports one content element.")
+                            If Not childXml.HasAttribute("Width") Then childElement.HorizontalAlign = HorizontalAlignment.Stretch
+                            If Not childXml.HasAttribute("Height") Then childElement.VerticalAlign = VerticalAlignment.Stretch
+                            container.Content = childElement
+                        ElseIf TypeOf element Is GroupBox Then
+                            Dim container = DirectCast(element, GroupBox)
+                            If container.Content IsNot Nothing Then Throw New InvalidDataException("GroupBox supports one content element.")
+                            If Not childXml.HasAttribute("Width") Then childElement.HorizontalAlign = HorizontalAlignment.Stretch
+                            If Not childXml.HasAttribute("Height") Then childElement.VerticalAlign = VerticalAlignment.Stretch
+                            container.Content = childElement
                         Else
                             element.Children.Add(childElement)
                         End If
@@ -932,6 +960,11 @@ Namespace [Shared].Drawing.Designer
             text.UseXamlTextLayout = True
             Dim alignment As HorizontalAlignment
             If [Enum].TryParse(xmlElement.GetAttribute("TextAlignment"), True, alignment) Then text.TextAlignment = alignment
+            Dim trimming As TextTrimming
+            If [Enum].TryParse(xmlElement.GetAttribute("TextTrimming"), True, trimming) Then text.TextTrimming = trimming
+            text.LineHeight = GetAttributeSingle(xmlElement, "LineHeight", Single.NaN)
+            text.BlockLineHeight = xmlElement.GetAttribute("LineStackingStrategy") = "BlockLineHeight"
+            text.Clip = text.TextTrimming <> TextTrimming.None OrElse xmlElement.HasAttribute("MaxHeight")
 
             ' Set wrapping parameters BEFORE text content so the initial
             ' UpdateWrappedText uses the correct wrap width.

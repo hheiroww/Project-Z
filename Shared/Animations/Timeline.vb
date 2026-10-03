@@ -19,6 +19,12 @@ Namespace [Shared].Animations
 
         Public Property gameTime As GameTime
 
+        Public ReadOnly Property HasActiveAnimations As Boolean
+            Get
+                Return BindQueue.Count > 0 OrElse ActiveAnimations.Keys.Any(Function(animation) animation.Running)
+            End Get
+        End Property
+
         Public Sub AddChild(Animation As AnimationBase, TargetProperty As ElementProperty)
             If Animation.From Is Nothing Then Animation.From = TargetProperty.GetValue
             Dim owner = propertyOwners.FirstOrDefault(Function(p) p.Target.TargetsSameProperty(TargetProperty))

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><RootNamespace>ImportSamplesVB</RootNamespace><OptionStrict>On</OptionStrict></PropertyGroup>
+  <ItemGroup><Import Include="System.Windows" /><ProjectReference Include="../CSharp/CSharp.csproj" /></ItemGroup>
+</Project>

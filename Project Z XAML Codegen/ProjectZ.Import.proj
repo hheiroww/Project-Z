@@ -1,0 +1,11 @@
+<Project DefaultTargets="ImportProjectZWpf">
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <ProjectZXamlGenerator>$(MSBuildThisFileDirectory)bin/$(Configuration)/net8.0/ProjectZ.XamlCodegen.dll</ProjectZXamlGenerator>
+  </PropertyGroup>
+  <Target Name="ImportProjectZWpf">
+    <Error Condition="'$(ProjectZImportSource)' == '' or '$(ProjectZImportOutput)' == ''" Text="Set ProjectZImportSource to a csproj/vbproj and ProjectZImportOutput to a separate directory." />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
+    <Exec Command="dotnet &quot;$(ProjectZXamlGenerator)&quot; import &quot;$(ProjectZImportSource)&quot; --output &quot;$(ProjectZImportOutput)&quot;" />
+  </Target>
+</Project>

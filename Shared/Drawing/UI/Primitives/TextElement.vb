@@ -85,13 +85,19 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Property TextTrimming As TextTrimming = TextTrimming.None
         Public Property LineHeight As Single = Single.NaN
         Public Property BlockLineHeight As Boolean
+        ' XAML FontSize is in DIPs; the shared font resources use points.
+        Public Property FontScale As Single = 1
+
+        Private Function MeasureContent(value As String) As Vector2
+            Return Scene.MeasureText(Font, value) * FontScale
+        End Function
 
         Private ReadOnly Property XamlLineSpacing As Single
             Get
                 If BlockLineHeight AndAlso Single.IsFinite(LineHeight) AndAlso LineHeight > 0 Then Return LineHeight
                 Dim vectorFont As VectorFont = Nothing
-                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.LineSpacing
-                Return Scene.contentCollection.Fonts(Font).LineSpacing
+                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.LineSpacing * FontScale
+                Return Scene.contentCollection.Fonts(Font).LineSpacing * FontScale
             End Get
         End Property
 
@@ -103,7 +109,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Friend ReadOnly Property XamlDesiredSize As Vector2
             Get
                 Dim content = If(TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
-                Dim measured = Scene.MeasureText(Font, If(content, String.Empty))
+                Dim measured = MeasureContent(If(content, String.Empty))
                 If BlockLineHeight AndAlso Not String.IsNullOrEmpty(content) Then
                     measured.Y = content.Replace(vbCr, "").Split(ChrW(10)).Length * XamlLineSpacing
                 End If
@@ -156,7 +162,7 @@ Namespace [Shared].Drawing.UI.Primitives
 
                 If _TextWrapping = TextWrapping.NoWrap OrElse String.IsNullOrEmpty(_Text) Then
                     WrappedText = _Text
-                    Size = Scene.MeasureText(Font, If(String.IsNullOrEmpty(_Text), " ", _Text))
+                    Size = MeasureContent(If(String.IsNullOrEmpty(_Text), " ", _Text))
                     Invalidate()
                     Return
                 End If
@@ -178,7 +184,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 End If
 
                 WrappedText = WrapText(_Text, wrapWidth)
-                Dim measuredSize = Scene.MeasureText(Font, If(String.IsNullOrEmpty(WrappedText), " ", WrappedText))
+                Dim measuredSize = MeasureContent(If(String.IsNullOrEmpty(WrappedText), " ", WrappedText))
                 ' Constrain width so text element never reports wider than its wrap boundary
                 Size = New Vector2(Math.Min(measuredSize.X, wrapWidth), measuredSize.Y)
                 Invalidate()
@@ -202,7 +208,7 @@ Namespace [Shared].Drawing.UI.Primitives
 
                 If String.IsNullOrEmpty(line) Then Continue For
 
-                Dim lineWidth As Single = Scene.MeasureText(Font, line).X
+                Dim lineWidth As Single = MeasureContent(line).X
                 If lineWidth <= maxWidth Then
                     result.Append(line)
                     Continue For
@@ -229,7 +235,7 @@ Namespace [Shared].Drawing.UI.Primitives
 
             For Each word As String In words
                 Dim testLine As String = If(currentLine.Length = 0, word, currentLine.ToString() & " " & word)
-                Dim testWidth As Single = Scene.MeasureText(Font, testLine).X
+                Dim testWidth As Single = MeasureContent(testLine).X
 
                 If testWidth <= maxWidth Then
                     If currentLine.Length > 0 Then currentLine.Append(" ")
@@ -242,7 +248,7 @@ Namespace [Shared].Drawing.UI.Primitives
                     End If
 
                     ' Check if single word is too long
-                    Dim wordWidth As Single = Scene.MeasureText(Font, word).X
+                    Dim wordWidth As Single = MeasureContent(word).X
                     If wordWidth > maxWidth Then
                         ' Break the word by characters
                         result.Append(WrapLineByCharacters(word, maxWidth))
@@ -271,7 +277,7 @@ Namespace [Shared].Drawing.UI.Primitives
 
             For Each c As Char In line
                 Dim testLine As String = currentLine.ToString() & c
-                Dim testWidth As Single = Scene.MeasureText(Font, testLine).X
+                Dim testWidth As Single = MeasureContent(testLine).X
 
                 If testWidth <= maxWidth Then
                     currentLine.Append(c)
@@ -385,14 +391,14 @@ Namespace [Shared].Drawing.UI.Primitives
             Dim result As New List(Of String)
             For index = 0 To count - 1
                 Dim line = lines(index)
-                Dim overflow = Scene.MeasureText(Font, line).X > width OrElse (index = count - 1 AndAlso count < lines.Length)
+                Dim overflow = MeasureContent(line).X > width OrElse (index = count - 1 AndAlso count < lines.Length)
                 If overflow AndAlso TextTrimming <> TextTrimming.None Then
                     Const ellipsis As String = "…"
-                    While line.Length > 0 AndAlso Scene.MeasureText(Font, line & ellipsis).X > width
+                    While line.Length > 0 AndAlso MeasureContent(line & ellipsis).X > width
                         line = line.Substring(0, line.Length - 1)
                     End While
                     If TextTrimming = TextTrimming.WordEllipsis AndAlso line.LastIndexOf(" "c) > 0 Then line = line.Substring(0, line.LastIndexOf(" "c))
-                    line = If(Scene.MeasureText(Font, ellipsis).X <= width, line.TrimEnd() & ellipsis, String.Empty)
+                    line = If(MeasureContent(ellipsis).X <= width, line.TrimEnd() & ellipsis, String.Empty)
                 End If
                 result.Add(line)
             Next
@@ -412,10 +418,10 @@ Namespace [Shared].Drawing.UI.Primitives
                             Dim at = Position + New Vector2(Padding.Left, Padding.Top)
                             Dim width = Math.Max(0, Size.X - Padding.Left - Padding.Right)
                             For Each line In textToDraw.Replace(vbCr, "").Split(ChrW(10))
-                                Dim lineWidth = vectorFont.Measure(line).X
+                                Dim lineWidth = vectorFont.Measure(line).X * FontScale
                                 Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - lineWidth) / 2,
                                     If(TextAlignment = HorizontalAlignment.Right, width - lineWidth, 0))
-                                vectorFont.Draw(spriteBatch.GraphicsDevice, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset)
+                                vectorFont.Draw(spriteBatch.GraphicsDevice, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset, FontScale)
                                 at.Y += XamlLineSpacing
                             Next
                         Else
@@ -436,9 +442,9 @@ Namespace [Shared].Drawing.UI.Primitives
                     Dim at = Position + New Vector2(Padding.Left, Padding.Top)
                     Dim width = Math.Max(0, Size.X - Padding.Left - Padding.Right)
                     For Each line In sanitizedText.Replace(vbCr, "").Split(ChrW(10))
-                        Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - currentFont.MeasureString(line).X) / 2,
-                            If(TextAlignment = HorizontalAlignment.Right, width - currentFont.MeasureString(line).X, 0))
-                        spriteBatch.DrawString(currentFont, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor))
+                        Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - currentFont.MeasureString(line).X * FontScale) / 2,
+                            If(TextAlignment = HorizontalAlignment.Right, width - currentFont.MeasureString(line).X * FontScale, 0))
+                        spriteBatch.DrawString(currentFont, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), 0, Vector2.Zero, FontScale, SpriteEffects.None, 0)
                         at.Y += XamlLineSpacing
                     Next
                 Else

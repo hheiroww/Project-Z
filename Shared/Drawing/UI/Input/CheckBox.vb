@@ -252,17 +252,21 @@ Namespace [Shared].Drawing.UI.Input
 
             Dim borderThickness As Single = 2.0F
 
-            CheckBoxBorder.Position = New Vector2(0, (Size.Y - BoxSize) / 2.0F)
+            CheckBoxBorder.Position = Position + New Vector2(0, (Size.Y - BoxSize) / 2.0F)
             CheckBoxBorder.Size = New Vector2(BoxSize, BoxSize)
 
-            CheckBoxBackground.Position = New Vector2(borderThickness, (Size.Y - BoxSize) / 2.0F + borderThickness)
+            CheckBoxBackground.Position = Position + New Vector2(borderThickness, (Size.Y - BoxSize) / 2.0F + borderThickness)
             CheckBoxBackground.Size = New Vector2(BoxSize - borderThickness * 2, BoxSize - borderThickness * 2)
 
             Dim checkPadding As Single = 4.0F
-            CheckMark.Position = New Vector2(checkPadding, (Size.Y - BoxSize) / 2.0F + checkPadding)
+            CheckMark.Position = Position + New Vector2(checkPadding, (Size.Y - BoxSize) / 2.0F + checkPadding)
             CheckMark.Size = New Vector2(BoxSize - checkPadding * 2, BoxSize - checkPadding * 2)
 
-            ContentText.Position = New Vector2(BoxSize + 8.0F, 0)
+            ContentText.Position = Position + New Vector2(BoxSize + 8.0F, (Size.Y - ContentText.Size.Y) / 2.0F)
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            UpdateLayout()
         End Sub
 
         Private Sub UpdateCheckVisual()

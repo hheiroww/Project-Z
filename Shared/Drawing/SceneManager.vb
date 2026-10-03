@@ -95,6 +95,69 @@ Namespace [Shared].Drawing
         Private DuplicateKey As Keys
         Private ReadOnly ExternalKeys As New HashSet(Of Keys)()
 
+        Public ReadOnly Property UsesNativeTextInput As Boolean
+            Get
+#If WINDOWS Then
+                Return nativeKeyboard IsNot Nothing AndAlso Not UseExternalInput
+#Else
+                Return False
+#End If
+            End Get
+        End Property
+
+#If WINDOWS Then
+        Private nativeKeyboard As KeyboardMessageWindow
+
+        ' Preserve Windows message order, including taps entirely between frames.
+        ' Never run scene callbacks reentrantly inside the window procedure.
+        Private Class KeyboardMessageWindow
+            Inherits System.Windows.Forms.NativeWindow
+            Public ReadOnly Messages As New System.Collections.Concurrent.ConcurrentQueue(Of (Id As Integer, Value As Integer, Flags As Long))
+            Public Sub New(handle As IntPtr)
+                AssignHandle(handle)
+            End Sub
+            Protected Overrides Sub WndProc(ByRef m As System.Windows.Forms.Message)
+                Select Case m.Msg
+                    Case &H100, &H101, &H102, &H104, &H105, &H8
+                        Messages.Enqueue((m.Msg, CInt(m.WParam.ToInt64()), m.LParam.ToInt64()))
+                End Select
+                MyBase.WndProc(m)
+            End Sub
+        End Class
+
+        Private Sub DrainKeyboardMessages()
+            If nativeKeyboard Is Nothing Then
+                Dim hwnd = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+                If hwnd = IntPtr.Zero Then Return
+                nativeKeyboard = New KeyboardMessageWindow(hwnd)
+            End If
+            ActiveScene.UsesNativeTextInput = True
+            Dim entry As (Id As Integer, Value As Integer, Flags As Long)
+            While nativeKeyboard.Messages.TryDequeue(entry)
+                If entry.Id = &H8 Then
+                    ExternalKeys.Clear()
+                    Continue While
+                End If
+                If entry.Id = &H102 Then
+                    Dim character = ChrW(entry.Value And &HFFFF)
+                    If Not Char.IsControl(character) Then ActiveScene.InsertNativeText(character.ToString())
+                    Continue While
+                End If
+                Dim key = CType(entry.Value, Keys)
+                If entry.Value = &H10 Then key = If(((entry.Flags >> 16) And &HFF) = &H36, Keys.RightShift, Keys.LeftShift)
+                If entry.Value = &H11 Then key = If((entry.Flags And &H1000000) <> 0, Keys.RightControl, Keys.LeftControl)
+                If entry.Value = &H12 Then key = If((entry.Flags And &H1000000) <> 0, Keys.RightAlt, Keys.LeftAlt)
+                If entry.Id = &H100 OrElse entry.Id = &H104 Then
+                    If ExternalKeys.Add(key) Then ActiveScene.KeyDown(key, New KeyboardState(ExternalKeys.ToArray()))
+                    ProcessKeyPress(key, New KeyboardState(ExternalKeys.ToArray()))
+                Else
+                    ExternalKeys.Remove(key)
+                    ActiveScene.KeyUp(key, New KeyboardState(ExternalKeys.ToArray()))
+                End If
+            End While
+        End Sub
+#End If
+
         Private Sub DetectKeyPress(gameTime As GameTime)
             Dim KeyboardState As KeyboardState = Keyboard.GetState
             Dim currentHoldTick As Long = gameTime.TotalGameTime.Ticks
@@ -104,26 +167,26 @@ Namespace [Shared].Drawing
                 If KeyboardState.IsKeyDown(Key) And LastKeyboardState.IsKeyUp(Key) Then
                     LastKeyHoldTick = gameTime.TotalGameTime.Ticks
                     ActiveScene.KeyDown(Key, KeyboardState)
-                    DoDuplicate = False
-                    Exit For
+                    ProcessKeyPress(Key, KeyboardState)
+                    If Key <> Keys.LeftShift AndAlso Key <> Keys.RightShift AndAlso
+                       Key <> Keys.LeftControl AndAlso Key <> Keys.RightControl AndAlso
+                       Key <> Keys.LeftAlt AndAlso Key <> Keys.RightAlt Then
+                        DuplicateKey = Key
+                        LastKeyProcessTick = currentHoldTick + 3000000
+                        DoDuplicate = True
+                    End If
                 ElseIf KeyboardState.IsKeyUp(Key) And LastKeyboardState.IsKeyDown(Key) Then
                     LastKeyHoldTick = gameTime.TotalGameTime.Ticks
                     ActiveScene.KeyUp(Key, KeyboardState)
-                    ProcessKeyPress(Key, KeyboardState)
-                    DoDuplicate = False
-                    Exit For
-                ElseIf DoDuplicate AndAlso KeyboardState.IsKeyDown(Key) AndAlso currentHoldTick > LastKeyProcessTick + 2000000 Then
-                    ProcessKeyPress(DuplicateKey, LastKeyboardState)
-                    Exit For
-                ElseIf (currentHoldTick > LastKeyHoldTick + 5000000) AndAlso (KeyboardState.IsKeyDown(Key) And LastKeyboardState.IsKeyDown(Key)) Then
-                    LastKeyHoldTick = gameTime.TotalGameTime.Ticks
-                    LastKeyProcessTick = LastKeyHoldTick
-                    DuplicateKey = Key
-                    DoDuplicate = True
-                    Exit For
+                    If Key = DuplicateKey Then DoDuplicate = False
                 End If
             Next
 
+            If DoDuplicate AndAlso KeyboardState.IsKeyDown(DuplicateKey) AndAlso
+               currentHoldTick > LastKeyProcessTick + 2000000 Then
+                ProcessKeyPress(DuplicateKey, KeyboardState)
+                LastKeyProcessTick = currentHoldTick
+            End If
             LastKeyboardState = KeyboardState
         End Sub
 
@@ -151,6 +214,11 @@ Namespace [Shared].Drawing
         Public Shared Function TryConvertKeyboardInput(key As Keys, keyboard As KeyboardState) As String
             Dim ReturnString As String = String.Empty
             Dim shift As Boolean = (keyboard.IsKeyDown(Keys.LeftShift) Or keyboard.IsKeyDown(Keys.RightShift))
+#If WINDOWS Then
+            If key >= Keys.A AndAlso key <= Keys.Z AndAlso System.Windows.Forms.Control.IsKeyLocked(System.Windows.Forms.Keys.CapsLock) Then
+                shift = Not shift
+            End If
+#End If
 
             Select Case key
                 Case Keys.Enter
@@ -897,18 +965,17 @@ Namespace [Shared].Drawing
 
         Public Sub InjectKeyDown(key As Keys, Optional isRepeat As Boolean = False)
             If Not UseExternalInput OrElse ActiveScene Is Nothing Then Return
+            ActiveScene.UsesNativeTextInput = False
             If ExternalKeys.Add(key) Then
                 ActiveScene.KeyDown(key, New KeyboardState(ExternalKeys.ToArray()))
-            ElseIf isRepeat Then
-                ProcessKeyPress(key, New KeyboardState(ExternalKeys.ToArray()))
             End If
+            ProcessKeyPress(key, New KeyboardState(ExternalKeys.ToArray()))
         End Sub
 
         Public Sub InjectKeyUp(key As Keys)
             If Not UseExternalInput OrElse ActiveScene Is Nothing OrElse Not ExternalKeys.Remove(key) Then Return
             Dim state As New KeyboardState(ExternalKeys.ToArray())
             ActiveScene.KeyUp(key, state)
-            ProcessKeyPress(key, state)
         End Sub
 
         Private Function GetDifference(StartPoint As Point, EndPoint As Point) As Point
@@ -1018,6 +1085,10 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub Tick(gameTime As GameTime)
+            If viewportResizePending Then
+                viewportResizePending = False
+                ApplyPendingViewportResize()
+            End If
             If SetLimit Then
                 ' FIX
                 'gameTime.ElapsedGameTime =' TimeSpan.FromMilliseconds(1000 / LimitFPS)
@@ -1026,7 +1097,13 @@ Namespace [Shared].Drawing
             If ActiveScene IsNot Nothing Then
                 ' Input handlers can begin storyboards before Scene.Tick runs.
                 ActiveScene.gameTime = gameTime
-                If Not UseExternalInput Then DetectKeyPress(gameTime)
+                If Not UseExternalInput Then
+#If WINDOWS Then
+                    DrainKeyboardMessages()
+#Else
+                    DetectKeyPress(gameTime)
+#End If
+                End If
 #If WINDOWS Then
                 If Not UseHardwareInput AndAlso Not UseExternalInput Then
                     DetectMouseEvents(gameTime)
@@ -1076,7 +1153,13 @@ Namespace [Shared].Drawing
             AddHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
         End Sub
 
+        Private viewportResizePending As Boolean
+
         Private Sub HandleClientSizeChanged(senderObject As Object, e As EventArgs)
+            If Not resizeInProgress Then viewportResizePending = True
+        End Sub
+
+        Private Sub ApplyPendingViewportResize()
             If Not AutoResizeViewport OrElse resizeInProgress OrElse graphicsManager Is Nothing OrElse
                Sender.GraphicsDevice Is Nothing Then Return
 
@@ -1106,6 +1189,7 @@ Namespace [Shared].Drawing
             For Each scene In Scenes.Values
                 scene.ResizeViewport(oldSize, newSize)
             Next
+
             RaiseEvent ViewportResized(oldSize, newSize)
         End Sub
 
@@ -1131,6 +1215,8 @@ Namespace [Shared].Drawing
                     ActiveScene = Nothing
 
 #If WINDOWS Then
+                    nativeKeyboard?.ReleaseHandle()
+                    nativeKeyboard = Nothing
                     ' Uninstall mouse hook if installed
                     If MouseHook IsNot Nothing Then
                         MouseHook.Uninstall()

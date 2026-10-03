@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <RootNamespace>ProjectZ.Html5Host</RootNamespace>
+    <OptionStrict>On</OptionStrict>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Project Z Windows.vbproj" AdditionalProperties="ProjectZGraphicsBackend=DirectX12" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\Project Z HTML5\index.html" Link="Html5\index.html" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Project Z HTML5\styles.css" Link="Html5\styles.css" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Project Z HTML5\src\**\*.js" Link="Html5\src\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

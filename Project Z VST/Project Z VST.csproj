@@ -12,7 +12,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <DefineConstants Condition="Exists('..\..\SocketJack\LlmRuntime\LlmRuntime.csproj')">$(DefineConstants);SOCKETJACK_LLM_RUNTIME</DefineConstants>
-    <DeployVst3OnBuild Condition="'$(DeployVst3OnBuild)' == ''">true</DeployVst3OnBuild>
+    <ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
+    <DeployVst3OnBuild Condition="'$(DeployVst3OnBuild)' == ''">false</DeployVst3OnBuild>
     <Vst3InstallDirectory Condition="'$(Vst3InstallDirectory)' == ''">C:\Program Files\Common Files\VST3\Project Z Granulizer Synth</Vst3InstallDirectory>
   </PropertyGroup>
 
@@ -24,9 +25,9 @@
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
 
-  <!-- Keep FL Studio's standard VST3 location synchronized after every
-       successful build. If FL has the DLLs locked, stage the newest bundle
-       and finish deployment automatically when FL exits. -->
+  <!-- Opt in with -p:DeployVst3OnBuild=true to update FL Studio's VST3 folder.
+       Ordinary solution/package builds must not require an installed plugin
+       or administrator access. -->
   <Target Name="DeployProjectZGranulizerVst3"
           AfterTargets="Build"
           Condition="'$(OS)' == 'Windows_NT' and '$(DeployVst3OnBuild)' == 'true'">

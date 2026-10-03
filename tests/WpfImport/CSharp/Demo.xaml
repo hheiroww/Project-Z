@@ -1,0 +1,13 @@
+<Window x:Class="ImportSamples.Demo" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:ImportSamples" Width="640" Height="400">
+  <Window.Resources><local:PrefixConverter x:Key="Prefix" /></Window.Resources>
+  <StackPanel Width="500" Height="350">
+    <TextBox x:Name="Editor" Width="360" Height="40" Text="{Binding Person.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+    <TextBlock x:Name="Label" Width="360" Height="40" Text="{Binding Person.Name}" />
+    <Button x:Name="Save" Width="200" Height="45" Content="Save" Click="Save_Click" />
+    <CheckBox x:Name="Toggle" Width="200" Height="35" Content="Enabled" IsChecked="{Binding Enabled}" />
+    <ListBox x:Name="Items" Width="350" Height="100" ItemsSource="{Binding Items}">
+      <ListBox.ItemTemplate><DataTemplate><TextBlock x:Name="ItemLabel" Text="{Binding}" Height="24" /></DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+    <TextBlock x:Name="Converted" Width="350" Height="30" Text="{Binding Person.Name, Converter={StaticResource Prefix}}" />
+  </StackPanel>
+</Window>

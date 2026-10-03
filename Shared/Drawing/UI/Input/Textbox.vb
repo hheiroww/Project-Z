@@ -346,8 +346,43 @@ Namespace [Shared].Drawing.UI.Input
             [Select](0, Text.Length)
         End Sub
 
+        Private editMenu As ContextMenu
+
+        Private Sub OpenEditMenu(point As Point) Handles Me.MouseRightClick
+            If editMenu Is Nothing Then
+                editMenu = New ContextMenu(Scene) With {
+                    .Size = New Vector2(168, If(TypeOf Me Is PasswordBox, 72, 136)),
+                    .BackgroundColor = New Color(17, 23, 28)}
+                Dim labels = If(TypeOf Me Is PasswordBox, {"Paste", "Select all"}, {"Cut", "Copy", "Paste", "Select all"})
+                For Each value In labels
+                    Dim label = value
+                    Dim item As New MenuItem(Scene) With {.Header = label, .AutoSize = ButtonAutoSize.None,
+                        .Size = New Vector2(160, 32), .ForegroundColor = Color.White,
+                        .BackgroundColor = New Color(17, 23, 28), .MouseOverBackgroundColor = New Color(42, 55, 49)}
+                    AddHandler item.MouseLeftClick, Sub(p)
+                                                        editMenu.IsOpen = False
+                                                        Select Case label
+                                                            Case "Cut" : CutSelection()
+                                                            Case "Copy" : CopySelection()
+                                                            Case "Paste" : PasteClipboard()
+                                                            Case "Select all" : SelectAll()
+                                                        End Select
+                                                        isSelected = True
+                                                    End Sub
+                    editMenu.AddItem(item)
+                Next
+                Scene.AddElement(editMenu)
+            End If
+            ' Element mouse events are local; the overlay menu is scene-relative.
+            Dim viewport = Scene.InputViewportSize
+            editMenu.Position = New Vector2(
+                Math.Clamp(Position.X + point.X, 0, Math.Max(0, viewport.X - editMenu.Size.X)),
+                Math.Clamp(Position.Y + point.Y, 0, Math.Max(0, viewport.Y - editMenu.Size.Y)))
+            editMenu.IsOpen = True
+        End Sub
+
         Public Function CopySelection() As Boolean
-            If SelectionLength = 0 OrElse MaskCharacter.HasValue Then Return False
+            If SelectionLength = 0 OrElse MaskCharacter.HasValue OrElse TypeOf Me Is PasswordBox Then Return False
 #If WINDOWS Then
             Try
                 System.Windows.Forms.Clipboard.SetText(SelectedText)
@@ -497,6 +532,7 @@ Namespace [Shared].Drawing.UI.Input
                 Case Else
                     If control OrElse KeyboardState.IsKeyDown(Keys.LeftAlt) OrElse KeyboardState.IsKeyDown(Keys.RightAlt) Then Return
                     If Key = Keys.Enter AndAlso Not AcceptsReturn Then Return
+                    If Scene.UsesNativeTextInput AndAlso Key <> Keys.Enter Then Return
                     Dim value = SceneManager.TryConvertKeyboardInput(Key, KeyboardState)
                     If value <> String.Empty Then ReplaceSelection(value)
             End Select

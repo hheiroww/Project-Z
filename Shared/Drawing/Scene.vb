@@ -25,6 +25,14 @@ Namespace [Shared].Drawing
             Return _sender
         End Function
         Private _sender As Game
+        Private ownerManager As SceneManager
+        Public ReadOnly Property InputViewportSize As Point
+            Get
+                If ownerManager IsNot Nothing AndAlso ownerManager.UseExternalInput AndAlso ownerManager.ExternalViewportSize.X > 0 AndAlso ownerManager.ExternalViewportSize.Y > 0 Then Return ownerManager.ExternalViewportSize
+                Dim parameters = _sender.GraphicsDevice.PresentationParameters
+                Return New Point(parameters.BackBufferWidth, parameters.BackBufferHeight)
+            End Get
+        End Property
         Public ReadOnly Property MouseState As MouseState
             Get
                 Return _MouseState
@@ -406,6 +414,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyDown(Key As Keys, KeyboardState As KeyboardState)
+            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyDown", Key) Then Return
             CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then
                 MoveFocus(KeyboardState.IsKeyDown(Keys.LeftShift) OrElse KeyboardState.IsKeyDown(Keys.RightShift))
@@ -426,6 +435,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyUp(Key As Keys, KeyboardState As KeyboardState)
+            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyUp", Key) Then Return
             CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then Return
             If KeyboardButton IsNot Nothing AndAlso Key = KeyboardButtonKey Then
@@ -1025,6 +1035,14 @@ Namespace [Shared].Drawing
             DrawWithQuality(gameTime)
         End Sub
 
+        Public Property UsesNativeTextInput As Boolean
+
+        Protected Friend Sub InsertNativeText(value As String)
+            Dim box = TryCast(LastSelected, UI.Input.Textbox)
+            If box IsNot Nothing AndAlso box.isEnabled AndAlso box.isSelected Then box.ReplaceSelection(value)
+            ProjectionHosts.ForEach(Sub(s) s.TargetScene.InsertNativeText(value))
+        End Sub
+
         Private Sub DrawCore(gameTime As GameTime, Optional bypassRenderTarget As Boolean = False)
 
             If UseRenderTarget AndAlso Not bypassRenderTarget Then
@@ -1244,6 +1262,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub InitialConstructor(SceneManager As SceneManager)
+            ownerManager = SceneManager
             _sender = SceneManager.Sender
             spriteBatch = CType(sender.Services.GetService(GetType(SpriteBatch)), SpriteBatch)
 

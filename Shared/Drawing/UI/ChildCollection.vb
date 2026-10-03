@@ -71,7 +71,7 @@ Namespace [Shared].Drawing.UI
         End Function
 
         Public Sub Reset() Implements System.Collections.IEnumerator.Reset
-            Throw New NotImplementedException
+            Index = -1
         End Sub
 
         Public Function GetEnumerator() As IEnumerator(Of SceneElement) Implements IEnumerable(Of SceneElement).GetEnumerator
