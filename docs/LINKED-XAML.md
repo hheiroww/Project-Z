@@ -2,6 +2,8 @@
 
 The converter brings supported layout and code-behind behavior into Project-Z together. Named controls, initialization and event connections are generated for you. Your original source files remain unchanged; the output is built as a separate project.
 
+Want this to happen during ordinary builds? Use the optional [Project-Z build-time setting](BUILD-TIME-XAML.md). The export commands below remain available.
+
 ## One view: select the XAML once
 
 From the Project-Z source repository:

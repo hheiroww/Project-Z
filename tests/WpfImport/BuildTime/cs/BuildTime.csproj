@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><TargetFramework Condition="'$(ProjectZTestTargetFramework)' == ''">net8.0-windows7.0</TargetFramework><TargetFramework Condition="'$(ProjectZTestTargetFramework)' != ''">$(ProjectZTestTargetFramework)</TargetFramework><AssemblyName>BuildTimeCS</AssemblyName><RootNamespace></RootNamespace><UseWPF>true</UseWPF><EnableDefaultPageItems>false</EnableDefaultPageItems><EnableDefaultCompileItems>false</EnableDefaultCompileItems><ProjectZEnableXaml>true</ProjectZEnableXaml></PropertyGroup>
+ <ItemGroup>
+  <Page Include="../../LinkedViews/cs/View.xaml" Link="View.xaml" />
+  <Compile Include="../../LinkedViews/cs/View.xaml.cs" />
+  <Compile Include="../../LinkedViews/cs/View.Designer.cs" />
+ </ItemGroup>
+ <Import Project="../../../../Project Z XAML Codegen/ProjectZ.Xaml.targets" />
+</Project>

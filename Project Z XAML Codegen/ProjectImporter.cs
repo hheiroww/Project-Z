@@ -24,6 +24,14 @@ internal sealed class ProjectImporter
     readonly Dictionary<string, string> previous = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<ProjectId, string> projects = new();
     string output = "", compatibility = "";
+    bool generateOnly;
+    HashSet<string>? buildSources;
+    internal static int GenerateForBuild(string input, string output, HashSet<string> sources)
+    {
+        if (!MSBuildLocator.IsRegistered) MSBuildLocator.RegisterDefaults();
+        return new ProjectImporter { generateOnly = true, buildSources = sources }.Import(input, output).GetAwaiter().GetResult();
+    }
+
     static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     public static int Run(string[] args)
@@ -100,7 +108,7 @@ internal sealed class ProjectImporter
             xml.Root!.AddFirst(new XElement("PropertyGroup", new XElement("ProjectZImportHasErrors", issues.Count != 0 ? "true" : "false")));
             Write(relative, xml.ToString());
         }
-        if (issues.Count == 0)
+        if (issues.Count == 0 && !generateOnly)
         {
             var result = await Command("dotnet", ["build", projects[root.Id], "-c", "Release", "-p:GeneratePackageOnBuild=false", "--nologo", "-v:minimal"]);
             if (result.Code != 0) issues.Add(new("PZI900", input, 1, 1, "Generated compilation failed:\n" + result.Text));
@@ -185,6 +193,7 @@ internal sealed class ProjectImporter
         var contentFiles = new List<string>();
         foreach (var tree in compilation.SyntaxTrees.Where(t => !string.IsNullOrEmpty(t.FilePath) && !IsGenerated(t.FilePath)).OrderBy(t => t.FilePath))
         {
+            if (generateOnly && !buildSources!.Contains(tree.FilePath)) continue;
             var relative = SourceRelative(directory, tree.FilePath);
             var generated = Path.Combine(prefix, "Source", relative);
             var model = compilation.GetSemanticModel(tree);
@@ -236,7 +245,7 @@ internal sealed class ProjectImporter
             Write(Path.Combine(prefix, xamlOutput), page.Doc.ToString()); contentFiles.Add(xamlOutput);
             var className = (string?)page.Doc.Root?.Attribute(X + "Class");
             if (className == null || (!Capabilities.Controls.Contains(page.Doc.Root!.Name.LocalName) && page.Doc.Root.Name.LocalName != "Application")) continue;
-            var designer = Path.Combine("Generated", relative + (vb ? ".g.vb" : ".g.cs"));
+            var designer = Path.Combine("Generated", generateOnly ? Path.ChangeExtension(relative, vb ? ".design.vb" : ".design.cs") : relative + (vb ? ".g.vb" : ".g.cs"));
             var fullName = vb && Property("RootNamespace").Length > 0 ? Property("RootNamespace") + "." + className : className;
             var originalType = (await project.GetCompilationAsync())?.GetTypeByMetadataName(fullName);
             bool sourceBase = originalType?.DeclaringSyntaxReferences.Any(r => !IsGenerated(r.SyntaxTree.FilePath) && (r.GetSyntax() is CS.Syntax.ClassDeclarationSyntax c && c.BaseList != null || r.GetSyntax().Parent is VB.Syntax.ClassBlockSyntax b && b.Inherits.Count > 0)) == true;
@@ -301,7 +310,7 @@ internal sealed class ProjectImporter
             }
         projectXml.Add(includes, new XElement("Import", new XAttribute("Project", "../ProjectZ.Import.targets")));
         Write(Path.GetRelativePath(output, projects[project.Id]), projectXml.ToString());
-        ScanBinaryContracts(compilation, project);
+        if (!generateOnly) ScanBinaryContracts(compilation, project);
     }
     void ScanBinaryContracts(Compilation compilation, Project project)
     {
@@ -420,7 +429,7 @@ internal sealed class ProjectImporter
     }
     void Add(string code, string file, SyntaxNode node, string message) { var line = node.GetLocation().GetLineSpan().StartLinePosition; issues.Add(new(code, file, line.Line + 1, line.Character + 1, message)); }
     static bool IsGenerated(string path) => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "obj" or "bin") || path.EndsWith(".g.cs") || path.EndsWith(".g.vb");
-    static string SourceRelative(string directory, string path) { var relative = Path.GetRelativePath(directory, path); return relative.StartsWith("..") ? Path.Combine("Linked", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path)))[..8], Path.GetFileName(path)) : relative; }
+    internal static string SourceRelative(string directory, string path) { var relative = Path.GetRelativePath(directory, path); return relative.StartsWith("..") ? Path.Combine("Linked", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path)))[..8], Path.GetFileName(path)) : relative; }
     string SafePath(string relative) { var path = Path.GetFullPath(Path.Combine(output, relative)); if (!path.StartsWith(output + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Output path escapes destination."); return path; }
     void Write(string relative, string text) => WriteBytes(relative, new UTF8Encoding(false).GetBytes(text));
     void WriteBytes(string relative, byte[] data)

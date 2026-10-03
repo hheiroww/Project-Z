@@ -32,11 +32,14 @@ jobs:
           }
       - name: Restore and audit direct and transitive dependencies
         run: dotnet restore "Project Z Windows.vbproj" -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
-      - name: Build Release package
-        run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Verify linked CSharp and VB XAML conversion
         shell: pwsh
         run: ./tests/WpfImport/Verify.ps1 -SkipRuntime
+      - name: Verify opt-in compile-time XAML on NET8 and NET10
+        shell: pwsh
+        run: ./tests/WpfImport/BuildTime/Verify.ps1 -SkipRuntime
+      - name: Build Release package
+        run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Preserve package artifact
         uses: actions/upload-artifact@v4
         with:

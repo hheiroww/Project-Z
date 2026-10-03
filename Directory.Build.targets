@@ -1,0 +1,5 @@
+<Project>
+  <!-- Repository consumers get the settings page, but conversion remains off until explicitly enabled. -->
+  <Import Project="$(MSBuildThisFileDirectory)Project Z XAML Codegen/ProjectZ.Xaml.targets"
+          Condition="'$(ProjectZXamlIntegrationImported)' != 'true' and '$(MSBuildProjectName)' != 'Project Z Windows' and '$(MSBuildProjectName)' != 'ProjectZ.WpfCompatibility' and '$(MSBuildProjectName)' != 'ProjectZ.XamlCodegen' and '$(MSBuildProjectName)' != 'Project Z Model Import'" />
+</Project>

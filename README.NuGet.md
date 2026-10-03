@@ -1,4 +1,4 @@
-# ⚡ Project Z 2.7
+# ⚡ Project Z 2.8
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -32,19 +32,25 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.7.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2.8.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.7.1
+## 📦 Install 2.8.0
 
 ```powershell
-dotnet add package ProjectZ --version 2.7.1
+dotnet add package ProjectZ --version 2.8.0
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-**🔐 Dependency refresh:** ProjectZ 2.7.1 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
+**🔐 Dependency refresh:** ProjectZ 2.8.0 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
+
+## ⚙️ New in 2.8: optional build-time XAML
+
+Enable **Project Properties → Project-Z → Enable build-time XAML conversion** in a project using the source tooling. Normal builds then generate `.design.cs` or `.design.vb` files under `obj` and compile supported XAML/code-behind automatically. C# and VB Windows projects are tested on **.NET 8 and .NET 10**.
+
+**Off by default.** Keep it off for manually ported applications such as heirowSnap, or exclude specific views. Your original files stay untouched. External projects need the one-time source-tooling import described in the [build-time setup guide](https://github.com/hheiroww/Project-Z/blob/master/docs/BUILD-TIME-XAML.md); the main NuGet package alone does not install the converter.
 
 ## 🔗 XAML + C#/VB code-behind → Project-Z
 
@@ -308,9 +314,9 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2.7.1.nupkg`.
-The project and assembly version is `2.7.1.0`; NuGet normalizes the package version
-to `2.7.1`. The package includes the internal model-import DLL and restores its
+The framework Release build also creates `bin/Release/ProjectZ.2.8.0.nupkg`.
+The project and assembly version is `2.8.0.0`; NuGet normalizes the package version
+to `2.8.0`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
 building a package for distribution.

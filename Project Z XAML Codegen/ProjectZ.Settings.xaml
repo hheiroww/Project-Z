@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Rule Name="ProjectZ" DisplayName="Project-Z" PageTemplate="generic" Order="200" xmlns="http://schemas.microsoft.com/build/2009/properties">
+  <Rule.DataSource><DataSource Persistence="ProjectFile" SourceOfDefaultValue="AfterContext" HasConfigurationCondition="false" /></Rule.DataSource>
+  <Rule.Categories><Category Name="Xaml" DisplayName="XAML conversion" /></Rule.Categories>
+  <BoolProperty Name="ProjectZEnableXaml" DisplayName="Enable build-time XAML conversion" Category="Xaml" Default="false" Description="Opt in to generating Project-Z .design.cs or .design.vb files under obj. Off preserves the normal build and existing manually ported views." />
+  <StringProperty Name="ProjectZXamlExclude" DisplayName="Excluded XAML files" Category="Xaml" Description="Semicolon-separated paths or patterns for manually ported views that must not be converted, such as Views\Manual\**\*.xaml." />
+</Rule>
