@@ -27,8 +27,28 @@ try {
    Run $arguments
    if((Get-Item $generated[0].FullName).LastWriteTimeUtc -ne $stamp) { throw 'Unchanged build regenerated the designer.' }
   }
-  if(!$SkipRuntime) { Run @('run','--project','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Release','-p:GeneratePackageOnBuild=false',"-p:ProjectZTestTargetFramework=$framework") }
+  if(!$SkipRuntime) { Run @('run','--project','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Release','-p:GeneratePackageOnBuild=false',"-p:ProjectZTestTargetFramework=$framework",'--','--smoke-test') }
  }
+ # Designer-only retains original manual code; both languages still compile and wire handlers.
+ foreach($language in @('cs','vb')) {
+  $folder = "tests/WpfImport/BuildTime/DesignerOnly/$language"
+  $extension = if($language -eq 'cs'){'csproj'}else{'vbproj'}
+  $source = "$folder/View.xaml.$language"
+  $hash = (Get-FileHash $source).Hash
+  Run @('build',"$folder/DesignerOnly.$extension",'-c','Release','-p:GeneratePackageOnBuild=false')
+  $originals = "$folder/obj/Release/net8.0-windows7.0/ProjectZXaml/original-items"
+  if ((Get-Content $originals).Length -gt 0 -or (Get-FileHash $source).Hash -ne $hash) { throw 'Designer-only replaced manual code-behind.' }
+ }
+ Run @('build','tests/WpfImport/BuildTime/Off/Off.csproj','-p:ProjectZXamlMode=CodeBehindOnly') 1
+ Run @('build','tests/WpfImport/BuildTime/Off/Off.csproj','-p:ProjectZEnableXaml=true','-p:ProjectZXamlMode=Disabled')
+ # Match VS: references already built, consumer cleaned and built separately.
+ Run @('build','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','-p:GeneratePackageOnBuild=false')
+ Run @('clean','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','-p:BuildProjectReferences=false','-v:q')
+ Run @('build','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','-p:BuildProjectReferences=false','-p:BuildingInsideVisualStudio=true','-p:GeneratePackageOnBuild=false')
+ $markup = @(Get-ChildItem 'tests/WpfImport/BuildTime/Runtime/bin/Debug/net8.0-windows7.0' -Recurse -Filter View.xaml)
+ if($markup.Count -ne 4) { throw "Expected all four runtime views after VS-style build, got $($markup.Count)." }
+ if(!$SkipRuntime) { Run @('run','--project','tests/WpfImport/BuildTime/Runtime/Runtime.csproj','-c','Debug','--no-build','--','--smoke-test') }
+ Write-Output 'PASS designer-only C#/VB preservation, invalid-mode rejection, explicit opt-out and VS runtime content copying.'
  # Edit only this regression fixture, restore it even if validation fails.
  $xaml = 'tests/WpfImport/LinkedViews/cs/View.xaml'
  $original = [IO.File]::ReadAllBytes((Resolve-Path $xaml))

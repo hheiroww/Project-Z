@@ -30,8 +30,9 @@ internal static class BuildViewImporter
             string xml = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"), props, items).ToString();
             if (!File.Exists(input) || File.ReadAllText(input) != xml) File.WriteAllText(input, xml);
             string generated = Path.Combine(directory, "Generated");
-            var selected = new HashSet<string>(Lines("convert-sources"), StringComparer.OrdinalIgnoreCase);
-            foreach (var page in Lines("pages"))
+            bool convertCodeBehind = Read("mode").Equals("DesignerAndCodeBehind", StringComparison.OrdinalIgnoreCase);
+            var selected = new HashSet<string>(convertCodeBehind ? Lines("convert-sources") : Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            foreach (var page in convertCodeBehind ? Lines("pages") : Array.Empty<string>())
                 foreach (var candidate in new[] { page + (vb ? ".vb" : ".cs"), Path.ChangeExtension(page, vb ? ".Designer.vb" : ".Designer.cs"), page + (vb ? ".Designer.vb" : ".Designer.cs") })
                     if (sources.Contains(candidate, StringComparer.OrdinalIgnoreCase)) selected.Add(candidate);
             if (selected.Any(s => !sources.Contains(s, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Every ProjectZXamlSource must also be a Compile item.");

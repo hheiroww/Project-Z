@@ -1,4 +1,4 @@
-# ⚡ Project Z 2.8.1
+# ⚡ Project Z 2.8.2
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -34,21 +34,29 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.8.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2.8.2:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.8.1
+## 📦 Install 2.8.2
 
 ```powershell
-dotnet add package ProjectZ --version 2.8.1
+dotnet add package ProjectZ --version 2.8.2
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-**🔐 Dependency refresh:** ProjectZ 2.8.1 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
+**🔐 Dependency refresh:** ProjectZ 2.8.2 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
 
-## 📋 New in 2.8.1: select and copy display text
+## ⚙️ New in 2.8.2: choose what gets generated
+
+The **Project-Z** settings page now offers **Disabled**, **Designer only**, or **Designer + code-behind**. Designer-only mode keeps your hand-adapted C#/VB code and generates the view fields, initialization and event wiring. Converting code-behind always includes a designer.
+
+The Runtime example now stays open when launched from Visual Studio: click **Run**, and use **F1/F2** to switch C#/VB views. Generated XAML is also copied correctly when Visual Studio builds referenced projects separately.
+
+[Settings and examples](https://github.com/hheiroww/Project-Z/blob/master/docs/BUILD-TIME-XAML.md)
+
+## 📋 Added in 2.8.1: select and copy display text
 
 Users can now select text without turning it into an editable field. Enable `IsTextSelectionEnabled` on a Project-Z text block to allow dragging, Shift-selection, **Ctrl+A**, **Ctrl+C**, and **right-click → Copy**. Its menu offers **Copy** and **Select all**; it has no Cut or Paste commands.
 
@@ -63,7 +71,7 @@ Keep your XAML and C# or VB code-behind together, then let a normal build prepar
 
 | What's new | What it means for your project |
 | :--- | :--- |
-| **⚙️ Project-Z settings** | Choose **Project Properties → Project-Z → Enable build-time XAML conversion** for each project that should use it. |
+| **⚙️ Project-Z settings** | Choose **Project Properties → Project-Z → XAML conversion mode** for each project that should use it. |
 | **🔗 XAML + C# or VB** | Matching code-behind and designer files are picked up together, including views linked from another folder. |
 | **🛠️ Generated designers** | Builds create `.design.cs` or `.design.vb` files containing the control fields, initialization and event connections. |
 | **🛡️ Manual ports stay yours** | Conversion is **off by default**. Leave it off for an existing port, or exclude individual views. Original source files are never overwritten. |
@@ -83,7 +91,7 @@ Unchanged builds reuse the output. Editing a view regenerates it, and **Clean** 
 <details>
 <summary><strong>🛡️ Keep existing manual changes</strong></summary>
 
-For a hand-adapted application such as heirowSnap, leave **Enable build-time XAML conversion** unchecked. Its existing code continues to build normally.
+For a hand-adapted application such as heirowSnap, leave **XAML conversion mode** unchecked. Its existing code continues to build normally.
 
 To convert selected new views, enable the setting and use **Excluded XAML files** for views that should keep their current build behavior. Exclusions accept semicolon-separated paths or patterns, such as `Views\Manual\**\*.xaml`. Each project controls its own setting.
 
@@ -400,9 +408,9 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2.8.1.nupkg`.
-The project and assembly version is `2.8.1.0`; NuGet normalizes the package version
-to `2.8.1`. The package includes the internal model-import DLL and restores its
+The framework Release build also creates `bin/Release/ProjectZ.2.8.2.nupkg`.
+The project and assembly version is `2.8.2.0`; NuGet normalizes the package version
+to `2.8.2`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
 building a package for distribution.
