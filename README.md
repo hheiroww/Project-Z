@@ -6,7 +6,7 @@ Build expressive desktop tools, creative applications, and game interfaces with 
 
 ![DX12](https://img.shields.io/badge/RENDERER-NATIVE_DX12-39ff14?style=for-the-badge&labelColor=061b16)
 ![XAML](https://img.shields.io/badge/UI-XAML-35e7c4?style=for-the-badge&labelColor=061b16)
-![Windows](https://img.shields.io/badge/.NET-8_WINDOWS-78bfff?style=for-the-badge&labelColor=061b16)
+![Windows](https://img.shields.io/badge/.NET-8_%26_10_WINDOWS-78bfff?style=for-the-badge&labelColor=061b16)
 
 **[Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)**
 
@@ -24,7 +24,7 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | :--- | :--- |
 | **Vector text renderer** | Smooth text drawn from font outlines, with selection and cursor placement that match the displayed letters. |
 | **Native DX12 renderer** | Hardware-rendered scenes, reusable render targets, FXAA, synchronized viewport resizing, and a build-selectable DX11 fallback. |
-| **XAML UI porting** | Import existing windows, named controls, resource dictionaries, and item templates into native elements. Generate VB event scaffolding from XAML. |
+| **XAML UI porting** | Convert supported XAML with its C# or VB code-behind and designer files, either on demand or automatically during builds. |
 | **XAML shader support** | GPU blur, shadows, inversion, and chromatic effects on controls and subtrees, with animatable effect properties. |
 | **XAML animations** | Storyboards, double/color keyframes, discrete corner-radius keyframes, easing, repeating tracks, and load/hover/click triggers. |
 | **Desktop input with scaling** | Mouse buttons, drag, hover, wheel, keyboard and editable text, with native client-to-render coordinate mapping and transformed hit testing. |
@@ -48,11 +48,54 @@ dotnet add package ProjectZ --version 2.8.0
 **🔐 Dependency refresh:** ProjectZ 2.8.0 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
 
-## ⚙️ New in 2.8: optional build-time XAML
+## ⚙️ New in 2.8: build your XAML directly
 
-Enable **Project Properties → Project-Z → Enable build-time XAML conversion** in a project using the source tooling. Normal builds then generate `.design.cs` or `.design.vb` files under `obj` and compile supported XAML/code-behind automatically. C# and VB Windows projects are tested on **.NET 8 and .NET 10**.
+Keep your XAML and C# or VB code-behind together, then let a normal build prepare the supported views for Project-Z. After the one-time setup, there is no separate conversion command to run each time you edit a view.
 
-**Off by default.** Keep it off for manually ported applications such as heirowSnap, or exclude specific views. Your original files stay untouched. External projects need the one-time source-tooling import described in the [build-time setup guide](https://github.com/hheiroww/Project-Z/blob/master/docs/BUILD-TIME-XAML.md); the main NuGet package alone does not install the converter.
+| What's new | What it means for your project |
+| :--- | :--- |
+| **⚙️ Project-Z settings** | Choose **Project Properties → Project-Z → Enable build-time XAML conversion** for each project that should use it. |
+| **🔗 XAML + C# or VB** | Matching code-behind and designer files are picked up together, including views linked from another folder. |
+| **🛠️ Generated designers** | Builds create `.design.cs` or `.design.vb` files containing the control fields, initialization and event connections. |
+| **🛡️ Manual ports stay yours** | Conversion is **off by default**. Leave it off for an existing port, or exclude individual views. Original source files are never overwritten. |
+| **🪟 .NET 8 and .NET 10** | C# and VB Windows consumers have passed build and native runtime checks on both versions. |
+
+**Setup:** this feature currently uses the tools in the source repository. External projects need the one-time import in the [build-time setup guide](https://github.com/hheiroww/Project-Z/blob/master/docs/BUILD-TIME-XAML.md). Installing the main ProjectZ NuGet package alone does not install the converter or add the settings page.
+
+<details>
+<summary><strong>🛠️ What happens when I build?</strong></summary>
+
+Project-Z reads the selected XAML, converts copies of its supported code-behind, and generates the matching `.design.cs` or `.design.vb` files under `obj`. It then compiles those files and copies the view markup needed at runtime. Keep editing your original files; the generated files are temporary build output.
+
+Unchanged builds reuse the output. Editing a view regenerates it, and **Clean** removes it so the next build starts fresh. Unsupported markup produces a build error explaining what needs attention. Application startup in `App.xaml` still uses the [full project importer](https://github.com/hheiroww/Project-Z/blob/master/docs/WPF-IMPORT.md).
+
+</details>
+
+<details>
+<summary><strong>🛡️ Keep existing manual changes</strong></summary>
+
+For a hand-adapted application such as heirowSnap, leave **Enable build-time XAML conversion** unchecked. Its existing code continues to build normally.
+
+To convert selected new views, enable the setting and use **Excluded XAML files** for views that should keep their current build behavior. Exclusions accept semicolon-separated paths or patterns, such as `Views\Manual\**\*.xaml`. Each project controls its own setting.
+
+</details>
+
+<details>
+<summary><strong>🪟 Try C# and VB in Visual Studio 2026</strong></summary>
+
+Open `tests/WpfImport/BuildTime/ProjectZ.Xaml.BuildTests.sln` in **Visual Studio 2026** and set **Runtime** as the startup project. It exercises generated C# and VB views, including their original event handlers. The **Off** project demonstrates that a manual designer is preserved when conversion is disabled.
+
+The samples default to .NET 8. To run the same views on .NET 10 from the repository root:
+
+```powershell
+dotnet run --project tests/WpfImport/BuildTime/Runtime/Runtime.csproj -c Release -p:ProjectZTestTargetFramework=net10.0-windows7.0
+```
+
+The framework package targets .NET 8 for compatibility; .NET 10 Windows applications can consume it. The test suite also checks exclusions, rebuilds after XAML edits, unchanged builds, and diagnostics for unsupported features.
+
+</details>
+
+[Full setup, settings and limitations](https://github.com/hheiroww/Project-Z/blob/master/docs/BUILD-TIME-XAML.md)
 
 ## 🔗 XAML + C#/VB code-behind → Project-Z
 
