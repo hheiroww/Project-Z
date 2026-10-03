@@ -34,19 +34,37 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.7.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2.7.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.7.0
+## 📦 Install 2.7.1
 
 ```powershell
-dotnet add package ProjectZ --version 2.7.0
+dotnet add package ProjectZ --version 2.7.1
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-**🔐 Dependency refresh:** ProjectZ 2.7.0 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
+**🔐 Dependency refresh:** ProjectZ 2.7.1 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
+
+## 🔗 XAML + C#/VB code-behind → Project-Z
+
+Bring the view **and its behavior**: convert supported XAML together with its C# or VB code-behind and designer partials. Project-Z generates the matching control fields and initialization code, connects events, and builds the converted project. You do not need to recreate the supported controls or rewrite their event handlers by hand.
+
+For a single view, run this from the Project-Z repository:
+
+```powershell
+dotnet run --project "Project Z XAML Codegen" -c Release -- import-view "C:\MyApp\View.xaml" --output "C:\Converted\View"
+```
+
+It finds `View.xaml.cs` or `View.xaml.vb` automatically, plus a matching `View.Designer.cs/.vb` or `View.xaml.Designer.cs/.vb` if present. For files with different names, pass `--code-behind` and `--designer`. Original files stay unchanged.
+
+For an existing project, including files added with **Add As Link**, use `import MyApp.csproj` or `import MyApp.vbproj` instead. That route carries the project's namespaces, supporting source and references through the conversion. The single-view route creates a view library for an existing Project-Z scene; a complete project with `App.xaml` can become an executable.
+
+**Supported WPF features convert directly.** Features outside the compatibility layer produce diagnostics instead of a misleading successful conversion. This is WPF/XAML conversion; WinForms designers and arbitrary third-party controls are not covered.
+
+[Single-view conversion, linked projects, and designer handling](https://github.com/hheiroww/Project-Z/blob/master/docs/LINKED-XAML.md) · [Supported controls and limitations](https://github.com/hheiroww/Project-Z/blob/master/docs/WPF-IMPORT.md)
 
 ## ✨ New in 2.7
 
@@ -324,9 +342,9 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2.7.0.nupkg`.
-The project and assembly version is `2.7.0.0`; NuGet normalizes the package version
-to `2.7.0`. The package includes the internal model-import DLL and restores its
+The framework Release build also creates `bin/Release/ProjectZ.2.7.1.nupkg`.
+The project and assembly version is `2.7.1.0`; NuGet normalizes the package version
+to `2.7.1`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
 building a package for distribution.

@@ -10,6 +10,16 @@ try {
     $generator = 'Project Z XAML Codegen/bin/Release/net8.0/ProjectZ.XamlCodegen.dll'
     Invoke-Dotnet @('build', 'Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj', '-c', 'Release', '-p:GeneratePackageOnBuild=false', '-v:q')
     Invoke-Dotnet @('build', 'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj', '-c', 'Release', '-v:q')
+    $linkedSources = Get-ChildItem tests/WpfImport/LinkedViews -File -Recurse
+    $linkedHashes = @{}; foreach ($file in $linkedSources) { $linkedHashes[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName).Hash }
+    foreach ($language in @('cs', 'vb')) {
+        $view = "tests/WpfImport/LinkedViews/$language/View.xaml"
+        $designer = "tests/WpfImport/LinkedViews/$language/View.Designer.$language"
+        $destination = "artifacts/wpf-import/linked-$language"
+        Invoke-Dotnet @($generator, 'import-view', $view, '--output', $destination)
+        Invoke-Dotnet @($generator, 'import-view', $view, '--designer', $designer, '--output', $destination)
+    }
+    foreach ($file in $linkedSources) { if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne $linkedHashes[$file.FullName]) { throw "Linked source changed: $file" } }
     $sources = Get-ChildItem tests/WpfImport/CSharp,tests/WpfImport/VisualBasic -File -Recurse | Where-Object FullName -NotMatch '[\\/](obj|bin)[\\/]'
     $before = @{}; foreach ($file in $sources) { $before[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName).Hash }
     $import = @($generator, 'import', 'tests/WpfImport/VisualBasic/VisualBasic.vbproj', '--output', 'artifacts/wpf-import/generated')

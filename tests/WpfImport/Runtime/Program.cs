@@ -63,6 +63,18 @@ sealed class Probe : Game
         try
         {
             manager.Tick(time); scene.Draw(time);
+            csharp.Hide();
+            foreach (var linked in new Window[] { new LinkedCSharp.View(), new LinkedVisualBasic.View() })
+            {
+                linked.Show(); manager.Tick(time); scene.Draw(time);
+                var action = (Controls.Button)linked.FindName("Action")!;
+                Click(action);
+                int calls = (int)linked.GetType().GetProperty("Calls")!.GetValue(linked)!;
+                string designerLabel = (string)linked.GetType().GetProperty("DesignerLabel")!.GetValue(linked)!;
+                Require(calls == 1 && ((Controls.TextBlock)linked.FindName("Status")!).Text == designerLabel + "1", linked.GetType().FullName + " linked XAML, code-behind and designer execute once through native input");
+                linked.Close();
+            }
+            csharp.Show(); manager.Tick(time); scene.Draw(time);
             var editor = (Controls.TextBox)csharp.FindName("Editor")!; var label = (Controls.TextBlock)csharp.FindName("Label")!; var save = (Controls.Button)csharp.FindName("Save")!;
             Require(ReferenceEquals(UIElement.FromNative(editor.NativeElement), editor), "stable adapter identity");
             Require(editor.Text == "Ada" && label.Text == "Ada", "inherited DataContext initializes native text");

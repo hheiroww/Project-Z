@@ -258,7 +258,7 @@ internal sealed class ProjectImporter
         }
         var projectXml = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"));
         var props = new XElement("PropertyGroup", new XElement("TargetFramework", string.IsNullOrWhiteSpace(Property("TargetFramework")) ? "net8.0-windows7.0" : Property("TargetFramework")), new XElement("OutputType", "Library"), new XElement("EnableDefaultCompileItems", "false"), new XElement("EnableDefaultEmbeddedResourceItems", "false"), new XElement("EnableDefaultContentItems", "false"));
-        foreach (var name in new[] { "RootNamespace", "AssemblyName", "DefineConstants", "OptionStrict", "OptionInfer", "OptionExplicit", "Nullable", "LangVersion", "AllowUnsafeBlocks", "UseWindowsForms" }) if (Property(name).Length > 0) props.Add(new XElement(name, Property(name)));
+        foreach (var name in new[] { "RootNamespace", "AssemblyName", "DefineConstants", "OptionStrict", "OptionInfer", "OptionExplicit", "Nullable", "LangVersion", "AllowUnsafeBlocks", "UseWindowsForms" }) if (name == "RootNamespace" || Property(name).Length > 0) props.Add(new XElement(name, Property(name)));
         projectXml.Add(props);
         if (pages.Any(p => p.Doc.Root?.Name.LocalName == "Application"))
         {

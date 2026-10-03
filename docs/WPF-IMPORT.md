@@ -4,6 +4,10 @@ Project-Z is the upstream framework. Applications depend on it; Project-Z, its c
 
 The project importer preserves C# or VB and uses Roslyn symbols plus evaluated Release MSBuild inputs to redirect supported WPF APIs into `ProjectZ.WpfCompatibility`. Its adapters operate on native Project-Z controls. This is source compatibility, not a replacement for Microsoft's WPF assemblies or a binary rewriter.
 
+## Convert a view and its code-behind together
+
+For a single linked XAML/C#/VB view, use `import-view`. Matching code-behind and designer partials are found automatically. For an existing project, the `import` command below also includes files added with Add As Link. Both paths generate initialization and event wiring for supported features. See the [linked-view walkthrough](LINKED-XAML.md).
+
 ## Run
 
 ```powershell

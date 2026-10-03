@@ -63,6 +63,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "import-view") return ViewImporter.Run(args[1..]);
         if (args.Length > 0 && args[0] == "import") return ProjectImporter.Run(args[1..]);
         if (args.Length != 2)
         {
