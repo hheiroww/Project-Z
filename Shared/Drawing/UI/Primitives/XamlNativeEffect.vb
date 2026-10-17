@@ -38,6 +38,10 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return CInt(Math.Ceiling(Math.Clamp(Radius, 0, 100) + If(Kind = XamlEffectKind.DropShadow, Math.Abs(ShadowDepth), 0))) + 2
             End Get
         End Property
+        Public Function EffectivePadding(quality As GraphicsQuality) As Integer
+            If Kind = XamlEffectKind.PassThrough OrElse Kind >= XamlEffectKind.ChromaticAberration Then Return 0
+            Return CInt(Math.Ceiling(Math.Clamp(Radius * Math.Clamp(quality.BlurRadiusScale, 0, 3), 0, 100) + If(Kind = XamlEffectKind.DropShadow, Math.Abs(ShadowDepth), 0))) + 2
+        End Function
         Private source As RenderTarget2D
         Private scratch As RenderTarget2D
         Private shader As Effect
@@ -52,9 +56,10 @@ Namespace [Shared].Drawing.UI.Primitives
                                                             rendererReferences.Add(New WeakReference(Of XamlNativeEffect)(created))
                                                             Return created
                                                         End Function)
-                renderer.Kind = Me.Kind : renderer.Radius = Me.Radius : renderer.Amount = Me.Amount
-                renderer.Phase = Me.Phase : renderer.Angle = Me.Angle : renderer.ShadowDepth = Me.ShadowDepth
-                renderer.Direction = Me.Direction : renderer.Color = Me.Color : renderer.Opacity = Me.Opacity
+                Dim quality = GraphicsQuality.ForDevice(device)
+                renderer.Kind = Me.Kind : renderer.Radius = Me.Radius * Math.Clamp(quality.BlurRadiusScale, 0, 3) : renderer.Amount = Me.Amount * Math.Clamp(quality.ChromaticAberrationScale, 0, 3)
+                renderer.Phase = Me.Phase * Math.Clamp(quality.ShaderMotionSpeed, 0, 3) : renderer.Angle = Me.Angle : renderer.ShadowDepth = Me.ShadowDepth
+                renderer.Direction = Me.Direction : renderer.Color = Me.Color : renderer.Opacity = Me.Opacity * Math.Clamp(quality.ShadowOpacityScale, 0, 2)
                 Return renderer.Render(device, width, height, draw)
             End If
             If shader Is Nothing Then

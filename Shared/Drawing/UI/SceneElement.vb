@@ -159,7 +159,7 @@ Namespace [Shared].Drawing.UI
         Private rotationSurface As Primitives.XamlNativeEffect
         Friend ReadOnly Property DrawingEffect As Primitives.XamlNativeEffect
             Get
-                If VisualEffect IsNot Nothing AndAlso VisualEffect.IsActive Then Return VisualEffect
+                If VisualEffect IsNot Nothing AndAlso VisualEffect.IsActive AndAlso Scene.Quality.EffectsEnabled Then Return VisualEffect
                 If RenderRotation = 0 Then Return Nothing
                 If rotationSurface Is Nothing Then rotationSurface = New Primitives.XamlNativeEffect With {.Kind = Primitives.XamlEffectKind.PassThrough}
                 Return rotationSurface

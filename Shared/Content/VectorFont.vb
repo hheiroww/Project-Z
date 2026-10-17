@@ -47,6 +47,13 @@ Namespace [Shared].Content
         Private deviceDisposing As EventHandler(Of EventArgs)
         Public ReadOnly Property FilePath As String
         Public ReadOnly Property LineSpacing As Integer
+        Public Property PpiPerfectText As Boolean
+
+        Public Shared Function AlignToPixelGrid(position As Vector2, Optional pixelsPerUnit As Single = 1) As Vector2
+            If Not Single.IsFinite(pixelsPerUnit) OrElse pixelsPerUnit <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pixelsPerUnit))
+            Return New Vector2(CSng(Math.Round(position.X * pixelsPerUnit, MidpointRounding.AwayFromZero)) / pixelsPerUnit,
+                               CSng(Math.Round(position.Y * pixelsPerUnit, MidpointRounding.AwayFromZero)) / pixelsPerUnit)
+        End Function
 
         Public Sub New(familyName As String, weight As Integer, pointSize As Single)
             If String.IsNullOrWhiteSpace(familyName) Then Throw New ArgumentException("Font family is required.", NameOf(familyName))
@@ -76,26 +83,29 @@ Namespace [Shared].Content
             LineSpacing = CInt(Math.Ceiling(glyphFace.Height * emSize))
         End Sub
 
-        Private Function Format(text As String) As Media.FormattedText
+        Private Function Format(text As String, Optional pixelPerfect As Boolean = False) As Media.FormattedText
             Return New Media.FormattedText(text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
-                face, emSize, Media.Brushes.White, 1.0) With {.LineHeight = LineSpacing}
+                face, emSize, Media.Brushes.White, Nothing, If(pixelPerfect, Media.TextFormattingMode.Display, Media.TextFormattingMode.Ideal), 1.0) With {.LineHeight = LineSpacing}
         End Function
 
-        Public Function Measure(text As String) As Vector2
+        Public Function Measure(text As String, Optional pixelPerfect As Boolean? = Nothing) As Vector2
             If String.IsNullOrEmpty(text) Then Return Vector2.Zero
+            Dim aligned = If(pixelPerfect, PpiPerfectText)
+            Dim key = If(aligned, "P:", "I:") & text
             Dim size As Vector2
-            If Not measurements.TryGetValue(text, size) Then
-                Dim formatted = Format(text)
+            If Not measurements.TryGetValue(key, size) Then
+                Dim formatted = Format(text, aligned)
                 size = New Vector2(CSng(formatted.WidthIncludingTrailingWhitespace), CSng(formatted.Height))
-                measurements.Add(text, size)
+                measurements.Add(key, size)
             End If
             Return size
         End Function
 
-        Private Function Triangles(text As String) As VertexPositionColor()
+        Private Function Triangles(text As String, pixelPerfect As Boolean) As VertexPositionColor()
+            Dim key = If(pixelPerfect, "P:", "I:") & text
             Dim result As VertexPositionColor() = Nothing
-            If meshes.TryGetValue(text, result) Then Return result
-            Dim geometry = Format(text).BuildGeometry(New System.Windows.Point()).GetFlattenedPathGeometry(0.025, Media.ToleranceType.Absolute)
+            If meshes.TryGetValue(key, result) Then Return result
+            Dim geometry = Format(text, pixelPerfect).BuildGeometry(New System.Windows.Point()).GetFlattenedPathGeometry(0.025, Media.ToleranceType.Absolute)
             Dim tessellator As New Tess()
             For Each figure In geometry.Figures
                 If Not figure.IsFilled Then Continue For
@@ -120,13 +130,16 @@ Namespace [Shared].Content
                 Next
             Next
             result = vertices.ToArray()
-            meshes.Add(text, result)
+            meshes.Add(key, result)
             Return result
         End Function
 
-        Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2, Optional textScale As Single = 1)
+        Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2, Optional textScale As Single = 1, Optional pixelPerfect As Boolean? = Nothing)
             If String.IsNullOrWhiteSpace(text) Then Return
-            Dim vertices = Triangles(text)
+            Dim quality = Drawing.GraphicsQuality.ForDevice(device)
+            Dim aligned = If(pixelPerfect, PpiPerfectText OrElse quality.PpiPerfectText)
+            If aligned Then position = AlignToPixelGrid(position)
+            Dim vertices = Triangles(text, aligned)
             If vertices.Length = 0 Then Return
             If effect Is Nothing Then
                 effect = New BasicEffect(device) With {.VertexColorEnabled = True}

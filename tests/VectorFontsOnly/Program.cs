@@ -23,6 +23,11 @@ internal static class Program
         var previousCulture = CultureInfo.CurrentCulture;
         try
         {
+            Require(VectorFont.AlignToPixelGrid(new Vector2(10.49f, -2.49f)) == new Vector2(10, -2),
+                "pixel alignment rounds positive and negative output coordinates");
+            var scaledOrigin = VectorFont.AlignToPixelGrid(new Vector2(1.1f, -2.1f), 1.5f) * 1.5f;
+            Require(Math.Abs(scaledOrigin.X - MathF.Round(scaledOrigin.X)) < .001f && Math.Abs(scaledOrigin.Y - MathF.Round(scaledOrigin.Y)) < .001f,
+                "pixel alignment respects a noninteger pixels-per-unit transform");
             resources.LoadVectorFontsOnly();
             Require(resources.Fonts.Count == 0 && content.LoadCalls == 0,
                 "vector-only loading never reads compiled font assets");

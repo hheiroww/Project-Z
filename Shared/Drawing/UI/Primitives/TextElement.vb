@@ -97,8 +97,13 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Property BlockLineHeight As Boolean
         ' XAML FontSize is in DIPs; the shared font resources use points.
         Public Property FontScale As Single = 1
+        ''' <summary>Override device/font pixel alignment; Nothing inherits the device setting.</summary>
+        Public Property PpiPerfectText As Boolean?
+        Private measuredPixelMode As Boolean?
 
         Private Function MeasureContent(value As String) As Vector2
+            Dim vectorFont As VectorFont = Nothing
+            If Scene.contentCollection.TryGetVectorFont(Font, vectorFont) Then Return vectorFont.Measure(value, If(PpiPerfectText, Scene.Quality.PpiPerfectText OrElse vectorFont.PpiPerfectText)) * FontScale
             Return Scene.MeasureText(Font, value) * FontScale
         End Function
 
@@ -445,6 +450,11 @@ Namespace [Shared].Drawing.UI.Primitives
         End Function
 
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
+            Dim pixelMode = If(PpiPerfectText, Scene.Quality.PpiPerfectText)
+            If Not measuredPixelMode.HasValue OrElse measuredPixelMode.Value <> pixelMode Then
+                measuredPixelMode = pixelMode
+                UpdateWrappedText()
+            End If
             Dim textToDraw As String = If(_TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
             If UseXamlTextLayout AndAlso Not String.IsNullOrEmpty(textToDraw) AndAlso
                (TextTrimming <> TextTrimming.None OrElse MaxSize.Y < Single.MaxValue) Then textToDraw = FitXamlText(textToDraw)
@@ -468,14 +478,14 @@ Namespace [Shared].Drawing.UI.Primitives
                                     at.Y += XamlLineSpacing
                                     Continue For
                                 End If
-                                Dim lineWidth = vectorFont.Measure(line).X * FontScale
+                                Dim lineWidth = MeasureContent(line).X
                                 Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - lineWidth) / 2,
                                     If(TextAlignment = HorizontalAlignment.Right, width - lineWidth, 0))
-                                vectorFont.Draw(spriteBatch.GraphicsDevice, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset, FontScale)
+                                vectorFont.Draw(spriteBatch.GraphicsDevice, line, at + New Vector2(offset, 0), ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset, FontScale, PpiPerfectText)
                                 at.Y += XamlLineSpacing
                             Next
                         Else
-                            vectorFont.Draw(spriteBatch.GraphicsDevice, textToDraw, Position, ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset)
+                            vectorFont.Draw(spriteBatch.GraphicsDevice, textToDraw, Position, ApplyOpacity(ForegroundColor), Scene.EffectRenderOffset, FontScale, PpiPerfectText)
                         End If
                     Finally
                         spriteBatch.Begin()

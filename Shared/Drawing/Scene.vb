@@ -524,7 +524,7 @@ Namespace [Shared].Drawing
 
         Public Function MeasureText(Font As String, Text As String) As Vector2
             Dim vectorFont As VectorFont = Nothing
-            If contentCollection.TryGetVectorFont(Font, vectorFont) Then Return vectorFont.Measure(Text)
+            If contentCollection.TryGetVectorFont(Font, vectorFont) Then Return vectorFont.Measure(Text, Quality.PpiPerfectText OrElse vectorFont.PpiPerfectText)
             Return contentCollection.Fonts(Font).MeasureString(SanitizeText(Font, Text))
         End Function
 

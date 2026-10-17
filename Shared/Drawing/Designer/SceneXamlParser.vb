@@ -1121,6 +1121,7 @@ End Function
             End While
             text.IsTextSelectionEnabled = GetAttributeBoolean(xmlElement, "IsTextSelectionEnabled", selectable)
             text.UseXamlTextLayout = True
+            If xmlElement.HasAttribute("PpiPerfectText") Then text.PpiPerfectText = GetAttributeBoolean(xmlElement, "PpiPerfectText", False)
             Dim alignment As HorizontalAlignment
             If [Enum].TryParse(xmlElement.GetAttribute("TextAlignment"), True, alignment) Then text.TextAlignment = alignment
             Dim trimming As TextTrimming
