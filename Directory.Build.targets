@@ -6,7 +6,9 @@
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)Extensions/ProjectZ.Diagnostics.targets"
           Condition="'$(ProjectZSourceReference)' != '' or '$(MSBuildProjectName)' == 'Project Z Windows'" />
-  <!-- Repository consumers get the settings page, but conversion remains off until explicitly enabled. -->
+  <!-- Repository consumers get the settings page, but conversion remains off until explicitly enabled.
+       Runtime/tool projects must not opt in through inherited command-line properties: the
+       diagnostics helper is itself a framework dependency and would create a reference cycle. -->
   <Import Project="$(MSBuildThisFileDirectory)Project Z XAML Codegen/ProjectZ.Xaml.targets"
-          Condition="'$(ProjectZXamlIntegrationImported)' != 'true' and '$(MSBuildProjectName)' != 'Project Z Windows' and '$(MSBuildProjectName)' != 'ProjectZ.WpfCompatibility' and '$(MSBuildProjectName)' != 'ProjectZ.XamlCodegen' and '$(MSBuildProjectName)' != 'Project Z Model Import'" />
+          Condition="'$(ProjectZXamlIntegrationImported)' != 'true' and '$(MSBuildProjectName)' != 'Project Z Windows' and '$(MSBuildProjectName)' != 'ProjectZ.WpfCompatibility' and '$(MSBuildProjectName)' != 'ProjectZ.XamlCodegen' and '$(MSBuildProjectName)' != 'ProjectZ.Diagnostics' and '$(MSBuildProjectName)' != 'Project Z Model Import'" />
 </Project>
