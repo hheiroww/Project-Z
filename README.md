@@ -1,4 +1,4 @@
-# ⚡ Project Z 2.8.2
+# ⚡ Project Z 2026.10.17.0
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -34,21 +34,21 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.8.2:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2026.10.17.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.8.2
+## 📦 Install 2026.10.17.0
 
 ```powershell
-dotnet add package ProjectZ --version 2.8.2
+dotnet add package ProjectZ --version 2026.10.17.0
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Publish](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-**🔐 Dependency refresh:** ProjectZ 2.8.2 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
+**🔐 Dependency refresh:** ProjectZ 2026.10.17.0 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
 
-## ⚙️ New in 2.8.2: choose what gets generated
+## ⚙️ New in 2026.10.17.0: choose what gets generated
 
 The **Project-Z** settings page now offers **Disabled**, **Designer only**, or **Designer + code-behind**. Designer-only mode keeps your hand-adapted C#/VB code and generates the view fields, initialization and event wiring. Converting code-behind always includes a designer.
 
@@ -408,8 +408,8 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2.8.2.nupkg`.
-The project and assembly version is `2.8.2.0`; NuGet normalizes the package version
+The framework Release build also creates `bin/Release/ProjectZ.2026.10.17.0.nupkg`.
+The project and assembly version is `2026.10.17.0`; NuGet normalizes the package version
 to `2.8.2`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
@@ -434,7 +434,7 @@ Network workflows need a configured service/account; recording and thumbnail wor
 | `Project Z Windows.vbproj` | Scene graph, controls, layout, input, animations, XAML, and rendering. |
 | `heirowSnap Project Z` | Desktop port and practical integration example. |
 | `heirowSnap Protocol` / `heirowSnap Legacy Settings` | Network models and linked settings implementation. |
-| `Project Z XAML Codegen` | XAML-to-VB named-control and event scaffolding. |
+| `Project Z XAML Codegen` | XAML-to-VB/C# named-control and event scaffolding. |
 | `Project Z Model Import` | Assimp-backed model import for 3D surfaces. |
 | `Project Z VST` / `Project Z VST SmokeHost` | Granular synthesizer, native editor, and embedded-host checks. |
 | `Project Z Application` | UI demo and playable Tetris. |
