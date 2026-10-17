@@ -414,3 +414,4 @@ FodyWeavers.xsd
 /tests/ShellTransfer
 /tests/Steam
 /tests/SteamUploadAuth
+/docs/WORKSTATION-PORT-FAILURES.md
