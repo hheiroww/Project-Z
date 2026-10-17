@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <Compile Remove="tests\ShellTransfer\**\*.vb" />
-  </ItemGroup>
 
   <PropertyGroup>
 	<TargetFramework>net8.0-windows7.0</TargetFramework>
@@ -42,9 +39,10 @@
 
 <ItemGroup>
 	<!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
-	<Compile Remove="tests\WpfImport\**;artifacts\**" />
-	<Page Remove="tests\WpfImport\**;artifacts\**;Project Z XAML Codegen\**" />
-	<EmbeddedResource Remove="tests\WpfImport\**;artifacts\**" />
+	<Compile Remove="artifacts\**" />
+	<Compile Remove="tests\**" />
+	<Page Remove="artifacts\**;Project Z XAML Codegen\**" />
+	<EmbeddedResource Remove="artifacts\**" />
 	<Compile Remove="obj\**" />
 	<Compile Remove="packages\**" />
 	<Compile Remove="Project Z Application\**" />
@@ -69,11 +67,13 @@
 	<None Remove="ProjectTemplate\**" />
 	<None Remove="heirowSnap Project Z\**" />
 	<None Remove="heirowSnap Protocol\**" />
+	<None Remove="tests\**" />
 	<Page Remove="obj\**" />
 	<Page Remove="packages\**" />
 	<Page Remove="Project Z Tower Defense\**" />
 	<Page Remove="heirowSnap Project Z\**" />
 	<Page Remove="heirowSnap Protocol\**" />
+	<Page Remove="tests\**" />
 </ItemGroup>
 
 <!-- MonoGame 3.8.5.1 native DX12 is the default. WindowsDX remains available
@@ -123,9 +123,6 @@
     <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" />
     <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(ProjectZGraphicsBackend.ToUpperInvariant())" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
-  <ItemGroup>
-    <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />
-  </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
   </ItemGroup>
@@ -200,6 +197,9 @@
       <Pack>true</Pack>
       <PackagePath>tools\native\win-x64\</PackagePath>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />
   </ItemGroup>
 
 </Project>
