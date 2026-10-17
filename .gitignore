@@ -403,3 +403,14 @@ FodyWeavers.xsd
 /.codex-artifacts
 /heirowSnap Project Z/Generated/LegacyXaml
 /heirowSnap Protocol
+!ThirdParty/MonoGame.Native/win-x64/mgruntime.dll
+/heirowSnap Project Z
+/tests/CaptureSelection
+/tests/GraphicsFence
+/tests/GuestRooms
+/tests/GuestRoomsLive
+/tests/Notifications
+/tests/PrivateRtmp
+/tests/ShellTransfer
+/tests/Steam
+/tests/SteamUploadAuth
