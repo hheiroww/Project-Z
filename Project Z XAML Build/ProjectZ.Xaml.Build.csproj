@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <PackageId>ProjectZ.Xaml.Build</PackageId><Version>2026.10.17.6</Version><Authors>Project-Z</Authors>
+    <Description>Project-Z native scene XAML compilation integrated into ordinary C# builds. No runtime markup loader.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput><SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <DevelopmentDependency>true</DevelopmentDependency><NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Project Z XAML Codegen/NativeSceneCompiler.cs" Link="NativeSceneCompiler.cs" />
+    <None Include="ProjectZ.Xaml.Build.targets" Pack="true" PackagePath="buildTransitive/ProjectZ.Xaml.Build.targets" />
+    <None Include="../Project Z XAML Codegen/ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools/ProjectZ.NativeXaml.targets" />
+    <None Include="$(OutputPath)ProjectZ.Xaml.Build.dll" Pack="true" PackagePath="tools/net8.0/" />
+    <None Include="$(OutputPath)ProjectZ.Xaml.Build.deps.json" Pack="true" PackagePath="tools/net8.0/" />
+    <None Include="$(OutputPath)ProjectZ.Xaml.Build.runtimeconfig.json" Pack="true" PackagePath="tools/net8.0/" />
+  </ItemGroup>
+</Project>

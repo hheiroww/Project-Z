@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)ProjectZ.NativeXaml.targets" Condition="'$(ProjectZNativeXamlIntegrationImported)' != 'true'" />
   <PropertyGroup>
     <ProjectZXamlIntegrationImported>true</ProjectZXamlIntegrationImported>
     <ProjectZEnableXaml Condition="'$(ProjectZEnableXaml)' == ''">false</ProjectZEnableXaml>

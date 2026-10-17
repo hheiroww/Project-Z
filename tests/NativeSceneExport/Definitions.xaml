@@ -1,0 +1,10 @@
+<SceneTemplates xmlns="urn:projectz:native-scene" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Class="Fixture.View">
+  <Factory x:Name="Label" Returns="Control" Tag="TextBlock" Replace="true">
+    <Parameter Name="text" Attribute="Text" Type="string" />
+    <Parameter Name="width" Attribute="Width" Type="float" Default="42" />
+    <Element Type="Control">
+      <Set Property="Text" Type="string" Value="{Parameter text}" />
+      <Set Property="Width" Type="float" Value="{Parameter width}" />
+    </Element>
+  </Factory>
+</SceneTemplates>
