@@ -34,12 +34,12 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2.8.2:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2026.10.17.0:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.8.2
+## 📦 Install 2026.10.17.0
 
 ```powershell
-dotnet add package ProjectZ --version 2.8.2
+dotnet add package ProjectZ --version 2026.10.17.0
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
@@ -48,7 +48,7 @@ dotnet add package ProjectZ --version 2.8.2
 **🔐 Dependency refresh:** ProjectZ 2026.10.17.0 references SocketJack **2026.15.0**, which uses SSH.NET **2026.0.0**. This replaces the vulnerable SSH.NET 2025.1.0 dependency resolved by the previous local package. Direct and transitive NuGet audit warnings block publication. SocketJack 2026.14 adds default authentication gates; networking applications should follow its [migration guide](https://github.com/hheiroww/SocketJack/blob/master/docs/SAFEMODE.md).
 
 
-## ⚙️ New in 2.8.2: choose what gets generated
+## ⚙️ New in 2026.10.17.0: choose what gets generated
 
 The **Project-Z** settings page now offers **Disabled**, **Designer only**, or **Designer + code-behind**. Designer-only mode keeps your hand-adapted C#/VB code and generates the view fields, initialization and event wiring. Converting code-behind always includes a designer.
 
