@@ -40,6 +40,12 @@ jobs:
         run: ./tests/WpfImport/BuildTime/Verify.ps1 -SkipRuntime
       - name: Build Release package
         run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
+      - name: Verify standalone NuGet consumer
+        shell: pwsh
+        run: |
+          $packages = @(Get-ChildItem bin/Release/ProjectZ.*.nupkg | Where-Object Name -NotLike '*.symbols.nupkg')
+          if ($packages.Count -ne 1) { throw "Expected exactly one ProjectZ package." }
+          ./tests/Packaging/Verify.ps1 -PackagePath $packages[0].FullName
       - name: Preserve package artifact
         uses: actions/upload-artifact@v4
         with:

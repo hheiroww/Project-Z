@@ -1,4 +1,6 @@
-# ⚡ Project Z 2.8.3
+# ⚡ Project Z 2026.10.17.1
+
+Version 2026.10.17.1 fixes package restore: the internal `ProjectZ.ModelImport.dll` is bundled with ProjectZ, and consumers no longer need an unpublished `ProjectZ.ModelImport` package.
 
 Project-Z automatically starts persistent diagnostics when a Windows `SceneManager` is created. Logs include full managed exceptions, while the bundled `ProjectZ.Diagnostics` observer records abrupt exits and captures native fault dumps. NuGet consumers receive the observer automatically, including for self-contained publishing.
 
@@ -40,10 +42,10 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 
 > **📦 Release 2.8.2:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2.8.2
+## 📦 Install 2026.10.17.1
 
 ```powershell
-dotnet add package ProjectZ --version 2.8.2
+dotnet add package ProjectZ --version 2026.10.17.1
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)

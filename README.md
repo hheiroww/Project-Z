@@ -1,4 +1,4 @@
-# ⚡ Project Z 2026.10.17.0
+# ⚡ Project Z 2026.10.17.1
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 

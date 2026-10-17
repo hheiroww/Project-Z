@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.17.0</Version>
+	<Version>2026.10.17.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2.8.4 fixes false DX12 GPU fence hang detection and fatal cleanup, captures original native graphics HRESULTs and dumps, and includes the patched runtime with automatic framework diagnostics in build and publish outputs.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.17.1 fixes NuGet restore by bundling the internal model-import bridge without requiring an unpublished ProjectZ.ModelImport package. Includes the DX12 runtime, automatic diagnostics, and WPF importer fixes from 2026.10.17.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -100,9 +100,8 @@
 </ItemGroup>
 
 <ItemGroup>
-	<!--  <ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" /> -->
 	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
-	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" />
+	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
 </ItemGroup>
 
   <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
