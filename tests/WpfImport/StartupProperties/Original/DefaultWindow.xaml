@@ -1,0 +1,52 @@
+<Window x:Class="StartupProperties.DefaultWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:StartupProperties" Title="Default startup">
+  <Window.Resources>
+    <SolidColorBrush x:Key="HoverColor" Color="Yellow"/>
+    <Style x:Key="StateCheckBox" TargetType="CheckBox">
+      <Setter Property="Background" Value="Red"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource HoverColor}"/></Trigger></Style.Triggers>
+    </Style>
+  </Window.Resources>
+  <TabControl x:Name="Tabs" SelectedIndex="1">
+    <TabItem Header="First"><TextBlock Text="First page" /></TabItem>
+    <TabItem x:Name="Second">
+      <TabItem.Header><StackPanel Orientation="Horizontal"><TextBlock x:Name="HeaderText" Text="Second"/><Button x:Name="HeaderButton" Content="Reload" Click="Reload" Width="70" Height="25"/></StackPanel></TabItem.Header>
+      <StackPanel>
+        <Image x:Name="ResourceLogo" Source="Assets/logo.png" Width="20" Height="20" />
+        <Rectangle x:Name="SpriteSurface" Width="20" Height="20"><Rectangle.Fill><ImageBrush x:Name="SpriteBrush" ImageSource="Assets/logo.png" Viewbox="0,0,1,1" ViewboxUnits="Absolute" Stretch="Fill"/></Rectangle.Fill></Rectangle>
+        <CheckBox x:Name="StateCheckBox" Style="{StaticResource StateCheckBox}" Content="Remember this device" Width="180" Height="25"/>
+        <StackPanel x:Name="IntrinsicRow" Orientation="Horizontal">
+          <Button x:Name="IntrinsicButton" Content="Natural button"/>
+          <CheckBox x:Name="IntrinsicCheckBox" Content="Natural checkbox"/>
+          <Grid x:Name="IntrinsicGrid"><TextBlock Text="Natural grid"/></Grid>
+        </StackPanel>
+        <Grid x:Name="MixedColumns">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock x:Name="MixedColumnText" Text="The star column retains room for ordinary text."/>
+          <Button x:Name="AutoColumnButton" Grid.Column="1" Content="Auto button"/>
+        </Grid>
+        <Grid x:Name="SpanningColumns">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <TextBlock x:Name="SpanLabel" Text="Provider"/><ComboBox x:Name="SpanCombo" Grid.Column="1"><ComboBoxItem Content="Native provider"/></ComboBox>
+          <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="Spanning status text uses the star column as well as the label column." TextWrapping="Wrap"/>
+        </Grid>
+        <WrapPanel x:Name="MeasuredWrap" Width="230"><CheckBox x:Name="WrapFirst" Content="First wrapped checkbox"/><CheckBox x:Name="WrapSecond" Content="Second wrapped checkbox"/></WrapPanel>
+        <Border x:Name="InitiallyCollapsed" Visibility="Collapsed"><TextBlock Text="Hidden content"/></Border>
+        <GroupBox x:Name="MeasuredGroup" Header="Measured native group" Padding="6"><StackPanel><TextBlock Text="First group line"/><TextBlock Text="Second group line"/><Button Content="Group action"/></StackPanel></GroupBox>
+        <TextBlock x:Name="AfterMeasuredGroup" Text="Content following the group"/>
+        <UniformGrid x:Name="NativeUniformGrid" Columns="2"><Button x:Name="UniformFirst" Content="First cell" Margin="2"/><Button x:Name="UniformSecond" Content="Second cell" Margin="2"/><Button x:Name="UniformThird" Content="Third cell" Margin="2"/></UniformGrid>
+        <local:Widget x:Name="CustomWidget"/>
+        <ContentControl x:Name="NativeContentHost"><TextBlock x:Name="HostedText" Text="Native content host"/></ContentControl>
+        <Rectangle x:Name="GradientSurface" Width="200" Height="40">
+          <Rectangle.Fill><LinearGradientBrush x:Name="NamedGradient"><GradientStop x:Name="NamedStop" Offset="0" Color="Red"/><GradientStop Offset="1" Color="Green"/></LinearGradientBrush></Rectangle.Fill>
+          <Rectangle.RenderTransform><TranslateTransform x:Name="NamedMotion"/></Rectangle.RenderTransform>
+        </Rectangle>
+        <Path x:Name="BlankPath" Width="20" Height="20" Data="M 0 0 L 20 20">
+          <Path.RenderTransform><TranslateTransform x:Name="BlankMotion" X="4"/></Path.RenderTransform>
+          <Path.Clip><RectangleGeometry x:Name="BlankClip" Rect="0,0,10,10"/></Path.Clip>
+        </Path>
+      </StackPanel>
+    </TabItem>
+    <TabItem x:Name="CollapsedTab" Header="Hidden tab" Visibility="Collapsed"><TextBlock Text="Hidden tab content"/></TabItem>
+  </TabControl>
+</Window>

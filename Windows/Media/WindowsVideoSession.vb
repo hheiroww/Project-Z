@@ -51,7 +51,8 @@ Namespace Windows.Media
                 AddHandler player.MediaOpened,
                     Sub()
                         If player.NaturalVideoWidth <= 0 OrElse player.NaturalVideoHeight <= 0 Then
-                            Fail("This file has no supported video stream.")
+                            If player.NaturalDuration.HasTimeSpan Then Interlocked.Exchange(durationTicks, player.NaturalDuration.TimeSpan.Ticks)
+                            Interlocked.Exchange(opened, 1)
                             Return
                         End If
                         Dim scale = Math.Min(1.0, maxSize / CDbl(Math.Max(player.NaturalVideoWidth, player.NaturalVideoHeight)))

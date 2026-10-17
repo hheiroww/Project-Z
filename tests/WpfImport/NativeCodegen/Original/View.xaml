@@ -1,0 +1,42 @@
+<Window x:Class="NativeCodegenFixture.View"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Native codegen appearance and items" Width="500" Height="450">
+  <Window.Resources>
+    <LinearGradientBrush x:Key="Gradient" StartPoint="0,0" EndPoint="1,0">
+      <GradientStop Color="#204080" Offset="0" />
+      <GradientStop Color="#40D080" Offset="1" />
+    </LinearGradientBrush>
+    <Style x:Key="BaseSurface" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource Gradient}" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Height" Value="55" />
+      <Setter Property="Width" Value="260" />
+    </Style>
+    <Style x:Key="ShadowSurface" TargetType="{x:Type Border}" BasedOn="{StaticResource BaseSurface}">
+      <Setter Property="Effect">
+        <Setter.Value><DropShadowEffect BlurRadius="6" ShadowDepth="4" Direction="315" Opacity="0.7" Color="Black" /></Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+  <StackPanel Margin="20">
+    <Border x:Name="Surface" Style="{StaticResource ShadowSurface}" Margin="0,0,0,10">
+      <TextBlock Text="Original XAML: native gradient and shadow" Margin="10" />
+    </Border>
+    <Border x:Name="Blurred" Background="#E03050" Width="100" Height="25" Margin="0,0,0,10">
+      <Border.Effect><BlurEffect Radius="2" /></Border.Effect>
+    </Border>
+    <ComboBox x:Name="Models" Width="260" Height="32" SelectedIndex="1" SelectionChanged="OnSelection">
+      <ComboBoxItem x:Name="First" Content="Tiny" Tag="tiny" />
+      <ComboBoxItem x:Name="Second" Content="Large" Tag="large" />
+      <ComboBoxItem x:Name="Disabled" Content="Disabled" Tag="disabled" IsEnabled="False" />
+    </ComboBox>
+    <ListBox x:Name="History" Height="80" Width="260" SelectedIndex="0" Margin="0,10,0,10">
+      <ListBox.Items>
+        <ListBoxItem x:Name="Entry" Content="Previous request" Tag="request-1" />
+        <ListBoxItem Content="Second request" Tag="request-2" />
+      </ListBox.Items>
+    </ListBox>
+    <Button x:Name="Change" Content="Change through translated code" Click="OnChange" Width="260" Height="35" />
+  </StackPanel>
+</Window>

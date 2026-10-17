@@ -1,0 +1,24 @@
+<UserControl x:Class="BrowserEvents.View" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:web="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf" Width="500" Height="360" PreviewMouseDown="RootPreview" MouseDown="RootDown" PreviewKeyDown="RootKey" TextBox.TextChanged="RootTextChanged">
+  <UserControl.Resources>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#FF204060"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+        <Border x:Name="InputChrome" Background="{TemplateBinding Background}" CornerRadius="4" SnapsToDevicePixels="True">
+          <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+        </Border>
+        <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter TargetName="InputChrome" Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="180"/><RowDefinition Height="70"/><RowDefinition Height="70"/><RowDefinition Height="40"/></Grid.RowDefinitions>
+    <Border x:Name="Crop" ClipToBounds="True" Width="280" Height="160" HorizontalAlignment="Left" VerticalAlignment="Top">
+      <web:WebView2 x:Name="Browser" Width="300" Height="190" Source="about:blank" DefaultBackgroundColor="#FF102030" NavigationCompleted="BrowserNavigated"/>
+    </Border>
+    <Button x:Name="Action" Grid.Row="1" Content="Native routed action" Width="240" Height="48" HorizontalAlignment="Left" Click="ActionClicked" MouseDown="ActionDown" PreviewMouseRightButtonDown="RightPreview"/>
+    <ListBox x:Name="Rows" Grid.Row="2" Height="64">
+      <ListBox.ItemTemplate><DataTemplate><Button x:Name="RowAction" Height="32" Width="200" Content="Template routed action" Click="RowClicked"/></DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+    <TextBox x:Name="Editor" Grid.Row="3" Width="250" Height="32" HorizontalAlignment="Left" PreviewTextInput="EditorPreviewText" TextInput="EditorText"/>
+  </Grid>
+</UserControl>

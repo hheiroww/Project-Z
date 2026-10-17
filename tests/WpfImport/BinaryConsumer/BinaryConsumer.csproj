@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0-windows</TargetFramework></PropertyGroup>
+  <ItemGroup><Reference Include="Microsoft.ImportFixture"><HintPath>../BinaryWpf/bin/Release/net8.0-windows/Microsoft.ImportFixture.dll</HintPath></Reference></ItemGroup>
+</Project>

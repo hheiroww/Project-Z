@@ -1,0 +1,134 @@
+diff --git a/native/monogame/directx12/CommandQueue.cpp b/native/monogame/directx12/CommandQueue.cpp
+index 0859bbd..ccbe53c 100644
+--- a/native/monogame/directx12/CommandQueue.cpp
++++ b/native/monogame/directx12/CommandQueue.cpp
+@@ -14,6 +14,7 @@ using namespace Graphics;
+ 
+ void CommandQueue::Create(ID3D12Device* device)
+ {
++    m_device = device;
+     D3D12_COMMAND_QUEUE_DESC desc = {};
+     desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+     desc.Type = m_type;
+@@ -33,14 +34,14 @@ uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* commandList)
+     // Make sure the fence covers ExecuteCommandLists call.
+     std::lock_guard lock(m_fenceMutex);
+     m_queue->ExecuteCommandLists(1, &commandList);
+-    m_queue->Signal(m_fence.Get(), m_nextFenceValue);
++    ThrowIfFailed(m_queue->Signal(m_fence.Get(), m_nextFenceValue));
+     return m_nextFenceValue++;
+ }
+ 
+ uint64_t CommandQueue::SignalFence()
+ {
+     std::lock_guard lock(m_fenceMutex);
+-    m_queue->Signal(m_fence.Get(), m_nextFenceValue);
++    ThrowIfFailed(m_queue->Signal(m_fence.Get(), m_nextFenceValue));
+     return m_nextFenceValue++;
+ }
+ 
+@@ -55,6 +56,9 @@ bool CommandQueue::IsFenceComplete(uint64_t fenceValue)
+ {
+     std::lock_guard lock(m_fenceMutex);
+     uint64_t completedFenceValue = m_fence->GetCompletedValue();
++    // UINT64_MAX is the removed-device sentinel, not a completed submission.
++    if (completedFenceValue == UINT64_MAX)
++        ThrowIfFailed(m_device->GetDeviceRemovedReason());
+     return completedFenceValue >= fenceValue;
+ }
+ 
+@@ -64,25 +68,32 @@ void CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
+         return;
+ 
+     HANDLE evt = CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
++    if (!evt)
++        ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
++    const auto closeEvent = std::unique_ptr<void, decltype(&CloseHandle)>(evt, CloseHandle);
+     HRESULT hr = m_fence->SetEventOnCompletion(fenceValue, evt);
+     ThrowIfFailed(hr);
+ 
+-    // 5 seconds should be more than enough.
+-    // https://learn.microsoft.com/en-us/windows-hardware/drivers/display/timeout-detection-and-recovery
+-    // "The default timeout period in Windows is two seconds."
+-    // "If the GPU can't complete or preempt the current task within the TDR timeout period, the OS diagnoses that the GPU is frozen."
+-    DWORD waitResult = WaitForSingleObjectEx(evt, 5000, FALSE);
+-
+-    CloseHandle(evt);
+-    if (waitResult == WAIT_TIMEOUT)
+-    {
+-        ThrowIfFailed(DXGI_ERROR_DEVICE_HUNG);
+-    }
+-    else if (waitResult == WAIT_FAILED)
++    const auto started = GetTickCount64();
++    bool delayReported = false;
++    for (;;)
+     {
+-        DWORD win32Error = GetLastError();
+-        ThrowIfFailed(HRESULT_FROM_WIN32(win32Error));
++        const auto waitResult = WaitForSingleObjectEx(evt, 1000, FALSE);
++        if (waitResult == WAIT_FAILED)
++            ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
++        // A timeout is not evidence of a GPU hang. The driver is authoritative,
++        // including when a fence wakes with the removed-device sentinel.
++        ThrowIfFailed(m_device->GetDeviceRemovedReason());
++        if (waitResult == WAIT_OBJECT_0 || IsFenceComplete(fenceValue))
++            break;
++        if (!delayReported && GetTickCount64() - started >= 5000)
++        {
++            OutputDebugStringA("Project-Z DX12: GPU fence delayed beyond 5 seconds; device remains healthy; waiting for completion.\n");
++            delayReported = true;
++        }
+     }
++    if (delayReported)
++        OutputDebugStringA("Project-Z DX12: delayed GPU fence completed; rendering continues.\n");
+ }
+ 
+ void CommandQueue::WaitForIdle()
+diff --git a/native/monogame/directx12/CommandQueue.h b/native/monogame/directx12/CommandQueue.h
+index d5c33b6..79e1cd5 100644
+--- a/native/monogame/directx12/CommandQueue.h
++++ b/native/monogame/directx12/CommandQueue.h
+@@ -34,6 +34,7 @@ public:
+     D3D12_COMMAND_LIST_TYPE GetType() const { return m_type; }
+ 
+ private:
++    Microsoft::WRL::ComPtr<ID3D12Device> m_device;
+     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_queue;
+     D3D12_COMMAND_LIST_TYPE m_type;
+     std::wstring m_name;
+diff --git a/native/monogame/directx12/DeviceResources.cpp b/native/monogame/directx12/DeviceResources.cpp
+index f701948..3c0e3fa 100644
+--- a/native/monogame/directx12/DeviceResources.cpp
++++ b/native/monogame/directx12/DeviceResources.cpp
+@@ -430,8 +430,20 @@ public:
+     }
+ 
+     void WaitForGpu() noexcept {
+-        m_queue->SignalFence();
+-        m_queue->WaitForIdle();
++        // Cleanup must not throw across this noexcept boundary and terminate
++        // while unwinding the original graphics exception.
++        if (!m_queue || !m_d3dDevice || FAILED(m_d3dDevice->GetDeviceRemovedReason()))
++            return;
++        try {
++            m_queue->SignalFence();
++            m_queue->WaitForIdle();
++        } catch (const std::exception& failure) {
++            OutputDebugStringA("Project-Z DX12: GPU cleanup skipped after failure: ");
++            OutputDebugStringA(failure.what());
++            OutputDebugStringA("\n");
++        } catch (...) {
++            OutputDebugStringA("Project-Z DX12: GPU cleanup skipped after native failure.\n");
++        }
+     }
+ 
+     // Code common between Present and PresentX
+@@ -488,6 +500,8 @@ public:
+             return false;
+         }
+ 
++        if (!m_lostCbk)
++            ThrowIfFailed(hr);
+         m_lostCbk(); // let the C# dictate the order of reset
+         return true;
+     }

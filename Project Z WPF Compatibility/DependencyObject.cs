@@ -3,11 +3,20 @@ using System.ComponentModel;
 namespace ProjectZ.WpfCompatibility;
 
 public delegate void PropertyChangedCallback(DependencyObject d, DependencyPropertyChangedEventArgs e);
+public delegate void DependencyPropertyChangedEventHandler(object sender,DependencyPropertyChangedEventArgs e);
 public readonly record struct DependencyPropertyChangedEventArgs(DependencyProperty Property, object? OldValue, object? NewValue);
 public class PropertyMetadata(object? defaultValue = null, PropertyChangedCallback? propertyChangedCallback = null)
 {
     public object? DefaultValue { get; } = defaultValue;
     public PropertyChangedCallback? PropertyChangedCallback { get; } = propertyChangedCallback;
+}
+[Flags] public enum FrameworkPropertyMetadataOptions { None=0, AffectsMeasure=1, AffectsArrange=2, AffectsParentMeasure=4, AffectsParentArrange=8, AffectsRender=16, Inherits=32, BindsTwoWayByDefault=256 }
+public class FrameworkPropertyMetadata : PropertyMetadata
+{
+    public FrameworkPropertyMetadataOptions Options { get; }
+    public FrameworkPropertyMetadata(object? defaultValue) : base(defaultValue) { }
+    public FrameworkPropertyMetadata(object? defaultValue,FrameworkPropertyMetadataOptions options) : base(defaultValue) => Options=options;
+    public FrameworkPropertyMetadata(object? defaultValue,FrameworkPropertyMetadataOptions options,PropertyChangedCallback callback) : base(defaultValue,callback) => Options=options;
 }
 public sealed class DependencyProperty
 {
@@ -25,10 +34,20 @@ public sealed class DependencyProperty
 }
 public class DependencyObject : INotifyPropertyChanged
 {
+    internal global::ProjectZ.Shared.Drawing.Scene? AnimationScene;
+    readonly Dictionary<string, List<global::ProjectZ.Shared.Animations.PropertyAnimationClock>> animations = new();
+    internal void TrackAnimation(string name, global::ProjectZ.Shared.Animations.PropertyAnimationClock clock) { if (!animations.TryGetValue(name, out var tracks)) animations[name] = tracks = new(); tracks.Add(clock); }
+    internal void RemoveAnimation(string name) { if (!animations.Remove(name, out var tracks)) return; foreach (var track in tracks) track.Stop(); }
+    internal void ClearAnimations() { foreach (var name in animations.Keys.ToArray()) RemoveAnimation(name); }
+    public void BeginAnimation(DependencyProperty property, Media.Animation.AnimationTimeline? animation) => BeginAnimation(property, animation, Media.Animation.HandoffBehavior.SnapshotAndReplace);
+    public void BeginAnimation(DependencyProperty property, Media.Animation.AnimationTimeline? animation, Media.Animation.HandoffBehavior handoffBehavior) => Media.Animation.AnimationHost.Start(this, new PropertyPath(property), animation, handoffBehavior);
     readonly Dictionary<DependencyProperty, object?> values = new();
     public event PropertyChangedEventHandler? PropertyChanged;
     public Threading.Dispatcher Dispatcher => Application.Current.Dispatcher;
-    public object? GetValue(DependencyProperty dp) => dp.NativeBacked ? GetType().GetProperty(dp.Name)!.GetValue(this) : values.TryGetValue(dp, out var value) ? value : dp.DefaultMetadata.DefaultValue;
+#nullable disable
+    // WPF's legacy GetValue contract permits null without nullable annotations.
+    public object GetValue(DependencyProperty dp) => dp.NativeBacked ? GetType().GetProperty(dp.Name).GetValue(this) : values.TryGetValue(dp, out var value) ? value : dp.DefaultMetadata.DefaultValue;
+#nullable restore
     public virtual void SetValue(DependencyProperty dp, object? value)
     {
         Dispatcher.VerifyAccess();
@@ -41,7 +60,11 @@ public class DependencyObject : INotifyPropertyChanged
         Changed(dp.Name);
     }
     public virtual void ClearValue(DependencyProperty dp) { SetValue(dp, dp.DefaultMetadata.DefaultValue); values.Remove(dp); }
-    protected internal void Changed(string name) => PropertyChanged?.Invoke(this, new(name));
+    protected internal void Changed(string name)
+    {
+        if (this is FrameworkElement element) element.NativeElement?.OwnerScene?.RequestRender();
+        PropertyChanged?.Invoke(this, new(name));
+    }
 }
 public enum Visibility { Visible, Hidden, Collapsed }
 public enum HorizontalAlignment { Left, Center, Right, Stretch }
@@ -55,10 +78,14 @@ public struct Thickness
 }
 public readonly record struct Point(double X, double Y);
 public readonly record struct Size(double Width, double Height);
-public class PropertyPath(string path) { public string Path { get; set; } = path; }
+public class PropertyPath { public string Path { get; set; } public PropertyPath(string path) => Path = path; public PropertyPath(DependencyProperty property) => Path = property.Name; }
 public class ResourceDictionary : Dictionary<object, object> { }
 public class RoutedEventArgs : EventArgs
 {
+    public RoutedEventArgs() { }
+    public RoutedEventArgs(RoutedEvent routedEvent) => RoutedEvent = routedEvent;
+    public RoutedEventArgs(RoutedEvent routedEvent, object source) { RoutedEvent = routedEvent; Source = source; }
+    public RoutedEvent? RoutedEvent { get; set; }
     public bool Handled { get; set; }
     public object? Source { get; set; }
     public object? OriginalSource { get; internal set; }

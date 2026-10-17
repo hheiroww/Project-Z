@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><PlatformTarget>x64</PlatformTarget>
+    <Version>3.7.2</Version><AssemblyTitle>Build graph fixture</AssemblyTitle><WorkerEnabled>true</WorkerEnabled>
+    <FixturePayload>local/payload.txt</FixturePayload>
+    <OutputPath>custom-out/$(Configuration)/</OutputPath><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath><AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="local/payload.txt" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="System.Text.Json" Version="10.0.7" PrivateAssets="all" ExcludeAssets="analyzers" />
+  </ItemGroup>
+  <Target Name="RequireTargetPayload" BeforeTargets="PrepareForBuild"><Error Condition="!Exists('$(FixturePayload)')" Text="Relocated target payload is missing." /></Target>
+  <Target Name="BundleWorker" AfterTargets="Build" Condition="'$(WorkerEnabled)' == 'true'">
+    <MSBuild Projects="../BuildTargetWorker/BuildTargetWorker.csproj" Targets="Restore;Build" Properties="Configuration=Release" BuildInParallel="false" />
+    <ItemGroup><WorkerFiles Include="../BuildTargetWorker/bin/Release/net8.0/BuildTargetWorker.dll" /></ItemGroup>
+    <Copy SourceFiles="@(WorkerFiles)" DestinationFolder="$(OutDir)Tools" />
+    <GetFileHash Files="$(OutDir)$(AssemblyName).dll" Algorithm="SHA256"><Output TaskParameter="Items" ItemName="ReleaseHash" /></GetFileHash>
+    <WriteLinesToFile File="$(OutDir)release.sha256" Lines="@(ReleaseHash->'%(FileHash)')" Overwrite="true" />
+  </Target>
+  <Target Name="PublishWorker" AfterTargets="Publish" Condition="'$(WorkerEnabled)' == 'true'">
+    <ItemGroup><WorkerPublishedFiles Include="$(OutDir)Tools/**/*" /></ItemGroup>
+    <Copy SourceFiles="@(WorkerPublishedFiles)" DestinationFiles="@(WorkerPublishedFiles->'$(PublishDir)Tools/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="$(OutDir)release.sha256" DestinationFolder="$(PublishDir)" />
+  </Target>
+</Project>

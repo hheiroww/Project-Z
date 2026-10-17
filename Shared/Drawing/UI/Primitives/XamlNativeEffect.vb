@@ -3,6 +3,7 @@ Imports Microsoft.Xna.Framework.Graphics
 
 Namespace [Shared].Drawing.UI.Primitives
     Public Enum XamlEffectKind
+        PassThrough = -1
         Blur
         DropShadow
         ChromaticAberration
@@ -25,12 +26,14 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Property Opacity As Single = 1
         Public ReadOnly Property IsActive As Boolean
             Get
+                If Kind = XamlEffectKind.PassThrough Then Return True
                 Return If(Kind >= XamlEffectKind.ChromaticAberration, Math.Abs(Amount) > 0.00001F,
                           If(Kind = XamlEffectKind.DropShadow, Opacity > 0, Radius > 0))
             End Get
         End Property
         Public ReadOnly Property Padding As Integer
             Get
+                If Kind = XamlEffectKind.PassThrough Then Return 0
                 If Kind >= XamlEffectKind.ChromaticAberration Then Return 0
                 Return CInt(Math.Ceiling(Math.Clamp(Radius, 0, 100) + If(Kind = XamlEffectKind.DropShadow, Math.Abs(ShadowDepth), 0))) + 2
             End Get
@@ -39,8 +42,21 @@ Namespace [Shared].Drawing.UI.Primitives
         Private scratch As RenderTarget2D
         Private shader As Effect
         Private batch As SpriteBatch
+        Private ReadOnly renderers As New Runtime.CompilerServices.ConditionalWeakTable(Of UI.SceneElement, XamlNativeEffect)
+        Private ReadOnly rendererReferences As New List(Of WeakReference(Of XamlNativeEffect))
 
-        Friend Function Render(device As GraphicsDevice, width As Integer, height As Integer, draw As Action) As Texture2D
+        Friend Function Render(device As GraphicsDevice, width As Integer, height As Integer, draw As Action, Optional owner As UI.SceneElement = Nothing) As Texture2D
+            If owner IsNot Nothing Then
+                Dim renderer = renderers.GetValue(owner, Function(key)
+                                                            Dim created As New XamlNativeEffect
+                                                            rendererReferences.Add(New WeakReference(Of XamlNativeEffect)(created))
+                                                            Return created
+                                                        End Function)
+                renderer.Kind = Me.Kind : renderer.Radius = Me.Radius : renderer.Amount = Me.Amount
+                renderer.Phase = Me.Phase : renderer.Angle = Me.Angle : renderer.ShadowDepth = Me.ShadowDepth
+                renderer.Direction = Me.Direction : renderer.Color = Me.Color : renderer.Opacity = Me.Opacity
+                Return renderer.Render(device, width, height, draw)
+            End If
             If shader Is Nothing Then
                 Using stream = GetType(XamlNativeEffect).Assembly.GetManifestResourceStream("ProjectZ.Resources.XamlEffects.mgfx")
                     Using bytes As New IO.MemoryStream()
@@ -58,6 +74,7 @@ Namespace [Shared].Drawing.UI.Primitives
             device.SetRenderTarget(source)
             device.Clear(Color.Transparent)
             draw()
+            If Kind = XamlEffectKind.PassThrough Then Return source
             shader.Parameters("TexelSize")?.SetValue(New Vector2(1.0F / width, 1.0F / height))
             shader.Parameters("Amount").SetValue(Amount)
             shader.Parameters("Phase").SetValue(Phase)
@@ -82,7 +99,13 @@ Namespace [Shared].Drawing.UI.Primitives
             Return source
         End Function
 
-        Friend Sub Composite(device As GraphicsDevice, texture As Texture2D, destination As Rectangle)
+        Friend Sub Composite(device As GraphicsDevice, texture As Texture2D, destination As Rectangle, Optional owner As UI.SceneElement = Nothing, Optional rotation As Single = 0, Optional pivot As Vector2 = Nothing)
+            If owner IsNot Nothing Then
+                Dim renderer As XamlNativeEffect = Nothing
+                If Not renderers.TryGetValue(owner, renderer) Then Throw New InvalidOperationException("The effect must render its visual before compositing.")
+                renderer.Composite(device, texture, destination, Nothing, MathHelper.ToRadians(owner.RenderRotation), pivot)
+                Return
+            End If
             If Kind = XamlEffectKind.DropShadow Then
                 shader.Parameters("Mode").SetValue(2.0F)
                 shader.Parameters("BlurStep").SetValue(New Vector2(0, Math.Clamp(Radius, 0, 100) * GraphicsQuality.ForDevice(device).RenderScale.Y / 4 / texture.Height))
@@ -90,7 +113,11 @@ Namespace [Shared].Drawing.UI.Primitives
             Else
                 batch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, device.RasterizerState)
             End If
-            batch.Draw(texture, destination, Color.White)
+            If rotation = 0 Then
+                batch.Draw(texture, destination, Color.White)
+            Else
+                batch.Draw(texture, New Vector2(destination.X, destination.Y) + pivot, Nothing, Color.White, rotation, pivot, New Vector2(destination.Width / CSng(texture.Width), destination.Height / CSng(texture.Height)), SpriteEffects.None, 0)
+            End If
             batch.End()
         End Sub
 
@@ -105,7 +132,13 @@ Namespace [Shared].Drawing.UI.Primitives
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
+            For Each reference In rendererReferences
+                Dim renderer As XamlNativeEffect = Nothing
+                If reference.TryGetTarget(renderer) Then renderer.Dispose()
+            Next
+            rendererReferences.Clear() : renderers.Clear()
             source?.Dispose() : scratch?.Dispose() : shader?.Dispose() : batch?.Dispose()
+            source = Nothing : scratch = Nothing : shader = Nothing : batch = Nothing
         End Sub
     End Class
 End Namespace

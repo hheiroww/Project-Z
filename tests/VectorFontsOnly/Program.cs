@@ -1,0 +1,87 @@
+using System.Globalization;
+using System.IO;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
+using ProjectZ.Shared.Content;
+
+internal static class Program
+{
+    [STAThread]
+    private static int Main()
+    {
+        int checks = 0;
+        void Require(bool condition, string description)
+        {
+            if (!condition) throw new InvalidOperationException(description);
+            checks++;
+            Console.WriteLine("PASS " + description);
+        }
+
+        string missingRoot = Path.Combine(Path.GetTempPath(), "ProjectZ-vector-only-" + Guid.NewGuid().ToString("N"));
+        using var content = new NoAssetContent(new GameServiceContainer()) { RootDirectory = missingRoot };
+        var resources = new ContentContainer(content, null, missingRoot);
+        var previousCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            resources.LoadVectorFontsOnly();
+            Require(resources.Fonts.Count == 0 && content.LoadCalls == 0,
+                "vector-only loading never reads compiled font assets");
+            Require(!Directory.Exists(missingRoot) && resources.VectorFonts.Count == 8,
+                "default outline fonts load without creating a content directory");
+            Require(resources.TryGetVectorFont("SegoeUI_20", out var twenty),
+                "the formerly missing 20-point registration heading resolves from the system font file");
+            var size = twenty.Measure("Create your SocketJack account");
+            Require(size.X > 0 && size.Y > 0 && twenty.LineSpacing > 0,
+                "20-point font supplies nonzero native layout and caret metrics");
+            Require(resources.TryGetVectorFont("SegoeUI_20", out var repeated) && ReferenceEquals(twenty, repeated),
+                "measurement and rendering resolve the same cached font instance");
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+            Require(resources.TryGetVectorFont("SegoeUI_20.5", out var fractional)
+                && fractional.Measure("Scale").Y > twenty.Measure("Scale").Y,
+                "fractional point sizes resolve with culture-independent names");
+            Require(!resources.TryGetVectorFont("SegoeUI_20,5", out var invalid) && invalid is null,
+                "culture-specific malformed names are not silently interpreted");
+            foreach (string name in new[] { "SegoeUI_0", "SegoeUI_-20", "SegoeUI_NaN", "SegoeUI_Infinity", "SegoeUI_513", "UnknownFont_20" })
+                Require(!resources.TryGetVectorFont(name, out invalid) && invalid is null,
+                    "invalid or unregistered font name rejects: " + name);
+            var unicode = twenty.Measure("heirow — Δ音楽 😀");
+            Require(unicode.X > 0 && unicode.Y > 0,
+                "native shaping accepts Unicode without compiled-font glyph sanitization");
+            string customFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "consola.ttf");
+            resources.LoadVectorFont("CustomOutline", customFile, 16);
+            Require(resources.TryGetVectorFont("CustomOutline", out var custom)
+                && custom.FilePath.Equals(customFile, StringComparison.OrdinalIgnoreCase)
+                && custom.Measure("123abc").X > 0,
+                "explicit custom font files preserve their registered identity and metrics");
+            Require(!resources.TryGetVectorFont(null!, out invalid) && invalid is null,
+                "missing font names fail resolution without dictionary exceptions");
+            resources.LoadAllContent();
+            Require(resources.Fonts.Count == 0 && content.LoadCalls == 0 && !Directory.Exists(missingRoot),
+                "compatibility loading also permits asset-free native text");
+            Require(resources.TryGetVectorFont("SegoeUI_20", out repeated) && ReferenceEquals(twenty, repeated),
+                "default loading preserves already resolved font instances");
+            Console.WriteLine($"PASS {checks} vector resolver checks; no UI or graphics device was created.");
+            return 0;
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(error);
+            return 1;
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+            foreach (var font in resources.VectorFonts.Values) font.Dispose();
+        }
+    }
+
+    private sealed class NoAssetContent(IServiceProvider services) : ContentManager(services)
+    {
+        public int LoadCalls { get; private set; }
+        public override T Load<T>(string assetName)
+        {
+            LoadCalls++;
+            throw new InvalidOperationException("A vector-only path attempted to load a compiled asset: " + assetName);
+        }
+    }
+}

@@ -20,6 +20,16 @@ Namespace [Shared].Drawing
 #Region "Properties"
 
         Friend renderTarget As RenderTarget2D
+        Private renderRevisionValue As Long = 1
+        Public ReadOnly Property RenderRevision As Long
+            Get
+                Return Threading.Interlocked.Read(renderRevisionValue)
+            End Get
+        End Property
+        ''' <summary>Request presentation after a visual or input change.</summary>
+        Public Sub RequestRender()
+            Threading.Interlocked.Increment(renderRevisionValue)
+        End Sub
 
         Public Function sender() As Game
             Return _sender
@@ -41,6 +51,29 @@ Namespace [Shared].Drawing
 
         Private _MouseState As MouseState
         Friend Property CurrentKeyboardState As KeyboardState
+        Public ReadOnly Property InputKeyboardState As KeyboardState
+            Get
+                Return CurrentKeyboardState
+            End Get
+        End Property
+        Private pointerCapture As SceneElement
+        Public ReadOnly Property CapturedPointerElement As SceneElement
+            Get
+                If pointerCapture IsNot Nothing AndAlso pointerCapture.IsDisposed Then pointerCapture = Nothing
+                Return pointerCapture
+            End Get
+        End Property
+        Public Sub CapturePointer(element As SceneElement)
+            If element IsNot Nothing AndAlso element.OwnerScene IsNot Me Then Throw New ArgumentException("Capture belongs to the element's scene.")
+            If pointerCapture Is element Then Return
+            Dim previous = pointerCapture
+            pointerCapture = element
+            If previous IsNot Nothing Then SceneEvents.RaiseEvent(previous, New SceneRoutedEventArgs(SceneRoutedEvent.Register("LostMouseCapture", SceneEventRouting.Bubble), previous))
+            If element IsNot Nothing Then SceneEvents.RaiseEvent(element, New SceneRoutedEventArgs(SceneRoutedEvent.Register("GotMouseCapture", SceneEventRouting.Bubble), element))
+        End Sub
+        Public Sub ReleasePointerCapture(element As SceneElement)
+            If pointerCapture Is element Then CapturePointer(Nothing)
+        End Sub
         Public Property SpriteSettings As XNA.SpriteBatchPropertySet
         Public isInitialized As Boolean = False
         Public Property isCursorVisible As Boolean = False
@@ -104,6 +137,7 @@ Namespace [Shared].Drawing
         Private LastSelected As SceneElement
         Private KeyboardButton As UI.Input.Button
         Private KeyboardButtonKey As Keys
+        Private KeyboardButtonWasDefault As Boolean
         Public ReadOnly Property FocusedElement As SceneElement
             Get
                 Return LastSelected
@@ -200,11 +234,23 @@ Namespace [Shared].Drawing
         Private HoveredElement As SceneElement  ' Currently hovered element for reliable enter/leave
 
         Protected Friend Sub MouseLeftDown(p As Point)
+            RequestRender()
             RaiseEvent OnMouseLeftDown(p)
             _MouseLeftDown(PointToElement(p), p)
         End Sub
 
         Private Sub _MouseLeftDown(Element As SceneElement, p As Point)
+            Element = If(CapturedPointerElement, Element)
+            ' A new pointer target always releases previous capture, including a
+            ' control disabled or hidden by its own action before mouse-up.
+            If LastElement IsNot Nothing Then LastElement.ReleasePointerPress()
+            LastElement = Nothing
+            KeyboardButton = Nothing
+            If CanFocus(Element) Then
+                FocusElement(Element)
+            Else
+                ClearFocus()
+            End If
             If Element IsNot Nothing AndAlso Element.isEnabled Then
                 LastElement = Element
                 ClickTargetElement = Element  ' Save for click event
@@ -212,37 +258,15 @@ Namespace [Shared].Drawing
                 MouseDownPoint = p
                 MouseIsDown = True
                 Element.OnMouseLeftDown(p.Subtract(Element.Position))
-                If LastSelected Is Nothing Then
-                    If Element.CanSelect Then
-                        Element.isSelected = True
-                        LastSelected = Element
-                    End If
-                End If
             Else
                 ClickTargetElement = Nothing
                 DragDropElement = Nothing
-                If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
-                    If LastSelected.CanSelect Then
-                        LastSelected.isSelected = False
-                    End If
-                    LastSelected = Nothing
-                End If
-            End If
-            If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
-                If LastSelected.CanSelect AndAlso LastSelected IsNot Element Then
-                    LastSelected.isSelected = False
-                    If Element IsNot Nothing AndAlso Element.isEnabled Then
-                        If Element.CanSelect AndAlso Not Element.isSelected Then
-                            Element.isSelected = True
-                            LastSelected = Element
-                        End If
-                    End If
-                End If
             End If
             ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseLeftDown(s.Interp(p)))
         End Sub
 
         Protected Friend Sub MouseLeftUp(p As Point)
+            RequestRender()
             RaiseEvent OnMouseLeftUp(p)
 
             ' Store reference before clearing
@@ -253,6 +277,7 @@ Namespace [Shared].Drawing
                 elementToRelease.OnMouseLeftUp(p.Subtract(elementToRelease.Position))
                 elementToRelease.OnUserInvalidated()
             End If
+            If elementToRelease IsNot Nothing Then elementToRelease.ReleasePointerPress()
 
             ' Reset state but keep ClickTargetElement and DragDropElement for their respective events
             MouseIsDown = False
@@ -279,15 +304,27 @@ Namespace [Shared].Drawing
             ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseLeftClick(s.Interp(p)))
         End Sub
 
+        Private rightPointerTarget As SceneElement
+        Protected Friend Sub MouseRightDown(p As Point)
+            rightPointerTarget = If(CapturedPointerElement, PointToElement(p))
+            If rightPointerTarget IsNot Nothing AndAlso rightPointerTarget.isEnabled Then rightPointerTarget.OnMouseRightDown(p.Subtract(rightPointerTarget.Position))
+            ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseRightDown(s.Interp(p)))
+        End Sub
+        Protected Friend Sub MouseRightUp(p As Point)
+            Dim target = If(rightPointerTarget, If(CapturedPointerElement, PointToElement(p)))
+            If target IsNot Nothing AndAlso target.isEnabled Then target.OnMouseRightUp(p.Subtract(target.Position))
+            ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseRightUp(s.Interp(p)))
+        End Sub
         Protected Friend Sub MouseRightClick(p As Point)
             RaiseEvent OnMouseRightClick(p)
-            Dim Element As SceneElement = PointToElement(p)
+            Dim Element As SceneElement = If(rightPointerTarget, If(CapturedPointerElement, PointToElement(p)))
             If Element IsNot Nothing AndAlso Element.isEnabled Then
                 Element.OnMouseRightClick(p.Subtract(Element.Position))
                 Element.OnUserInvalidated()
             End If
 
             ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseRightClick(s.Interp(p)))
+            rightPointerTarget = Nothing
         End Sub
 
         Protected Friend Sub MouseWheel(delta As Integer, p As Point)
@@ -349,13 +386,14 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub MouseMove(currentPoint As Point, lastPoint As Point)
+            RequestRender()
             RaiseEvent OnMouseMove(currentPoint, lastPoint)
             If Cursor IsNot Nothing AndAlso isCursorVisible Then
                 Cursor.Position = New Vector2(currentPoint.X + 1, currentPoint.Y + 1)
                 CursorBorder.Position = New Vector2(currentPoint.X, currentPoint.Y)
             End If
 
-            Dim currentElement As SceneElement = PointToElement(currentPoint)
+            Dim currentElement As SceneElement = If(CapturedPointerElement, PointToElement(currentPoint))
 
             ' Handle mouse leave - use tracked HoveredElement for reliable state management
             If HoveredElement IsNot Nothing AndAlso HoveredElement IsNot currentElement Then
@@ -382,6 +420,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub CancelPointerInput()
+            CapturePointer(Nothing)
             KeyboardButton = Nothing
             RaiseEvent OnPointerCancelled()
             If LastElement IsNot Nothing AndAlso LastElement.isEnabled AndAlso LastElement.isMouseDown Then
@@ -414,8 +453,9 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyDown(Key As Keys, KeyboardState As KeyboardState)
-            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyDown", Key) Then Return
+            RequestRender()
             CurrentKeyboardState = KeyboardState
+            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyDown", Key) Then Return
             If Key = Keys.Tab Then
                 MoveFocus(KeyboardState.IsKeyDown(Keys.LeftShift) OrElse KeyboardState.IsKeyDown(Keys.RightShift))
                 Return
@@ -423,7 +463,28 @@ Namespace [Shared].Drawing
             If (Key = Keys.Enter OrElse Key = Keys.Space) AndAlso TypeOf LastSelected Is UI.Input.Button AndAlso CanFocus(LastSelected) Then
                 KeyboardButton = DirectCast(LastSelected, UI.Input.Button)
                 KeyboardButtonKey = Key
+                KeyboardButtonWasDefault = False
                 Return
+            End If
+            If Key = Keys.Enter OrElse Key = Keys.Escape Then
+                If Not (Key = Keys.Enter AndAlso TypeOf LastSelected Is UI.Input.Textbox AndAlso DirectCast(LastSelected, UI.Input.Textbox).AcceptsReturn) Then
+                    Dim focusRoot = LastSelected
+                    While focusRoot IsNot Nothing AndAlso focusRoot.Parent IsNot Nothing
+                        focusRoot = focusRoot.Parent
+                    End While
+                    Dim button = Elements.OfType(Of UI.Input.Button)().FirstOrDefault(Function(candidate)
+                                                                                         If Not CanFocus(candidate) OrElse Not If(Key = Keys.Enter, candidate.IsDefault, candidate.IsCancel) Then Return False
+                                                                                         Dim root As SceneElement = candidate
+                                                                                         While root.Parent IsNot Nothing
+                                                                                             root = root.Parent
+                                                                                         End While
+                                                                                         Return focusRoot Is Nothing OrElse root Is focusRoot
+                                                                                     End Function)
+                    If button IsNot Nothing Then
+                        KeyboardButton = button : KeyboardButtonKey = Key : KeyboardButtonWasDefault = True
+                        Return
+                    End If
+                End If
             End If
             RaiseEvent OnKeyDown(Key, KeyboardState)
             If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
@@ -435,13 +496,14 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub KeyUp(Key As Keys, KeyboardState As KeyboardState)
-            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyUp", Key) Then Return
             CurrentKeyboardState = KeyboardState
+            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyUp", Key) Then Return
             If Key = Keys.Tab Then Return
             If KeyboardButton IsNot Nothing AndAlso Key = KeyboardButtonKey Then
                 Dim target = KeyboardButton
                 KeyboardButton = Nothing
-                If target Is LastSelected AndAlso target.isSelected AndAlso CanFocus(target) Then target.OnMouseLeftClick(New Point(CInt(target.Size.X / 2), CInt(target.Size.Y / 2)))
+                If CanFocus(target) AndAlso ((target Is LastSelected AndAlso target.isSelected) OrElse KeyboardButtonWasDefault) Then target.OnMouseLeftClick(New Point(CInt(target.Size.X / 2), CInt(target.Size.Y / 2)))
+                KeyboardButtonWasDefault = False
                 Return
             End If
             RaiseEvent OnKeyUp(Key, KeyboardState)
@@ -462,13 +524,13 @@ Namespace [Shared].Drawing
 
         Public Function MeasureText(Font As String, Text As String) As Vector2
             Dim vectorFont As VectorFont = Nothing
-            If contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.Measure(Text)
+            If contentCollection.TryGetVectorFont(Font, vectorFont) Then Return vectorFont.Measure(Text)
             Return contentCollection.Fonts(Font).MeasureString(SanitizeText(Font, Text))
         End Function
 
         Public Function TextLineSpacing(font As String) As Integer
             Dim vectorFont As VectorFont = Nothing
-            If contentCollection.VectorFonts.TryGetValue(font, vectorFont) Then Return vectorFont.LineSpacing
+            If contentCollection.TryGetVectorFont(font, vectorFont) Then Return vectorFont.LineSpacing
             Return contentCollection.Fonts(font).LineSpacing
         End Function
 
@@ -481,7 +543,8 @@ Namespace [Shared].Drawing
 
         Public Function SanitizeText(Font As String, text As String) As String
             If String.IsNullOrEmpty(text) Then Return If(text, String.Empty)
-            If contentCollection.VectorFonts.ContainsKey(Font) Then Return text
+            Dim vectorFont As VectorFont = Nothing
+            If contentCollection.TryGetVectorFont(Font, vectorFont) Then Return text
             Dim spriteFont = contentCollection.Fonts(Font)
             Dim supported As HashSet(Of Char) = Nothing
             If Not fontCharacters.TryGetValue(spriteFont, supported) Then
@@ -514,7 +577,7 @@ Namespace [Shared].Drawing
             Dim ordered = GetRenderOrderedElements()
             For i As Integer = ordered.Count - 1 To 0 Step -1
                 Dim element = ordered(i)
-                If Not element.ContainsPoint(p) Then Continue For
+                If Not element.IsInsideInputClip(p) OrElse Not element.ContainsPoint(p) Then Continue For
                 ' Reject off-point geometry before walking the parent chain.
                 If Not IsEffectivelyVisible(element) OrElse Not IsEffectivelyEnabled(element) Then Continue For
                 If Not element.isMouseBypassEnabled Then Return element
@@ -533,6 +596,7 @@ Namespace [Shared].Drawing
         ''' </summary>
         Private Function HitTestElement(element As SceneElement, p As Point) As SceneElement
             If Not IsEffectivelyVisible(element) OrElse Not IsEffectivelyEnabled(element) Then Return Nothing
+            If Not element.IsInsideInputClip(p) Then Return Nothing
 
             ' First check if the point is even within this element's bounds
             Dim elementContainsPoint As Boolean = element.ContainsPoint(p)
@@ -582,7 +646,7 @@ Namespace [Shared].Drawing
             Dim ordered = GetRenderOrderedElements()
             For i As Integer = ordered.Count - 1 To 0 Step -1
                 Dim element = ordered(i)
-                If Not element.ContainsPoint(p) Then Continue For
+                If Not element.IsInsideInputClip(p) OrElse Not element.ContainsPoint(p) Then Continue For
                 If IsEffectivelyVisible(element) AndAlso IsEffectivelyEnabled(element) AndAlso
                    Not element.isMouseBypassEnabled Then Elements.Add(element)
             Next
@@ -594,6 +658,7 @@ Namespace [Shared].Drawing
         ''' </summary>
         Private Sub HitTestElementAll(element As SceneElement, p As Point, results As List(Of SceneElement))
             If Not IsEffectivelyVisible(element) OrElse Not IsEffectivelyEnabled(element) Then Return
+            If Not element.IsInsideInputClip(p) Then Return
 
             Dim elementContainsPoint As Boolean = element.ContainsPoint(p)
 
@@ -622,9 +687,13 @@ Namespace [Shared].Drawing
 
         ''' <summary>Selects an input element for an embedding host.</summary>
         Public Sub FocusElement(element As SceneElement)
+            If element Is Nothing Then
+                ClearFocus()
+                Return
+            End If
             If Not CanFocus(element) Then Return
             KeyboardButton = Nothing
-            If LastSelected IsNot Nothing AndAlso LastSelected IsNot element AndAlso LastSelected.CanSelect Then
+            If LastSelected IsNot Nothing AndAlso LastSelected IsNot element Then
                 LastSelected.isSelected = False
             End If
             LastSelected = element
@@ -632,8 +701,17 @@ Namespace [Shared].Drawing
             element.OnUserInvalidated()
         End Sub
 
+        Private Sub ClearFocus()
+            Dim previous = LastSelected
+            LastSelected = Nothing
+            KeyboardButton = Nothing
+            If previous Is Nothing Then Return
+            previous.isSelected = False
+            previous.OnUserInvalidated()
+        End Sub
+
         Private Function CanFocus(element As SceneElement) As Boolean
-            Return element IsNot Nothing AndAlso element.CanSelect AndAlso ContainsElement(element) AndAlso IsEffectivelyVisible(element) AndAlso IsEffectivelyEnabled(element)
+            Return element IsNot Nothing AndAlso Not element.IsDisposed AndAlso element.CanSelect AndAlso ContainsElement(element) AndAlso IsEffectivelyVisible(element) AndAlso IsEffectivelyEnabled(element)
         End Function
 
         ''' <summary>Move through visible enabled tab stops, wrapping at either end.</summary>
@@ -652,6 +730,10 @@ Namespace [Shared].Drawing
 
         Private Sub QueueElementTree(Element As SceneElement)
             If Element Is Nothing OrElse Element.IsDisposed Then Return
+            ' A tab or container may detach and reattach a live subtree before
+            ' the next frame. Its latest attachment cancels the deferred removal.
+            Dim registeredIndex As Integer
+            If GUID_INDEX.TryGetValue(Element.GUID, registeredIndex) Then RemoveQueue.RemoveAll(Function(index) index = registeredIndex)
             If Not AddQueue.Contains(Element) AndAlso Not ContainsElement(Element) Then
                 AddQueue.Add(Element)
             End If
@@ -729,7 +811,7 @@ Namespace [Shared].Drawing
             ' order is hierarchical.  Sorting here preserves Panel.ZIndex inside
             ' each parent and promotes an IsOverlay ancestor together with all of
             ' its descendants above ordinary content added at any later time.
-            If ordered.Any(Function(element) element.VisualEffect IsNot Nothing AndAlso element.VisualEffect.IsActive AndAlso IsEffectivelyVisible(element)) Then
+            If ordered.Any(Function(element) element.DrawingEffect IsNot Nothing AndAlso element.DrawingEffect.IsActive AndAlso IsEffectivelyVisible(element)) Then
                 DrawXamlEffectCanvas(ordered, gd, viewportRect, ForceClip)
             Else
                 For Each E As SceneElement In ordered
@@ -756,6 +838,7 @@ Namespace [Shared].Drawing
         End Function
 
         Friend Sub InvalidateRenderOrder()
+            RequestRender()
             RenderOrderDirty = True
         End Sub
 
@@ -832,7 +915,7 @@ Namespace [Shared].Drawing
         Private Shared Function IsEffectivelyVisible(element As SceneElement) As Boolean
             Dim current = element
             While current IsNot Nothing
-                If current.IsDisposed OrElse Not current.isVisible OrElse current.IsLayoutVirtualized Then Return False
+                If current.IsDisposed OrElse Not current.isVisible OrElse current.IsLayoutVirtualized OrElse current.SuppressVisual Then Return False
                 current = current.Parent
             End While
             Return True
@@ -863,7 +946,7 @@ Namespace [Shared].Drawing
             While clipOwner IsNot Nothing
                 If clipOwner.Clip Then
                     hasClip = True
-                    clipRect = Rectangle.Intersect(clipRect, clipOwner.Rectangle)
+                    clipRect = Rectangle.Intersect(clipRect, clipOwner.ClippingRectangle)
                 End If
                 clipOwner = clipOwner.Parent
             End While
@@ -1038,6 +1121,7 @@ Namespace [Shared].Drawing
         Public Property UsesNativeTextInput As Boolean
 
         Protected Friend Sub InsertNativeText(value As String)
+            If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("TextInput", value) Then Return
             Dim box = TryCast(LastSelected, UI.Input.Textbox)
             If box IsNot Nothing AndAlso box.isEnabled AndAlso box.isSelected Then box.ReplaceSelection(value)
             ProjectionHosts.ForEach(Sub(s) s.TargetScene.InsertNativeText(value))
@@ -1228,6 +1312,7 @@ Namespace [Shared].Drawing
             ' This allows remove-and-readd patterns (like BringToFront) to work correctly
             CheckForRemovedChildren()
             CheckForAddedChildren()
+            If LastSelected IsNot Nothing AndAlso Not CanFocus(LastSelected) Then ClearFocus()
 
             If Not isInitialized Then
                 Initialize(gameTime)
@@ -1241,6 +1326,7 @@ Namespace [Shared].Drawing
                 If Not element.IsDisposed Then element.Tick(gameTime)
             Next
             If tickStarted <> 0 Then _LastElementTickMilliseconds = Diagnostics.Stopwatch.GetElapsedTime(tickStarted).TotalMilliseconds
+            RaiseEvent FrameUpdated(gameTime)
 
             InternalFPS += 1
             Dim MS As Integer = gameTime.ElapsedGameTime.Milliseconds
@@ -1256,6 +1342,8 @@ Namespace [Shared].Drawing
         Public Sub New()
 
         End Sub
+        ''' <summary>Advances visual clocks independently of GPU presentation.</summary>
+        Public Event FrameUpdated(gameTime As GameTime)
 
         Public Sub New(SceneManager As SceneManager)
             InitialConstructor(SceneManager)

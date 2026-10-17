@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Remove="tests\ShellTransfer\**\*.vb" />
+  </ItemGroup>
 
   <PropertyGroup>
 	<TargetFramework>net8.0-windows7.0</TargetFramework>
@@ -16,85 +19,91 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2.8.2.0</Version>
+	<Version>2026.10.17.0</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2.8.2 adds Disabled, Designer only, and Designer + code-behind modes; preserves manual source in designer-only builds; fixes generated XAML copying in Visual Studio; and keeps the Runtime example open for interactive testing.</PackageReleaseNotes>
+    <PackageReleaseNotes>2.8.4 fixes false DX12 GPU fence hang detection and fatal cleanup, captures original native graphics HRESULTs and dumps, and includes the patched runtime with automatic framework diagnostics in build and publish outputs.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
 	<PackageProjectUrl>https://github.com/hheiroww/Project-Z</PackageProjectUrl>
 	<ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
+    <!-- Declare the supported SDK floor so a consumer's compatible direct pin
+         does not become a package downgrade. The browser runtime updates separately. -->
+	<ProjectZWebView2SdkVersion Condition="'$(ProjectZWebView2SdkVersion)' == ''">[1.0.3124.44,)</ProjectZWebView2SdkVersion>
 	<!-- Published packages must not depend on an unpublished sibling checkout. -->
 	<SocketJackProject Condition="'$(UseLocalSocketJack)' == 'true' and '$(SocketJackProject)' == ''">..\..\Documents\GitHub\SocketJack\SocketJack\SocketJack.csproj</SocketJackProject>
 	<TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectZModelImport</TargetsForTfmSpecificBuildOutput>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">$(DefineConstants),PROJECTZ_DIRECTX12=-1</DefineConstants>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">$(DefineConstants),PROJECTZ_DIRECTX11=-1</DefineConstants>
-  </PropertyGroup>
+</PropertyGroup>
 
-  <ItemGroup>
-    <!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
-    <Compile Remove="tests\WpfImport\**;artifacts\**" />
-    <Page Remove="tests\WpfImport\**;artifacts\**;Project Z XAML Codegen\**" />
-    <EmbeddedResource Remove="tests\WpfImport\**;artifacts\**" />
-    <Compile Remove="obj\**" />
-    <Compile Remove="packages\**" />
-    <Compile Remove="Project Z Application\**" />
-    <Compile Remove="Project Z Audio\**" />
-    <Compile Remove="Project Z Test\**" />
-    <Compile Remove="Project Z Tower Defense\**" />
-    <Compile Remove="Project Z Video FX\**" />
-    <Compile Remove="Project Z.sln.ide\**" />
-    <Compile Remove="ProjectTemplate\**" />
-    <Compile Remove="heirowSnap Project Z\**" />
-    <Compile Remove="heirowSnap Protocol\**" />
-    <Compile Remove="heirowSnap Legacy Settings\**" />
-    <None Remove="obj\**" />
-    <None Remove="packages\**" />
-    <None Remove="Project Z Application\**" />
-    <None Remove="Project Z Audio\**" />
-    <None Remove="Project Z Test\**" />
-    <None Remove="Project Z Tower Defense\**" />
-    <None Remove="Project Z Video FX\**" />
-    <None Remove="Project Z.sln.ide\**" />
-    <None Remove="ProjectTemplate\**" />
-    <None Remove="heirowSnap Project Z\**" />
-    <None Remove="heirowSnap Protocol\**" />
-    <Page Remove="obj\**" />
-    <Page Remove="packages\**" />
-    <Page Remove="Project Z Tower Defense\**" />
-    <Page Remove="heirowSnap Project Z\**" />
-    <Page Remove="heirowSnap Protocol\**" />
-  </ItemGroup>
+<ItemGroup>
+	<!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
+	<Compile Remove="tests\WpfImport\**;artifacts\**" />
+	<Page Remove="tests\WpfImport\**;artifacts\**;Project Z XAML Codegen\**" />
+	<EmbeddedResource Remove="tests\WpfImport\**;artifacts\**" />
+	<Compile Remove="obj\**" />
+	<Compile Remove="packages\**" />
+	<Compile Remove="Project Z Application\**" />
+	<Compile Remove="Project Z Diagnostics\**" />
+	<Compile Remove="Project Z Audio\**" />
+	<Compile Remove="Project Z Test\**" />
+	<Compile Remove="Project Z Tower Defense\**" />
+	<Compile Remove="Project Z Video FX\**" />
+	<Compile Remove="Project Z.sln.ide\**" />
+	<Compile Remove="ProjectTemplate\**" />
+	<Compile Remove="heirowSnap Project Z\**" />
+	<Compile Remove="heirowSnap Protocol\**" />
+	<Compile Remove="heirowSnap Legacy Settings\**" />
+	<None Remove="obj\**" />
+	<None Remove="packages\**" />
+	<None Remove="Project Z Application\**" />
+	<None Remove="Project Z Audio\**" />
+	<None Remove="Project Z Test\**" />
+	<None Remove="Project Z Tower Defense\**" />
+	<None Remove="Project Z Video FX\**" />
+	<None Remove="Project Z.sln.ide\**" />
+	<None Remove="ProjectTemplate\**" />
+	<None Remove="heirowSnap Project Z\**" />
+	<None Remove="heirowSnap Protocol\**" />
+	<Page Remove="obj\**" />
+	<Page Remove="packages\**" />
+	<Page Remove="Project Z Tower Defense\**" />
+	<Page Remove="heirowSnap Project Z\**" />
+	<Page Remove="heirowSnap Protocol\**" />
+</ItemGroup>
 
-  <!-- MonoGame 3.8.5.1 native DX12 is the default. WindowsDX remains available
+<!-- MonoGame 3.8.5.1 native DX12 is the default. WindowsDX remains available
        as a migration fallback through -p:ProjectZGraphicsBackend=DirectX11. -->
-  <ItemGroup>
-    <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
-    <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
-    <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-    <PackageReference Include="SocketJack" Version="2026.15.0" Condition="!Exists('$(SocketJackProject)')" />
-    <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
-    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
-    <!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
-    <PackageReference Include="System.Net.Http" Version="4.3.4" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-  </ItemGroup>
+<ItemGroup>
+	<PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
+	<PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
+	<PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+	<PackageReference Include="SocketJack" Version="2026.15.0" Condition="!Exists('$(SocketJackProject)')" />
+	<PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
+	<PackageReference Include="LibTessDotNet" Version="1.1.15" />
+	<PackageReference Include="Microsoft.Web.WebView2" Version="$(ProjectZWebView2SdkVersion)" />
+	<!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
+	<PackageReference Include="System.Net.Http" Version="4.3.4" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+	<PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+</ItemGroup>
 
-  <Target Name="ValidateProjectZGraphicsBackend" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11'" Text="ProjectZGraphicsBackend must be DirectX12 or DirectX11." />
-  </Target>
+<Target Name="ValidateProjectZGraphicsBackend" BeforeTargets="PrepareForBuild">
+	<Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11'" Text="ProjectZGraphicsBackend must be DirectX12 or DirectX11." />
+</Target>
 
-  <ItemGroup Condition="Exists('$(SocketJackProject)')">
-    <ProjectReference Include="$(SocketJackProject)" />
-  </ItemGroup>
+<ItemGroup Condition="Exists('$(SocketJackProject)')">
+	<ProjectReference Include="$(SocketJackProject)" />
+</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
-  </ItemGroup>
+<ItemGroup>
+	<!--  <ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" /> -->
+	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
+	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" />
+</ItemGroup>
 
   <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
   <Target Name="IncludeProjectZModelImport">
@@ -168,5 +177,29 @@
   </ItemGroup>
 
   <!-- Include all VB code files by default (SDK-style) -->
+  <Target Name="IncludeProjectZDiagnosticsRuntime" BeforeTargets="AssignTargetPaths;_GetPackageFiles" Condition="'$(ProjectZDiagnosticsPrepared)' != 'true'">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Build" Condition="'$(NoBuild)' != 'true'" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;Platform;ArtifactsPath;GeneratePackageOnBuild" />
+    <PropertyGroup><ProjectZDiagnosticsPrepared>true</ProjectZDiagnosticsPrepared></PropertyGroup>
+    <ItemGroup>
+      <_ProjectZDiagnosticPayload Include="$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.exe;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.dll;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.deps.json;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.runtimeconfig.json" />
+      <Content Include="@(_ProjectZDiagnosticPayload)">
+        <Link>%(_ProjectZDiagnosticPayload.Filename)%(_ProjectZDiagnosticPayload.Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <Pack>true</Pack>
+        <PackagePath>tools\diagnostics\</PackagePath>
+      </Content>
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
+    <Content Include="ThirdParty\MonoGame.Native\win-x64\mgruntime.dll;ThirdParty\MonoGame.Native\win-x64\runtime.json;ThirdParty\MonoGame.Native\LICENSE*" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
+      <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Pack>true</Pack>
+      <PackagePath>tools\native\win-x64\</PackagePath>
+    </Content>
+  </ItemGroup>
 
 </Project>

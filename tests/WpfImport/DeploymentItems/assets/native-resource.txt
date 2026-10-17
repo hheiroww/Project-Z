@@ -1,0 +1,1 @@
+WPF Resource payload must remain available to native XAML at runtime and after publishing.

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="assets/output.txt" Link="config/live.txt" TargetPath="config/live.txt" CopyToOutputDirectory="Always" CopyToPublishDirectory="Never" />
+    <None Include="../SharedAssets/deployment-linked.txt" Link="data/external.txt" TargetPath="data/external.txt" CopyToOutputDirectory="Never" CopyToPublishDirectory="Always" />
+    <EmbeddedResource Include="assets/resource.txt" LogicalName="Fixture.Payload" />
+    <Resource Include="assets/native-resource.txt" />
+  </ItemGroup>
+</Project>

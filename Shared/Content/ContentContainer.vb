@@ -1,6 +1,7 @@
 ﻿Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework.Graphics
 Imports Microsoft.Xna.Framework.Content
+Imports System.Globalization
 
 Namespace [Shared].Content
 
@@ -17,6 +18,18 @@ Namespace [Shared].Content
 
         Public Property Fonts As New Dictionary(Of String, SpriteFont)
         Public ReadOnly Property VectorFonts As New Dictionary(Of String, VectorFont)
+        Private ReadOnly systemVectorFonts As New Dictionary(Of String, VectorFont)(StringComparer.Ordinal)
+        Private ReadOnly systemFontOrder As New Queue(Of String)
+
+        Public Shared Function SystemFontName(family As String, weight As Integer, pointSize As Single) As String
+            If String.IsNullOrWhiteSpace(family) Then Throw New ArgumentException("Font family is required.", NameOf(family))
+            If weight < 1 OrElse weight > 999 Then Throw New ArgumentOutOfRangeException(NameOf(weight))
+            If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
+            Return "SystemFont:" & Uri.EscapeDataString(family) & ":" & weight.ToString(CultureInfo.InvariantCulture) & ":" & pointSize.ToString(CultureInfo.InvariantCulture)
+        End Function
+
+        Private Shared ReadOnly DefaultVectorFontPath As String =
+            IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeui.ttf")
 
         Public Sub LoadVectorFont(name As String, fontFile As String, pointSize As Single)
             Dim font As New VectorFont(fontFile, pointSize)
@@ -24,6 +37,51 @@ Namespace [Shared].Content
             If VectorFonts.TryGetValue(name, previous) Then previous.Dispose()
             VectorFonts(name) = font
         End Sub
+
+        ''' <summary>Loads the native font-file outlines without requiring Content/Fonts or compiled font assets.</summary>
+        Public Sub LoadVectorFontsOnly()
+            If Not IO.File.Exists(DefaultVectorFontPath) Then
+                Throw New IO.FileNotFoundException("The system Segoe UI font is unavailable. Register a font file with LoadVectorFont instead.", DefaultVectorFontPath)
+            End If
+            For Each size In {10, 12, 14, 18, 24, 36, 48, 72}
+                Dim font As VectorFont = Nothing
+                TryGetVectorFont("SegoeUI_" & size, font)
+            Next
+        End Sub
+
+        ''' <summary>Resolves registered outlines and system Segoe UI sizes on demand, without a SpriteFont lookup.</summary>
+        Public Function TryGetVectorFont(name As String, <System.Runtime.InteropServices.Out> ByRef font As VectorFont) As Boolean
+            font = Nothing
+            If String.IsNullOrEmpty(name) Then Return False
+            If VectorFonts.TryGetValue(name, font) Then Return True
+            If name.StartsWith("SystemFont:", StringComparison.Ordinal) Then
+                If systemVectorFonts.TryGetValue(name, font) Then Return True
+                Dim parts = name.Split(":"c)
+                Dim weight As Integer, points As Single
+                If parts.Length <> 4 OrElse Not Integer.TryParse(parts(2), NumberStyles.Integer, CultureInfo.InvariantCulture, weight) OrElse
+                    Not Single.TryParse(parts(3), NumberStyles.Float, CultureInfo.InvariantCulture, points) Then Return False
+                ' Bound generated font variants and release their GPU meshes and device subscriptions.
+                While systemVectorFonts.Count >= 64
+                    Dim oldest = systemFontOrder.Dequeue()
+                    systemVectorFonts(oldest).Dispose()
+                    systemVectorFonts.Remove(oldest)
+                End While
+                font = New VectorFont(Uri.UnescapeDataString(parts(1)), weight, points)
+                systemVectorFonts.Add(name, font)
+                systemFontOrder.Enqueue(name)
+                Return True
+            End If
+            Const prefix As String = "SegoeUI_"
+            If Not name.StartsWith(prefix, StringComparison.Ordinal) Then Return False
+            Dim size As Single
+            If Not Single.TryParse(name.Substring(prefix.Length), NumberStyles.AllowDecimalPoint,
+                                   CultureInfo.InvariantCulture, size) OrElse
+               Not Single.IsFinite(size) OrElse size <= 0 OrElse size > 512 OrElse
+               Not IO.File.Exists(DefaultVectorFontPath) Then Return False
+            LoadVectorFont(name, DefaultVectorFontPath, size)
+            font = VectorFonts(name)
+            Return True
+        End Function
 
         Public Property Textures As New Dictionary(Of String, Texture2D)
 
@@ -33,6 +91,7 @@ Namespace [Shared].Content
 #Region "Content Methods"
 
         Public Sub LoadAllContent()
+            If IO.File.Exists(DefaultVectorFontPath) Then LoadVectorFontsOnly()
             '#If WINDOWS Then
             ' Content roots must follow the host that owns this ContentManager.
             ' VST hosts run from the DAW directory, so AppDomain.BaseDirectory
@@ -48,6 +107,7 @@ Namespace [Shared].Content
 
             Dim FontsDirectory As String = IO.Path.Combine(ContentDirectory, "Fonts")
             If Not IO.Directory.Exists(FontsDirectory) Then
+                If VectorFonts.Count > 0 Then Return
                 Throw New IO.DirectoryNotFoundException(
                     $"Project Z content directory does not contain Fonts: '{FontsDirectory}'.")
             End If
@@ -60,12 +120,6 @@ Namespace [Shared].Content
                     Fonts.Add(IO.Path.GetFileNameWithoutExtension(FontPath), Font)
                 Next
             Next
-            Dim segoeFile = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeui.ttf")
-            If IO.File.Exists(segoeFile) Then
-                For Each size In {10, 12, 14, 18, 24, 36, 48, 72}
-                    LoadVectorFont("SegoeUI_" & size, segoeFile, size)
-                Next
-            End If
             '#End If
         End Sub
 #If WINDOWS Then

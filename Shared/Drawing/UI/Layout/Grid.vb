@@ -4,12 +4,19 @@ Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports System.Collections.Generic
 
 Namespace [Shared].Drawing.UI.Layout
+    Public Enum GridSizeMode
+        Auto
+        Pixel
+        Star
+    End Enum
 
     ''' <summary>
     ''' Represents a row or column definition for a Grid panel.
     ''' </summary>
     <Serializable>
     Public Class GridDefinition
+        ' When unset, retain the legacy Size convention used by existing native applications.
+        Public Property SizeMode As GridSizeMode?
         ''' <summary>
         ''' Gets or sets the size of this row/column.
         ''' Use -1 for Auto (fit to content), 0 for Star (proportional), positive for fixed pixels.
@@ -34,27 +41,27 @@ Namespace [Shared].Drawing.UI.Layout
         ''' <summary>
         ''' The calculated actual size after layout.
         ''' </summary>
-        Friend ActualSize As Single = 0
+        Public Property ActualSize As Single = 0
 
         ''' <summary>
         ''' Creates an Auto-sized definition.
         ''' </summary>
         Public Shared Function Auto() As GridDefinition
-            Return New GridDefinition With {.Size = -1}
+            Return New GridDefinition With {.Size = -1, .SizeMode = GridSizeMode.Auto}
         End Function
 
         ''' <summary>
         ''' Creates a Star-sized definition.
         ''' </summary>
         Public Shared Function StarSize(Optional multiplier As Single = 1.0F) As GridDefinition
-            Return New GridDefinition With {.Size = 0, .Star = multiplier}
+            Return New GridDefinition With {.Size = 0, .Star = multiplier, .SizeMode = GridSizeMode.Star}
         End Function
 
         ''' <summary>
         ''' Creates a fixed-sized definition.
         ''' </summary>
         Public Shared Function Fixed(pixels As Single) As GridDefinition
-            Return New GridDefinition With {.Size = pixels}
+            Return New GridDefinition With {.Size = pixels, .SizeMode = GridSizeMode.Pixel}
         End Function
     End Class
 
@@ -254,6 +261,13 @@ Namespace [Shared].Drawing.UI.Layout
         Public Sub AddChild(element As SceneElement, row As Integer, column As Integer,
                            Optional rowSpan As Integer = 1, Optional columnSpan As Integer = 1,
                            Optional widthExplicit As Boolean = False, Optional heightExplicit As Boolean = False)
+            ConfigureChild(element, row, column, rowSpan, columnSpan, widthExplicit, heightExplicit)
+            Children.Add(element)
+        End Sub
+
+        Public Sub ConfigureChild(element As SceneElement, row As Integer, column As Integer,
+                                  Optional rowSpan As Integer = 1, Optional columnSpan As Integer = 1,
+                                  Optional widthExplicit As Boolean = False, Optional heightExplicit As Boolean = False)
             Dim attached = EnsureAttached(element)
             attached.Row = row
             attached.Column = column
@@ -263,7 +277,6 @@ Namespace [Shared].Drawing.UI.Layout
             attached.HeightExplicit = heightExplicit
             attached.DesiredWidth = element.Size.X
             attached.DesiredHeight = element.Size.Y
-            Children.Add(element)
         End Sub
 
         Protected Overrides Sub AlignChildren()
@@ -279,49 +292,45 @@ Namespace [Shared].Drawing.UI.Layout
             ' remeasures every descendant on each scroll translation.
             If ImportedLayout IsNot Nothing Then Return
             ' Ensure at least one row and column
-            If _RowDefinitions.Count = 0 Then
-                _RowDefinitions.Add(GridDefinition.StarSize(1))
-            End If
-            If _ColumnDefinitions.Count = 0 Then
-                _ColumnDefinitions.Add(GridDefinition.StarSize(1))
-            End If
+            Dim rows = If(_RowDefinitions.Count = 0, New List(Of GridDefinition) From {GridDefinition.StarSize()}, _RowDefinitions)
+            Dim columns = If(_ColumnDefinitions.Count = 0, New List(Of GridDefinition) From {GridDefinition.StarSize()}, _ColumnDefinitions)
 
             ' Calculate row heights
-            CalculateSizes(_RowDefinitions, Size.Y - Padding.Top - Padding.Bottom)
+            ComputeTrackSizes(rows, Size.Y - Padding.Top - Padding.Bottom, DesiredTracks(rows.Count, False), True)
             
             ' Calculate column widths
-            CalculateSizes(_ColumnDefinitions, Size.X - Padding.Left - Padding.Right)
+            ComputeTrackSizes(columns, Size.X - Padding.Left - Padding.Right, DesiredTracks(columns.Count, True), True)
 
             ' Position children
             For Each child As SceneElement In Children
                 If Not child.isVisible Then Continue For
 
                 Dim attached = GetAttached(child)
-                Dim row = Math.Min(attached.Row, _RowDefinitions.Count - 1)
-                Dim col = Math.Min(attached.Column, _ColumnDefinitions.Count - 1)
-                Dim rowSpan = Math.Min(attached.RowSpan, _RowDefinitions.Count - row)
-                Dim colSpan = Math.Min(attached.ColumnSpan, _ColumnDefinitions.Count - col)
+                Dim row = Math.Clamp(attached.Row, 0, rows.Count - 1)
+                Dim col = Math.Clamp(attached.Column, 0, columns.Count - 1)
+                Dim rowSpan = Math.Clamp(attached.RowSpan, 1, rows.Count - row)
+                Dim colSpan = Math.Clamp(attached.ColumnSpan, 1, columns.Count - col)
 
                 ' Calculate position
                 Dim x As Single = Position.X + Padding.Left
                 For i = 0 To col - 1
-                    x += _ColumnDefinitions(i).ActualSize
+                    x += columns(i).ActualSize
                 Next
 
                 Dim y As Single = Position.Y + Padding.Top
                 For i = 0 To row - 1
-                    y += _RowDefinitions(i).ActualSize
+                    y += rows(i).ActualSize
                 Next
 
                 ' Calculate size based on span
                 Dim width As Single = 0
                 For i = col To col + colSpan - 1
-                    width += _ColumnDefinitions(i).ActualSize
+                    width += columns(i).ActualSize
                 Next
 
                 Dim height As Single = 0
                 For i = row To row + rowSpan - 1
-                    height += _RowDefinitions(i).ActualSize
+                    height += rows(i).ActualSize
                 Next
 
                 Dim preserveDesiredWidth = attached.WidthExplicit OrElse
@@ -364,37 +373,63 @@ Namespace [Shared].Drawing.UI.Layout
             RaiseEvent LayoutUpdated()
         End Sub
 
-        Private Sub CalculateSizes(definitions As List(Of GridDefinition), availableSize As Single)
-            Dim fixedTotal As Single = 0
-            Dim starTotal As Single = 0
+        Private Function DesiredTracks(count As Integer, horizontal As Boolean) As Single()
+            Dim desired(count - 1) As Single
+            For Each child In Children
+                If Not child.isVisible Then Continue For
+                Dim attached = GetAttached(child)
+                Dim index = Math.Clamp(If(horizontal, attached.Column, attached.Row), 0, count - 1)
+                Dim span = If(horizontal, attached.ColumnSpan, attached.RowSpan)
+                If span <> 1 Then Continue For
+                Dim size = If(horizontal, attached.DesiredWidth, attached.DesiredHeight)
+                If TypeOf child Is TextElement Then
+                    Dim measured = DirectCast(child, TextElement).MeasureXamlText(Math.Max(1, Me.Size.X))
+                    size = Math.Max(size, If(horizontal, measured.X, measured.Y))
+                End If
+                desired(index) = Math.Max(desired(index), size + If(horizontal, child.Margin.Left + child.Margin.Right, child.Margin.Top + child.Margin.Bottom))
+            Next
+            Return desired
+        End Function
 
-            ' First pass: calculate fixed and auto sizes
-            For Each def In definitions
-                If def.Size > 0 Then
-                    ' Fixed size
-                    def.ActualSize = Math.Min(def.MaxSize, Math.Max(def.MinSize, def.Size))
-                    fixedTotal += def.ActualSize
-                ElseIf def.Size < 0 Then
-                    ' Auto size - for now, treat as minimum size
-                    def.ActualSize = def.MinSize
-                    fixedTotal += def.ActualSize
+        ''' <summary>Shared native and imported grid sizing, with constrained star redistribution.</summary>
+        Public Shared Function ComputeTrackSizes(definitions As IList(Of GridDefinition), available As Single, desired As Single(), stretch As Boolean) As Single()
+            Dim values(definitions.Count - 1) As Single
+            Dim active As New List(Of Integer)
+            For i = 0 To definitions.Count - 1
+                Dim definition = definitions(i)
+                Dim mode = definition.SizeMode.GetValueOrDefault(If(definition.Size < 0, GridSizeMode.Auto, If(definition.Size = 0, GridSizeMode.Star, GridSizeMode.Pixel)))
+                Dim maximum = Math.Max(definition.MinSize, definition.MaxSize)
+                If mode = GridSizeMode.Star AndAlso stretch AndAlso definition.Star > 0 Then
+                    active.Add(i)
                 Else
-                    ' Star size
-                    starTotal += def.Star
+                    Dim requested = If(mode = GridSizeMode.Pixel, definition.Size, If(mode = GridSizeMode.Star AndAlso stretch, 0, desired(i)))
+                    values(i) = Math.Clamp(requested, definition.MinSize, maximum)
                 End If
             Next
-
-            ' Second pass: distribute remaining space to star sizes
-            Dim remaining As Single = availableSize - fixedTotal
-            If remaining > 0 AndAlso starTotal > 0 Then
-                Dim starUnit As Single = remaining / starTotal
-                For Each def In definitions
-                    If def.Size = 0 Then
-                        def.ActualSize = Math.Min(def.MaxSize, Math.Max(def.MinSize, starUnit * def.Star))
+            If active.Count > 0 Then
+                Dim remaining = Math.Max(0, available - values.Sum())
+                Dim lower As Double = 0
+                Dim upper As Double = active.Max(Function(i) CDbl(remaining) / definitions(i).Star)
+                ' Solve sum(clamp(unit * weight, min, max)) = remaining. Simultaneously
+                ' clamping both extremes can otherwise overallocate a constrained grid.
+                For iteration = 0 To 47
+                    Dim unit = (lower + upper) / 2
+                    Dim total = active.Sum(Function(i) Math.Clamp(unit * definitions(i).Star, CDbl(definitions(i).MinSize), CDbl(Math.Max(definitions(i).MinSize, definitions(i).MaxSize))))
+                    If total > remaining Then
+                        upper = unit
+                    Else
+                        lower = unit
                     End If
                 Next
+                For Each i In active
+                    values(i) = CSng(Math.Clamp(lower * definitions(i).Star, CDbl(definitions(i).MinSize), CDbl(Math.Max(definitions(i).MinSize, definitions(i).MaxSize))))
+                Next
             End If
-        End Sub
+            For i = 0 To definitions.Count - 1
+                definitions(i).ActualSize = values(i)
+            Next
+            Return values
+        End Function
 
 #End Region
 

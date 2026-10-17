@@ -7,9 +7,7 @@
     <ProjectZXamlToolProject>$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
     <ProjectZXamlTool>$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll</ProjectZXamlTool>
   </PropertyGroup>
-  <ItemGroup>
-    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)ProjectZ.Settings.xaml"><Context>Project</Context></PropertyPageSchema>
-  </ItemGroup>
+  <Import Project="$(MSBuildThisFileDirectory)ProjectZ.Application.targets" Condition="'$(ProjectZApplicationIntegrationImported)' != 'true'" />
   <ItemGroup Condition="'$(ProjectZXamlMode)' != 'Disabled'">
     <UpToDateCheckInput Include="@(ProjectZXaml);@(Page);@(ProjectZXamlSource)" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" />

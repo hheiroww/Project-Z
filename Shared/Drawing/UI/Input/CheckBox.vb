@@ -104,7 +104,7 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Color)
                 _CheckColor = value
-                CheckMark.BackgroundColor = _CheckColor
+                CheckMark.ForegroundColor = _CheckColor
             End Set
         End Property
         Private _CheckColor As Color = Color.White
@@ -172,7 +172,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Private CheckBoxBorder As RectangleElement
         Private CheckBoxBackground As RectangleElement
-        Private CheckMark As RectangleElement
+        Private CheckMark As TextElement
         Private ContentText As TextElement
 
 #End Region
@@ -208,10 +208,13 @@ Namespace [Shared].Drawing.UI.Input
                 .BackgroundColor = New Color(30, 30, 30)
             }
 
-            CheckMark = New RectangleElement(Scene, spriteBatch.SpriteBatch) With {
+            CheckMark = New TextElement(Scene, spriteBatch.SpriteBatch) With {
                 .isMouseBypassEnabled = True,
+                .VerticalAlign = VerticalAlignment.Center,
                 .isVisible = False,
-                .BackgroundColor = _CheckColor
+                .Text = ChrW(&H2713),
+                .Font = Fonts.SegoeUI.GetResourceName(12),
+                .ForegroundColor = _CheckColor
             }
 
             ContentText = New TextElement(Scene, spriteBatch.SpriteBatch) With {
@@ -258,11 +261,15 @@ Namespace [Shared].Drawing.UI.Input
             CheckBoxBackground.Position = Position + New Vector2(borderThickness, (Size.Y - BoxSize) / 2.0F + borderThickness)
             CheckBoxBackground.Size = New Vector2(BoxSize - borderThickness * 2, BoxSize - borderThickness * 2)
 
-            Dim checkPadding As Single = 4.0F
-            CheckMark.Position = Position + New Vector2(checkPadding, (Size.Y - BoxSize) / 2.0F + checkPadding)
-            CheckMark.Size = New Vector2(BoxSize - checkPadding * 2, BoxSize - checkPadding * 2)
+            ' Text glyphs have line-height/baseline metrics; a padded 14px rectangle
+            ' places the check below the box. Center its measured glyph instead.
+            Dim markSize = Scene.MeasureText(CheckMark.Font, CheckMark.Text)
+            CheckMark.Position = Position + New Vector2((BoxSize - markSize.X) / 2, (Size.Y - markSize.Y) / 2)
+            CheckMark.Size = markSize
 
-            ContentText.Position = Position + New Vector2(BoxSize + 8.0F, (Size.Y - ContentText.Size.Y) / 2.0F)
+            Dim textSize = Scene.MeasureText(ContentText.Font, If(String.IsNullOrEmpty(Content), " ", Content))
+            ContentText.Position = Position + New Vector2(BoxSize + 8.0F, (Size.Y - textSize.Y) / 2)
+            ContentText.Size = textSize
         End Sub
 
         Protected Overrides Sub AlignChildren()
@@ -275,7 +282,8 @@ Namespace [Shared].Drawing.UI.Input
 
             If _IsChecked = True Then
                 CheckMark.isVisible = True
-                CheckMark.BackgroundColor = _CheckColor
+                CheckMark.Text = ChrW(&H2713)
+                CheckMark.ForegroundColor = _CheckColor
                 CheckBoxBackground.BackgroundColor = _CheckedBackgroundColor
             ElseIf _IsChecked = False Then
                 CheckMark.isVisible = False
@@ -283,7 +291,8 @@ Namespace [Shared].Drawing.UI.Input
             Else
                 ' Indeterminate state - show smaller mark
                 CheckMark.isVisible = True
-                CheckMark.BackgroundColor = New Color(150, 150, 150)
+                CheckMark.Text = ChrW(&H2014)
+                CheckMark.ForegroundColor = New Color(150, 150, 150)
                 CheckBoxBackground.BackgroundColor = New Color(60, 60, 60)
             End If
         End Sub

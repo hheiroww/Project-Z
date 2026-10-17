@@ -6,6 +6,13 @@
     <ProjectReference Include="../../../artifacts/wpf-import/generated/*/*.csproj" />
     <ProjectReference Include="../../../artifacts/wpf-import/generated/*/*.vbproj" />
     <ProjectReference Include="../../../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" />
+    <ProjectReference Include="../NativeCodegen/WindowsBuild/WindowsBuild.csproj" />
+    <ProjectReference Include="../ControlsCodegen/WindowsBuild/WindowsBuild.csproj" />
+  <ProjectReference Include="../../../artifacts/wpf-import/native-appearance/*/*.csproj" />
+  <ProjectReference Include="../../../artifacts/wpf-import/dispatcher-import/*/*.csproj" />
+  <ProjectReference Include="../../../artifacts/wpf-import/grid-import/*/*.csproj" />
+  <ProjectReference Include="../../../artifacts/wpf-import/text-layout/*/*.csproj" />
+  <ProjectReference Include="../../../artifacts/wpf-import/stack-layout/*/*.csproj" />
     <Content Include="../../../Project Z Application/Content/Fonts/Segoe UI/*.xnb" Link="Content/Fonts/Segoe UI/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

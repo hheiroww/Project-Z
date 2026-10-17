@@ -1,0 +1,9 @@
+<Window x:Class="GridImport.ProbeWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="300" Height="120">
+  <Grid x:Name="Layout">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="0.5*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="Auto" MinHeight="10" MaxHeight="40" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+    <TextBlock Text="Measured" Height="20" />
+    <Border x:Name="First" Grid.Row="1" Background="#FF224466" />
+    <Border x:Name="Second" Grid.Column="1" Grid.Row="1" Background="#FF669922" />
+  </Grid>
+</Window>

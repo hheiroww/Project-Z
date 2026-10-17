@@ -42,6 +42,11 @@ Namespace [Shared].Drawing.UI.Primitives
             End Get
         End Property
         Public Property SelectionColor As Color = New Color(38, 93, 160)
+        ' Hosts with a multi-element transcript can provide the combined selection.
+        Public Property SelectionCopyProvider As Func(Of String)
+        Public Function CharacterIndexAt(point As Point) As Integer
+            Return SelectionHit(point)
+        End Function
         Private Sub ClearTextSelection()
             selectionAnchor = 0
             selectionEnd = 0
@@ -55,10 +60,12 @@ Namespace [Shared].Drawing.UI.Primitives
             [Select](0, Text.Length)
         End Sub
         Public Function CopySelection() As Boolean
-            If Not IsTextSelectionEnabled OrElse SelectionLength = 0 Then Return False
+            If Not IsTextSelectionEnabled Then Return False
+            Dim value As String = If(SelectionCopyProvider Is Nothing, SelectedText, SelectionCopyProvider.Invoke())
+            If String.IsNullOrEmpty(value) Then Return False
 #If WINDOWS Then
             Try
-                System.Windows.Forms.Clipboard.SetText(SelectedText)
+                System.Windows.Forms.Clipboard.SetText(value)
                 Return True
             Catch ex As System.Runtime.InteropServices.ExternalException
                 Return False
@@ -178,6 +185,7 @@ Namespace [Shared].Drawing.UI.Primitives
             Next
         End Sub
         Protected Overrides Sub Dispose(disposing As Boolean)
+            If disposing Then decorationPixel?.Dispose()
             If disposing Then
                 selectionTexture?.Dispose()
                 If selectionMenu IsNot Nothing Then

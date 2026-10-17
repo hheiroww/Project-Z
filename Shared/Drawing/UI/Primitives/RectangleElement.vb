@@ -11,7 +11,18 @@ Namespace [Shared].Drawing.UI.Primitives
 #Region "Properties"
 
         Protected Friend Texture As Texture2D
-        Public Overridable Property BackgroundColor As New Color(60, 60, 60)
+        Private ownedSolidTexture As Texture2D
+        Private backgroundColorValue As New Color(60, 60, 60)
+        Public Overridable Property BackgroundColor As Color
+            Get
+                Return backgroundColorValue
+            End Get
+            Set(value As Color)
+                If backgroundColorValue = value Then Return
+                backgroundColorValue = value
+                Scene?.RequestRender()
+            End Set
+        End Property
         Public Property BackgroundBrush As XamlGradientBrush
         Public Property CornerRadii As CornerRadii
         ''' <summary>Uniform-radius shorthand. Use CornerRadii for independent XAML corners.</summary>
@@ -33,9 +44,13 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return _Color
             End Get
             Set(value As Color)
+                If value = _Color AndAlso Texture IsNot Nothing Then Return
                 _Color = value
                 Try
-                    Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, _Color)
+                    Dim replacement = If(value = Color.White, Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice), Content.Textures.CreateSolidTexture(Scene.graphicsDevice, value))
+                    ownedSolidTexture?.Dispose()
+                    ownedSolidTexture = If(value = Color.White, Nothing, replacement)
+                    Texture = replacement
                 Catch ex As Exception
                 End Try
             End Set
@@ -59,7 +74,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Sub New(Scene As Scene)
             MyBase.New(Scene)
             Try
-                Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+                Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
             Catch ex As Exception
 
             End Try
@@ -67,12 +82,12 @@ Namespace [Shared].Drawing.UI.Primitives
 
         Public Sub New(Scene As Scene, spriteBatch As SpriteBatch)
             MyBase.New(Scene, spriteBatch)
-            Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+            Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
         End Sub
 
         Public Sub New(Scene As Scene, newSpritebatch As Boolean)
             MyBase.New(Scene, newSpritebatch)
-            Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+            Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
         End Sub
 
 #End Region
@@ -98,14 +113,14 @@ Namespace [Shared].Drawing.UI.Primitives
                 DrawFocusIndicator()
                 Return
             End If
-            If Texture Is Nothing Then Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+            If Texture Is Nothing Then Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
             spriteBatch.Draw(Texture, Rectangle, ApplyOpacity(fill))
             DrawFocusIndicator()
         End Sub
 
         Private Sub DrawFocusIndicator()
             If Not isSelected OrElse Not CanSelect Then Return
-            If Texture Is Nothing Then Texture = Content.Textures.CreateSolidTexture(Scene.graphicsDevice, Color.White)
+            If Texture Is Nothing Then Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
             Dim r = Rectangle
             Dim focusColor = ApplyOpacity(New Color(130, 190, 255))
             spriteBatch.Draw(Texture, New Rectangle(r.X, r.Y, r.Width, 2), focusColor)
@@ -116,6 +131,9 @@ Namespace [Shared].Drawing.UI.Primitives
 
         Protected Overrides Sub Dispose(disposing As Boolean)
             If disposing Then
+                ownedSolidTexture?.Dispose()
+                ownedSolidTexture = Nothing
+                Texture = Nothing
                 BackgroundBrush?.Dispose()
                 roundedBrush?.Dispose()
             End If

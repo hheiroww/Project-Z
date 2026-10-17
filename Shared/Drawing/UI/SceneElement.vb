@@ -1,4 +1,4 @@
-﻿Imports Microsoft.Xna.Framework
+Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Input
 Imports Microsoft.Xna.Framework.Graphics
 Imports ProjectZ.Shared.Animations.Properties
@@ -20,12 +20,41 @@ Namespace [Shared].Drawing.UI
         Public isUserInvalidated As Boolean = False
         ' Optional declarative layout adapter; native controls retain their own layout.
         Public Property ImportedLayout As Action
+        Public Property ImportedMeasure As Func(Of Single, Vector2)
+        Public Property SuppressVisual As Boolean
+        ''' <summary>Plain text exposed by this element. Nontext elements return an empty string.</summary>
+        Public Overridable Function GetCopyText() As String
+            If SuppressVisual Then Return String.Empty
+            Return String.Join(Environment.NewLine, Children.Select(Function(child) child.GetCopyText()).Where(Function(text) Not String.IsNullOrEmpty(text)))
+        End Function
+        Public Overridable Sub Copy()
+            Dim text = GetCopyText()
+            If String.IsNullOrEmpty(text) Then Return
+#If WINDOWS Then
+            System.Windows.Forms.Clipboard.SetText(text)
+#End If
+        End Sub
         ''' <summary>Optional compatibility routing before native input handlers. True consumes the event.</summary>
         Public Property ImportedInputFilter As Func(Of String, Object(), Boolean)
+        Public Property ImportedInputDetached As Boolean
         Private _importedPointerSuppressed As Boolean
+        Private importedRightPointerSuppressed As Boolean
 
         Public Function FilterImportedInput(name As String, ParamArray values As Object()) As Boolean
-            Return ImportedInputFilter IsNot Nothing AndAlso ImportedInputFilter(name, values)
+            If IsDisposed OrElse ImportedInputDetached Then Return False
+            If ImportedInputFilter IsNot Nothing Then Return ImportedInputFilter(name, values)
+            ' Internal native rows and editor parts route through their imported
+            ' owner, while retaining the point in that owner's coordinate space.
+            Dim owner = RoutedParent
+            If owner Is Nothing Then Return False
+            Dim translated = DirectCast(values.Clone(), Object())
+            For index = 0 To translated.Length - 1
+                If TypeOf translated(index) Is Point Then
+                    Dim point = DirectCast(translated(index), Point)
+                    translated(index) = New Point(point.X + CInt(Position.X - owner.Position.X), point.Y + CInt(Position.Y - owner.Position.Y))
+                End If
+            Next
+            Return owner.FilterImportedInput(name, translated)
         End Function
         ' Opt-in virtualization for fixed-size items such as a file gallery.
         ' Keep item positions current, but arrange descendants only near view.
@@ -88,6 +117,26 @@ Namespace [Shared].Drawing.UI
             End Set
         End Property
         Private _RenderScale As Vector2 = Vector2.One
+        Private _renderScaleOrigin As New Vector2(0.5F, 0.5F)
+        Public Property RenderScaleOrigin As Vector2
+            Get
+                Return _renderScaleOrigin
+            End Get
+            Set(value As Vector2)
+                _renderScaleOrigin = value
+                SetRectangleProperty()
+            End Set
+        End Property
+        Private _renderScaleCenter As Vector2
+        Public Property RenderScaleCenter As Vector2
+            Get
+                Return _renderScaleCenter
+            End Get
+            Set(value As Vector2)
+                _renderScaleCenter = value
+                SetRectangleProperty()
+            End Set
+        End Property
 
         Public Property RenderTranslation As Vector2
             Get
@@ -99,6 +148,32 @@ Namespace [Shared].Drawing.UI
             End Set
         End Property
         Private _RenderTranslation As Vector2 = Vector2.Zero
+        Public Property RenderRotation As Single
+        Public Property RenderRotationCenter As Vector2
+        Public Property RenderRotationOrigin As Vector2
+        Public ReadOnly Property RotationPivot As Vector2
+            Get
+                Return Position + Size * RenderRotationOrigin + RenderRotationCenter
+            End Get
+        End Property
+        Private rotationSurface As Primitives.XamlNativeEffect
+        Friend ReadOnly Property DrawingEffect As Primitives.XamlNativeEffect
+            Get
+                If VisualEffect IsNot Nothing AndAlso VisualEffect.IsActive Then Return VisualEffect
+                If RenderRotation = 0 Then Return Nothing
+                If rotationSurface Is Nothing Then rotationSurface = New Primitives.XamlNativeEffect With {.Kind = Primitives.XamlEffectKind.PassThrough}
+                Return rotationSurface
+            End Get
+        End Property
+        Public Property ClipBounds As Rectangle?
+        Public ReadOnly Property ClippingRectangle As Rectangle
+            Get
+                If Not ClipBounds.HasValue Then Return Rectangle
+                Dim bounds = ClipBounds.Value
+                bounds.Offset(CInt(Position.X), CInt(Position.Y))
+                Return bounds
+            End Get
+        End Property
 
         Public Property Padding As Thickness
             Get
@@ -183,7 +258,8 @@ Namespace [Shared].Drawing.UI
                 Return _isSelected
             End Get
             Set(value As Boolean)
-                If CanSelect Then
+                If value = _isSelected Then Return
+                If CanSelect OrElse Not value Then
                     _isSelected = value
                     Select Case _isSelected
                         Case True
@@ -223,6 +299,10 @@ Namespace [Shared].Drawing.UI
             End Get
         End Property
         Private _MouseDown As Boolean = False
+        Friend Sub ReleasePointerPress()
+            _MouseDown = False
+            OnUserInvalidated()
+        End Sub
         Private _MouseDownPosition As Vector2
 
         Public Property isMovable As Boolean
@@ -323,6 +403,7 @@ Namespace [Shared].Drawing.UI
             Set(value As Boolean)
                 If value = visibleValue Then Return
                 visibleValue = value
+                Scene?.RequestRender()
                 RaiseEvent VisibilityChanged()
             End Set
         End Property
@@ -346,6 +427,16 @@ Namespace [Shared].Drawing.UI
 
 
         Friend Scene As Scene
+        Public ReadOnly Property OwnerScene As Scene
+            Get
+                Return Scene
+            End Get
+        End Property
+        Public ReadOnly Property RoutedParent As SceneElement
+            Get
+                Return Parent
+            End Get
+        End Property
 
         Protected Friend Parent As SceneElement
 
@@ -395,6 +486,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Public Sub OnUserInvalidated()
+            Scene?.RequestRender()
             RaiseEvent UserInvalidated(Me)
         End Sub
 
@@ -429,6 +521,8 @@ Namespace [Shared].Drawing.UI
         Public Event MouseLeftClick(p As Point)
         Public Event MouseLeftDown(p As Point)
         Public Event MouseLeftUp(p As Point)
+        Public Event MouseRightDown(p As Point)
+        Public Event MouseRightUp(p As Point)
         Public Event MouseWheel(delta As Integer, p As Point)
         Public Event DragDrop(p As Point, Element As SceneElement)
         Public Event DragOver(p As Point, Element As SceneElement)
@@ -454,7 +548,20 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Protected Friend Sub OnMouseRightClick(p As Point)
+            If importedRightPointerSuppressed Then Return
             RaiseEvent MouseRightClick(p)
+        End Sub
+
+        Protected Friend Sub OnMouseRightDown(p As Point)
+            importedRightPointerSuppressed = FilterImportedInput("MouseRightButtonDown", p)
+            If importedRightPointerSuppressed Then Return
+            RaiseEvent MouseRightDown(p)
+        End Sub
+
+        Protected Friend Sub OnMouseRightUp(p As Point)
+            If FilterImportedInput("MouseRightButtonUp", p) Then importedRightPointerSuppressed = True
+            If importedRightPointerSuppressed Then Return
+            RaiseEvent MouseRightUp(p)
         End Sub
 
         Protected Friend Sub OnMouseWheel(delta As Integer, p As Point)
@@ -463,6 +570,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Protected Friend Sub OnMouseMove(currentPoint As Point, lastPoint As Point)
+            If FilterImportedInput("MouseMove", currentPoint, lastPoint) Then Return
             RaiseEvent MouseMove(currentPoint, lastPoint)
         End Sub
 
@@ -550,6 +658,7 @@ Namespace [Shared].Drawing.UI
         End Sub
 
         Public Sub Invalidate()
+            Scene?.RequestRender()
             Valid = False
             Validate()
         End Sub
@@ -720,8 +829,32 @@ Namespace [Shared].Drawing.UI
         Protected Friend MustOverride Sub Draw(gameTime As GameTime)
 
 
+        Friend Function IsInsideInputClip(p As Point) As Boolean
+            ' Rendering clips every descendant through all clipping ancestors.
+            ' The flat hit-test list must honor the identical screen-space chain,
+            ' including explicit ClipBounds, rather than testing hidden geometry.
+            Dim current As SceneElement = Me
+            While current IsNot Nothing
+                If current.Clip AndAlso Not current.ClippingRectangle.Contains(p) Then Return False
+                current = current.Parent
+            End While
+            Return True
+        End Function
+
         Protected Friend Overridable Function ContainsPoint(p As Point) As Boolean
-            Return Rectangle.Contains(p)
+            Dim point = p.ToVector2()
+            Dim route As New List(Of SceneElement)
+            Dim current As SceneElement = Me
+            While current IsNot Nothing
+                route.Add(current) : current = current.Parent
+            End While
+            For Each element In route.AsEnumerable().Reverse()
+                If element.RenderRotation = 0 Then Continue For
+                Dim relative = point - element.RotationPivot
+                Dim angle = MathHelper.ToRadians(-element.RenderRotation)
+                point = element.RotationPivot + New Vector2(relative.X * MathF.Cos(angle) - relative.Y * MathF.Sin(angle), relative.X * MathF.Sin(angle) + relative.Y * MathF.Cos(angle))
+            Next
+            Return Rectangle.Contains(point)
         End Function
 
         Public Shared RenderExceptionCount As Long
@@ -741,6 +874,9 @@ Namespace [Shared].Drawing.UI
                 spriteBatch.End()
             Catch ex As Exception
                 RenderExceptionCount += 1
+#If WINDOWS Then
+                If RenderExceptionCount <= 10 Then Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Report("Render " & Me.GetType().FullName, ex)
+#End If
                 If FirstRenderException Is Nothing Then FirstRenderException = ex.ToString()
             End Try
         End Sub
@@ -796,11 +932,12 @@ Namespace [Shared].Drawing.UI
             Dim oldRect As Rectangle = Rectangle
             Dim width = Math.Max(0.0F, Size.X * RenderScale.X)
             Dim height = Math.Max(0.0F, Size.Y * RenderScale.Y)
-            Dim x = Position.X + RenderTranslation.X - ((width - Size.X) / 2.0F)
-            Dim y = Position.Y + RenderTranslation.Y - ((height - Size.Y) / 2.0F)
+            Dim pivot = Position + Size * RenderScaleOrigin + RenderScaleCenter
+            Dim x = Position.X + RenderTranslation.X + (pivot.X - Position.X) * (1.0F - RenderScale.X)
+            Dim y = Position.Y + RenderTranslation.Y + (pivot.Y - Position.Y) * (1.0F - RenderScale.Y)
             Dim ancestor = Parent
             While ancestor IsNot Nothing
-                Dim center = ancestor.Position + ancestor.Size / 2.0F
+                Dim center = ancestor.Position + ancestor.Size * ancestor.RenderScaleOrigin + ancestor.RenderScaleCenter
                 x = center.X + (x - center.X) * ancestor.RenderScale.X + ancestor.RenderTranslation.X
                 y = center.Y + (y - center.Y) * ancestor.RenderScale.Y + ancestor.RenderTranslation.Y
                 width *= ancestor.RenderScale.X
@@ -810,6 +947,7 @@ Namespace [Shared].Drawing.UI
             _Rectangle = New Rectangle(CInt(Math.Round(x)), CInt(Math.Round(y)),
                                        CInt(Math.Round(width)), CInt(Math.Round(height)))
             If oldRect <> _Rectangle Then
+                Scene?.RequestRender()
                 RaiseEvent RectangleChanged()
                 Valid = False
                 If updateDescendants AndAlso Children IsNot Nothing Then
@@ -901,9 +1039,12 @@ Namespace [Shared].Drawing.UI
 
         ' IDisposable
         Protected Overridable Sub Dispose(disposing As Boolean)
+            If disposing Then rotationSurface?.Dispose()
             If Not Me.disposedValue Then
                 Me.disposedValue = True
                 If disposing Then
+                    Scene?.ReleasePointerCapture(Me)
+                    SceneEvents.ClearHandlers(Me)
                     VisualEffect?.Dispose()
                     ' Detach the complete registered tree BEFORE clearing its
                     ' children. Otherwise their parent links disappear while

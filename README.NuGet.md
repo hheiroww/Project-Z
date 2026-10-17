@@ -1,4 +1,10 @@
-# ⚡ Project Z 2.8.2
+# ⚡ Project Z 2.8.3
+
+Project-Z automatically starts persistent diagnostics when a Windows `SceneManager` is created. Logs include full managed exceptions, while the bundled `ProjectZ.Diagnostics` observer records abrupt exits and captures native fault dumps. NuGet consumers receive the observer automatically, including for self-contained publishing.
+
+The implementation lives in `Windows/Diagnostics` and the crash observer builds from `Project Z Diagnostics/ProjectZ.Diagnostics.vbproj` in the Project-Z solution. Repository project-reference consumers use the same deployment targets through `Directory.Build.targets`; the diagnostics implementation and build rules belong to Project-Z. `tests/CrashDiagnostics/Consumer` verifies an independent consumer without downstream application references.
+
+For startup coverage before creating the first scene, call `ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize()` at your entry point. `DiagnosticOptions` lets you set the application name, log directory and error-dialog preference. Use `ApplicationDiagnostics.Report(context, exception)` for handled errors. By default, diagnostics are saved under `%LOCALAPPDATA%\Project-Z\<application>\Diagnostics`; the latest ten sessions and three dumps are retained.
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -122,6 +128,11 @@ For an existing project, including files added with **Add As Link**, use `import
 [Single-view conversion, linked projects, and designer handling](https://github.com/hheiroww/Project-Z/blob/master/docs/LINKED-XAML.md) · [Supported controls and limitations](https://github.com/hheiroww/Project-Z/blob/master/docs/WPF-IMPORT.md)
 
 ## ✨ New in 2.7
+
+Project-Z 2.8.4 also ships a source-built DX12 GPU fence/cleanup fix and captures
+original native graphics HRESULTs and dumps before cleanup. These apply to
+framework consumers through build/publish targets. See
+[native runtime source and tests](ThirdParty/MonoGame.Native/README.md).
 
 Project-Z now gives you two more ways to build an interface: bring supported WPF projects into the native renderer, or show HTML5 content inside a Project-Z window. This release also improves text editing, control behavior and layout.
 

@@ -18,7 +18,7 @@ Namespace [Shared].Drawing.UI.Primitives
         ''' </summary>
         Wrap
         ''' <summary>
-        ''' Wraps text at character boundaries when words don't fit.
+        ''' Wraps at word boundaries and allows an unbreakable word to overflow.
         ''' </summary>
         WrapWithOverflow
     End Enum
@@ -32,6 +32,13 @@ Namespace [Shared].Drawing.UI.Primitives
     <Serializable>
     Partial Public Class TextElement
         Inherits SceneElement
+        Public Overrides Function GetCopyText() As String
+            Return If(String.IsNullOrEmpty(SelectedText), Text, SelectedText)
+        End Function
+        Public Property Underline As Boolean
+        Public Property Strikethrough As Boolean
+        Public Property Overline As Boolean
+        Public Property BaselineDecoration As Boolean
 
 #Region "Properties"
 
@@ -56,6 +63,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return _TextWrapping
             End Get
             Set(value As TextWrapping)
+                If _TextWrapping = value Then Return
                 _TextWrapping = value
                 UpdateWrappedText()
             End Set
@@ -71,6 +79,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return _MaxWidth
             End Get
             Set(value As Single)
+                If _MaxWidth = value Then Return
                 _MaxWidth = value
                 UpdateWrappedText()
             End Set
@@ -80,7 +89,7 @@ Namespace [Shared].Drawing.UI.Primitives
         ''' <summary>
         ''' Gets the wrapped text for rendering.
         ''' </summary>
-        Private Property WrappedText As String = String.Empty
+        Protected Property WrappedText As String = String.Empty
         Public Property UseXamlTextLayout As Boolean
         Public Property TextAlignment As HorizontalAlignment = HorizontalAlignment.Left
         Public Property TextTrimming As TextTrimming = TextTrimming.None
@@ -96,9 +105,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Private ReadOnly Property XamlLineSpacing As Single
             Get
                 If BlockLineHeight AndAlso Single.IsFinite(LineHeight) AndAlso LineHeight > 0 Then Return LineHeight
-                Dim vectorFont As VectorFont = Nothing
-                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then Return vectorFont.LineSpacing * FontScale
-                Return Scene.contentCollection.Fonts(Font).LineSpacing * FontScale
+                Return Scene.TextLineSpacing(Font) * FontScale
             End Get
         End Property
 
@@ -128,13 +135,44 @@ Namespace [Shared].Drawing.UI.Primitives
                 Return _Font
             End Get
             Set(value As String)
+                If _Font = value Then Return
                 _Font = value
                 UpdateWrappedText()
             End Set
         End Property
         Private _Font As String = Fonts.SegoeUI.GetResourceName(12)
+        Private systemFamily As String = "Segoe UI"
+        Private systemWeight As Integer = 400
+        Public Property FontFamily As String
+            Get
+                Return systemFamily
+            End Get
+            Set(value As String)
+                Font = ContentContainer.SystemFontName(value, systemWeight, 12)
+                systemFamily = value
+            End Set
+        End Property
+        Public Property FontWeight As Integer
+            Get
+                Return systemWeight
+            End Get
+            Set(value As Integer)
+                Font = ContentContainer.SystemFontName(systemFamily, value, 12)
+                systemWeight = value
+            End Set
+        End Property
 
-        Public Overridable Property ForegroundColor As New Color(255, 255, 255)
+        Private foregroundColorValue As Color = Color.White
+        Public Overridable Property ForegroundColor As Color
+            Get
+                Return foregroundColorValue
+            End Get
+            Set(value As Color)
+                If foregroundColorValue = value Then Return
+                foregroundColorValue = value
+                Scene?.RequestRender()
+            End Set
+        End Property
 
 #End Region
 
@@ -219,7 +257,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 If _TextWrapping = TextWrapping.Wrap Then
                     result.Append(WrapLineByWords(line, maxWidth))
                 Else ' WrapWithOverflow
-                    result.Append(WrapLineByCharacters(line, maxWidth))
+                    result.Append(WrapLineByWords(line, maxWidth, True))
                 End If
             Next
 
@@ -229,7 +267,7 @@ Namespace [Shared].Drawing.UI.Primitives
         ''' <summary>
         ''' Wraps a single line by word boundaries.
         ''' </summary>
-        Private Function WrapLineByWords(line As String, maxWidth As Single) As String
+        Private Function WrapLineByWords(line As String, maxWidth As Single, Optional allowOverflow As Boolean = False) As String
             Dim result As New StringBuilder()
             Dim words As String() = line.Split(" "c)
             Dim currentLine As New StringBuilder()
@@ -250,7 +288,7 @@ Namespace [Shared].Drawing.UI.Primitives
 
                     ' Check if single word is too long
                     Dim wordWidth As Single = MeasureContent(word).X
-                    If wordWidth > maxWidth Then
+                    If wordWidth > maxWidth AndAlso Not allowOverflow Then
                         ' Break the word by characters
                         result.Append(WrapLineByCharacters(word, maxWidth))
                         If result.Length > 0 AndAlso Not result.ToString().EndsWith(Environment.NewLine) Then
@@ -413,13 +451,23 @@ Namespace [Shared].Drawing.UI.Primitives
             DrawTextSelection(textToDraw)
             If Not String.IsNullOrEmpty(textToDraw) Then
                 Dim vectorFont As VectorFont = Nothing
-                If Scene.contentCollection.VectorFonts.TryGetValue(Font, vectorFont) Then
+                If Scene.contentCollection.TryGetVectorFont(Font, vectorFont) Then
                     spriteBatch.End()
                     Try
                         If UseXamlTextLayout Then
                             Dim at = Position + New Vector2(Padding.Left, Padding.Top)
                             Dim width = Math.Max(0, Size.X - Padding.Left - Padding.Right)
+                            Dim graphics = spriteBatch.GraphicsDevice
+                            Dim clip = If(graphics.RasterizerState.ScissorTestEnable, graphics.ScissorRectangle, graphics.Viewport.Bounds)
+                            Dim renderScale = Scene.Quality.RenderScale
+                            Dim visibleTop = clip.Top / renderScale.Y + Scene.EffectRenderOffset.Y - XamlLineSpacing
+                            Dim visibleBottom = clip.Bottom / renderScale.Y + Scene.EffectRenderOffset.Y + XamlLineSpacing
                             For Each line In textToDraw.Replace(vbCr, "").Split(ChrW(10))
+                                If at.Y > visibleBottom Then Exit For
+                                If at.Y < visibleTop Then
+                                    at.Y += XamlLineSpacing
+                                    Continue For
+                                End If
                                 Dim lineWidth = vectorFont.Measure(line).X * FontScale
                                 Dim offset = If(TextAlignment = HorizontalAlignment.Center, (width - lineWidth) / 2,
                                     If(TextAlignment = HorizontalAlignment.Right, width - lineWidth, 0))
@@ -432,6 +480,7 @@ Namespace [Shared].Drawing.UI.Primitives
                     Finally
                         spriteBatch.Begin()
                     End Try
+                    DrawDecorations(textToDraw)
                     Return
                 End If
                 Dim currentFont = Scene.contentCollection.Fonts(Font)
@@ -455,6 +504,26 @@ Namespace [Shared].Drawing.UI.Primitives
             End If
         End Sub
 
+        Private decorationPixel As Texture2D
+        Private Sub DrawDecorations(content As String)
+            If Not (Underline OrElse Strikethrough OrElse Overline OrElse BaselineDecoration) Then Return
+            If decorationPixel Is Nothing Then
+                decorationPixel = New Texture2D(Scene.graphicsDevice, 1, 1)
+                decorationPixel.SetData({Color.White})
+            End If
+            Dim at = Position + If(UseXamlTextLayout, New Vector2(Padding.Left, Padding.Top), Vector2.Zero)
+            Dim lineHeight = XamlLineSpacing
+            Dim thickness = Math.Max(1, CInt(lineHeight / 16))
+            For Each line In content.Replace(vbCr, "").Split(ChrW(10))
+                Dim width = MeasureContent(line).X
+                Dim available = Math.Max(0, Size.X - Padding.Left - Padding.Right)
+                Dim x = at.X + If(TextAlignment = HorizontalAlignment.Center, (available - width) / 2, If(TextAlignment = HorizontalAlignment.Right, available - width, 0))
+                For Each offset In New Single() {If(Underline, 0.86F, -1), If(Strikethrough, 0.46F, -1), If(Overline, 0, -1), If(BaselineDecoration, 0.76F, -1)}
+                    If offset >= 0 Then spriteBatch.Draw(decorationPixel, New Rectangle(CInt(x), CInt(at.Y + lineHeight * offset), Math.Max(0, CInt(width)), thickness), ApplyOpacity(ForegroundColor))
+                Next
+                at.Y += lineHeight
+            Next
+        End Sub
 #Region "Constructors"
 
         Public Sub New(Scene As Scene)

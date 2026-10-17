@@ -66,6 +66,9 @@ internal static class Program
         if (args.Length == 2 && args[0] == "build-views") return BuildViewImporter.Run(args[1]);
         if (args.Length > 0 && args[0] == "import-view") return ViewImporter.Run(args[1..]);
         if (args.Length > 0 && args[0] == "import") return ProjectImporter.Run(args[1..]);
+        if (args.Length == 2 && args[0] == "verify-import") return ProjectImporter.VerifyExisting(args[1]);
+        if (args.Length == 2 && args[0] == "application") return ApplicationGenerator.Run(args[1]);
+        if (args.Length == 4 && args[0] == "validate-xaml" && args[2] == "--output") return MarkupAudit.Run(args[1], args[3]);
         if (args.Length != 2)
         {
             Console.Error.WriteLine("Usage: ProjectZ.XamlCodegen <legacy-xaml-root> <generated-output-root>");

@@ -40,6 +40,7 @@ Namespace [Shared].Drawing.Designer
 #End Region
 
 #Region "Properties"
+        Public Property ImportedControlFactory As Func(Of XmlElement, SceneElement)
 
         ''' <summary>
         ''' Gets the dictionary of named elements (elements with x:Name attribute).
@@ -139,13 +140,18 @@ Namespace [Shared].Drawing.Designer
         End Function
 
         Public Property ImplicitStoryboardTriggersEnabled As Boolean = True
+        Public Property ImportedEventRouting As Boolean
         ''' <summary>Enable copying display text, except text nested in interactive controls.</summary>
         Public Property TextSelectionEnabled As Boolean
 
         ''' <summary>Attach legacy layout after an in-memory compatibility import.</summary>
         Public Sub AttachImportedLayout()
-            Dim layout As New LegacyWindowLayout(_scene, _xmlElements)
-            layout.Attach()
+            importedLayout = New LegacyWindowLayout(_scene, _xmlElements)
+            importedLayout.Attach()
+        End Sub
+        Private importedLayout As LegacyWindowLayout
+        Public Sub InvalidateImportedLayout()
+            importedLayout?.Invalidate()
         End Sub
 
         ''' <summary>Keep imported layout metadata in sync with code-behind property changes.</summary>
@@ -153,6 +159,7 @@ Namespace [Shared].Drawing.Designer
             For Each pair In _xmlElements
                 If pair.Value Is element Then
                     pair.Key.SetAttribute(propertyName, value)
+                    InvalidateImportedLayout()
                     Return
                 End If
             Next
@@ -160,8 +167,7 @@ Namespace [Shared].Drawing.Designer
 
         Public Function ParseLegacyWindow(filePath As String) As SceneElement
             Dim root = ParseFile(filePath)
-            Dim layout As New LegacyWindowLayout(_scene, _xmlElements)
-            layout.Attach()
+            AttachImportedLayout()
             Return root
         End Function
 
@@ -194,7 +200,7 @@ Namespace [Shared].Drawing.Designer
                                           Optional container As RectangleElement = Nothing) As SceneElement
             Dim doc As New XmlDocument()
             doc.Load(filePath)
-            Dim owner = doc.SelectNodes("//*").Cast(Of XmlElement)().First(Function(n) n.GetAttribute("x:Name") = ownerName)
+            Dim owner = doc.SelectNodes("//*").Cast(Of XmlElement)().First(Function(n) n.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml") = ownerName)
             If container IsNot Nothing Then
                 Dim item = doc.CreateElement("ListBoxItem", owner.NamespaceURI)
                 If owner.HasAttribute("ItemContainerStyle") Then item.SetAttribute("Style", owner.GetAttribute("ItemContainerStyle"))
@@ -234,7 +240,19 @@ Namespace [Shared].Drawing.Designer
             If Not _storyboards.TryGetValue(name, storyboard) Then
                 Throw New KeyNotFoundException("Storyboard not found: " & name)
             End If
-            Return storyboard.Begin(_scene.gameTime)
+            Return storyboard.Begin(If(_scene Is Nothing, New GameTime(), _scene.gameTime))
+        End Function
+
+        Public Function BeginImportedStoryboard(xaml As String, ownerName As String) As IReadOnlyList(Of AnimationBase)
+            Dim document As New XmlDocument With {.XmlResolver = Nothing}
+            document.LoadXml(xaml)
+            For Each animation As XmlElement In document.SelectNodes("/*/*")
+                If Not animation.HasAttribute("Storyboard.TargetName") Then animation.SetAttribute("Storyboard.TargetName", ownerName)
+            Next
+            Dim count = _unsupportedFeatures.Count
+            Dim storyboard = CreateStoryboard(document.DocumentElement, "inline")
+            If _unsupportedFeatures.Count > count Then Throw New NotSupportedException(String.Join(Environment.NewLine, _unsupportedFeatures.Skip(count)))
+            Return storyboard.Begin(If(_scene Is Nothing, New GameTime(), _scene.gameTime))
         End Function
 
 #End Region
@@ -264,6 +282,7 @@ Namespace [Shared].Drawing.Designer
             ' Input Controls
             _elementFactories("Button") = Function(e) CreateButton(e)
             _elementFactories("CheckBox") = Function(e) CreateCheckBox(e)
+            _elementFactories("ItemsControl") = Function(e) CreateListBox(e)
             _elementFactories("RadioButton") = Function(e) CreateRadioButton(e)
             _elementFactories("TextBox") = Function(e) CreateTextBox(e)
             _elementFactories("PasswordBox") = Function(e) CreatePasswordBox(e)
@@ -278,6 +297,9 @@ Namespace [Shared].Drawing.Designer
             _elementFactories("ComboBox") = Function(e) CreateComboBox(e)
             _elementFactories("ListBox") = Function(e) CreateListBox(e)
             _elementFactories("TabControl") = Function(e) CreateTabControl(e)
+            _elementFactories("TabItem") = Function(e) CreateBorder(e)
+            _elementFactories("ContentControl") = Function(e) CreateBorder(e)
+            _elementFactories("Menu") = Function(e) CreateStackPanel(e)
             _elementFactories("ScrollViewer") = Function(e) CreateScrollViewer(e)
             _elementFactories("wScrollViewer") = Function(e) CreateScrollViewer(e)
             _elementFactories("ClipboardHistoryScrollViewer") = Function(e) CreateScrollViewer(e)
@@ -302,6 +324,17 @@ Namespace [Shared].Drawing.Designer
             _elementFactories("Grid") = Function(e) CreateGrid(e)
             _elementFactories("Panel") = Function(e) CreatePanel(e)
             _elementFactories("Border") = Function(e) CreateBorder(e)
+            _elementFactories("ListView") = Function(e) CreateListBox(e)
+            _elementFactories("Decorator") = Function(e) CreatePanel(e)
+            _elementFactories("EmptyControl") = Function(e) New RectangleElement(_scene) With {.BackgroundColor = Color.Transparent, .isMouseBypassEnabled = True, .SuppressVisual = True}
+            _elementFactories("Polygon") = Function(e)
+                                                Dim values = GetAttributeString(e, "Points", "").Split({" "c, ","c}, StringSplitOptions.RemoveEmptyEntries).Select(Function(value) Single.Parse(value, Globalization.CultureInfo.InvariantCulture)).ToArray()
+                                                Dim points As New List(Of Vector2)
+                                                For index = 0 To values.Length - 2 Step 2
+                                                    points.Add(New Vector2(values(index), values(index + 1)))
+                                                Next
+                                                Return New PolygonElement(_scene, points.ToArray()) With {.FillColor = GetAttributeColor(e, "Fill", Color.White)}
+                                            End Function
         End Sub
 
 #End Region
@@ -314,7 +347,9 @@ Namespace [Shared].Drawing.Designer
 
             ' Check if we have a factory for this element
             Dim element As SceneElement
-            If Not _elementFactories.ContainsKey(elementName) Then
+            If ImportedControlFactory IsNot Nothing AndAlso xmlElement.HasAttribute("Type", "urn:projectz:import") Then
+                element = ImportedControlFactory.Invoke(xmlElement)
+            ElseIf Not _elementFactories.ContainsKey(elementName) Then
                 ' Keep the remainder of the window usable.  A generic panel is the
                 ' closest safe visual equivalent for an unknown legacy control and the
                 ' build-time generator reports the exact item for user follow-up.
@@ -326,7 +361,7 @@ Namespace [Shared].Drawing.Designer
             _xmlElements(xmlElement) = element
 
             ' Handle x:Name attribute
-            Dim nameAttr = xmlElement.GetAttribute("x:Name")
+            Dim nameAttr = xmlElement.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml")
             If String.IsNullOrEmpty(nameAttr) Then
                 nameAttr = xmlElement.GetAttribute("Name")
             End If
@@ -413,7 +448,6 @@ Namespace [Shared].Drawing.Designer
         End Function
 
         Private Sub ApplyResourceStyle(element As XmlElement)
-            CopyTemplateSurface(element, TryCast(element.SelectSingleNode("*[contains(local-name(), '.Template')]/*[local-name()='ControlTemplate']"), XmlElement))
             ApplyResolvedStyle(element)
         End Sub
 
@@ -421,7 +455,33 @@ Namespace [Shared].Drawing.Designer
         ' surface geometry onto the native control, not a WPF island or edited XAML.
         Private Sub CopyTemplateSurface(element As XmlElement, template As XmlElement, Optional depth As Integer = 0)
             If template Is Nothing OrElse depth > 8 Then Return
+            If element.LocalName = "Button" AndAlso Not ImportedEventRouting Then
+                For Each state In {("IsMouseOver", "MouseOverBackground"), ("IsPressed", "MouseDownBackground")}
+                    Dim setter = TryCast(template.SelectSingleNode(".//*[local-name()='Trigger'][@Property='" & state.Item1 & "'][@Value='True']/*[local-name()='Setter'][@Property='Background']"), XmlElement)
+                    If setter IsNot Nothing AndAlso setter.HasAttribute("Value") AndAlso Not element.HasAttribute(state.Item2) Then element.SetAttribute(state.Item2, setter.GetAttribute("Value"))
+                Next
+            End If
             Dim surface = TryCast(template.SelectSingleNode("*[local-name()='Border']"), XmlElement)
+            If ImportedEventRouting AndAlso surface IsNot Nothing Then
+                Dim surfaceName = surface.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml")
+                If surfaceName.Length = 0 Then surfaceName = GetAttributeString(surface, "Name", String.Empty)
+                Dim triggers = TryCast(element.SelectSingleNode("*[local-name()='" & element.LocalName & ".Triggers']"), XmlElement)
+                For Each original In template.SelectNodes("*[local-name()='ControlTemplate.Triggers']/*[local-name()='Trigger' or local-name()='DataTrigger']").OfType(Of XmlElement)()
+                    Dim trigger = DirectCast(element.OwnerDocument.ImportNode(original, True), XmlElement)
+                    For Each setter In trigger.SelectNodes(".//*[local-name()='Setter']").OfType(Of XmlElement)()
+                        If setter.GetAttribute("TargetName") = surfaceName Then setter.RemoveAttribute("TargetName")
+                    Next
+                    For Each animation In trigger.SelectNodes(".//*[@*[local-name()='Storyboard.TargetName']]").OfType(Of XmlElement)()
+                        If animation.GetAttribute("Storyboard.TargetName") = surfaceName Then animation.RemoveAttribute("Storyboard.TargetName")
+                    Next
+                    If trigger.GetAttribute("SourceName") = surfaceName Then trigger.RemoveAttribute("SourceName")
+                    If triggers Is Nothing Then
+                        triggers = element.OwnerDocument.CreateElement(element.LocalName & ".Triggers", element.NamespaceURI)
+                        element.AppendChild(triggers)
+                    End If
+                    If Not triggers.ChildNodes.OfType(Of XmlElement)().Any(Function(n) n.OuterXml = trigger.OuterXml) Then triggers.AppendChild(trigger)
+                Next
+            End If
             If surface Is Nothing Then
                 ' WPF ComboBox commonly delegates its closed surface to a
                 ' ToggleButton in a Grid; exclude the Popup's dropdown border.
@@ -434,10 +494,17 @@ Namespace [Shared].Drawing.Designer
             End If
             ' An explicit template brush is NOT a TemplateBinding: it wins over
             ' the control's own Background, as it does on the WPF combo surface.
-            For Each brushName In {"Background", "BorderBrush"}
+            For Each brushName In {"Background", "BorderBrush", "BorderThickness", "Padding", "CornerRadius"}
                 Dim value = surface.GetAttribute(brushName)
                 If value.Length > 0 AndAlso Not value.StartsWith("{TemplateBinding") Then element.SetAttribute(brushName, value)
             Next
+            Dim presenter = TryCast(surface.SelectSingleNode("*[local-name()='ContentPresenter' or local-name()='EmptyControl']"), XmlElement)
+            If presenter IsNot Nothing Then
+                For Each alignment In {("HorizontalAlignment", "HorizontalContentAlignment"), ("VerticalAlignment", "VerticalContentAlignment")}
+                    Dim value = presenter.GetAttribute(alignment.Item1)
+                    If value.Length > 0 AndAlso Not value.StartsWith("{TemplateBinding", StringComparison.Ordinal) Then element.SetAttribute(alignment.Item2, value)
+                Next
+            End If
             Dim effectNode = surface.SelectSingleNode("*[contains(local-name(), '.Effect')]")
             If effectNode IsNot Nothing AndAlso element.SelectSingleNode("*[contains(local-name(), '.Effect')]") Is Nothing Then
                 Dim propertyNode = element.OwnerDocument.CreateElement(element.LocalName & ".Effect", element.NamespaceURI)
@@ -458,6 +525,47 @@ Namespace [Shared].Drawing.Designer
             Next
         End Sub
 
+Private Function GetUniformBorderThickness(xml As XmlElement, fallback As Single) As Single
+    Dim borderThicknessAttribute As XmlAttribute = xml.Attributes("BorderThickness")
+    If borderThicknessAttribute Is Nothing Then
+        Return fallback
+    End If
+
+    Dim values As String() = borderThicknessAttribute.Value.Split({",", " "}, StringSplitOptions.RemoveEmptyEntries)
+    If values.Length <> 1 AndAlso values.Length <> 4 Then
+        _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: Invalid number of values.")
+        Return fallback
+    End If
+
+    Dim thicknessValues As New List(Of Single)()
+    For Each value As String In values
+        Try
+            Dim parsedValue As Single = Single.Parse(value, Global.System.Globalization.NumberStyles.Float, Global.System.Globalization.CultureInfo.InvariantCulture)
+            If parsedValue < 0 OrElse Not Single.IsFinite(parsedValue) Then
+                _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: Negative values are not supported.")
+                Return fallback
+            End If
+            thicknessValues.Add(parsedValue)
+        Catch ex As FormatException
+            _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: " & ex.Message)
+            Return fallback
+        Catch ex As OverflowException
+            _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: " & ex.Message)
+            Return fallback
+        Catch ex As ArgumentException
+            _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: " & ex.Message)
+            Return fallback
+        End Try
+    Next
+
+    If values.Length = 4 AndAlso (thicknessValues(0) <> thicknessValues(1) OrElse thicknessValues(1) <> thicknessValues(2) OrElse thicknessValues(2) <> thicknessValues(3)) Then
+        _unsupportedFeatures.Add(xml.LocalName & " BorderThickness: Asymmetric border strokes are not supported yet.")
+        Return fallback
+    End If
+
+    Return thicknessValues(0)
+End Function
+
         Private Sub ApplyRoundedSurface(target As RectangleElement, xml As XmlElement)
             Dim value = xml.GetAttribute("CornerRadius")
             If value.Length = 0 Then
@@ -471,7 +579,7 @@ Namespace [Shared].Drawing.Designer
                         Dim scope As XmlNode = xml
                         Dim resource As XmlElement = Nothing
                         While scope IsNot Nothing AndAlso resource Is Nothing
-                            resource = scope.SelectNodes("*[contains(local-name(), '.Resources')]/*").Cast(Of XmlElement)().FirstOrDefault(Function(n) n.GetAttribute("x:Key") = key)
+                            resource = scope.SelectNodes("*[contains(local-name(), '.Resources')]/*").Cast(Of XmlElement)().FirstOrDefault(Function(n) n.GetAttribute("Key", "http://schemas.microsoft.com/winfx/2006/xaml") = key)
                             scope = scope.ParentNode
                         End While
                         If resource Is Nothing Then Throw New FormatException("CornerRadius resource not found: " & key)
@@ -482,7 +590,7 @@ Namespace [Shared].Drawing.Designer
                     _unsupportedFeatures.Add(xml.LocalName & " CornerRadius: " & ex.Message)
                 End Try
             End If
-            If xml.HasAttribute("BorderThickness") Then target.BorderThickness = GetAttributeSingle(xml, "BorderThickness", target.BorderThickness)
+            If xml.HasAttribute("BorderThickness") Then target.BorderThickness = GetUniformBorderThickness(xml, target.BorderThickness)
             If xml.HasAttribute("BorderBrush") Then target.BorderColor = GetAttributeColor(xml, "BorderBrush", target.BorderColor)
         End Sub
 
@@ -513,9 +621,10 @@ Namespace [Shared].Drawing.Designer
                     If String.IsNullOrWhiteSpace(targetName) OrElse Not _namedElements.TryGetValue(targetName, target) Then
                         Throw New InvalidDataException("Storyboard '" & name & "' has an unknown TargetName: " & targetName)
                     End If
+                    If target.SuppressVisual Then Continue For
                     Dim relative As Boolean
                     Dim targetProperty = CreateAnimationProperty(target, propertyPath, relative)
-                    Dim repeatForever = GetAttributeString(animationXml, "RepeatBehavior", String.Empty).
+                    Dim repeatForever = GetAttributeString(animationXml, "RepeatBehavior", GetAttributeString(storyboardXml, "RepeatBehavior", String.Empty)).
                         Equals("Forever", StringComparison.OrdinalIgnoreCase)
 
                     Select Case animationXml.LocalName
@@ -527,7 +636,10 @@ Namespace [Shared].Drawing.Designer
                                                CultureInfo.InvariantCulture, parsed) Then fromValue = parsed
                             Dim toText = GetAttributeString(animationXml, "To", String.Empty)
                             If Not Double.TryParse(toText, NumberStyles.Float, CultureInfo.InvariantCulture, parsed) Then
-                                Throw New InvalidDataException("DoubleAnimation requires a numeric To value for " & targetName & "." & propertyPath)
+                                If Not Double.TryParse(GetAttributeString(animationXml, "By", String.Empty), NumberStyles.Float, CultureInfo.InvariantCulture, parsed) Then
+                                    Throw New InvalidDataException("DoubleAnimation requires a numeric To or By value for " & targetName & "." & propertyPath)
+                                End If
+                                If fromValue.HasValue Then parsed += fromValue.Value Else relative = True
                             End If
                             storyboard.AddDouble(target, targetProperty, fromValue, parsed, duration,
                                                  CreateEasingFactory(animationXml), repeatForever, relative)
@@ -586,6 +698,11 @@ Namespace [Shared].Drawing.Designer
                             If frames.Count = 0 Then Throw New NotSupportedException("Unsupported object key-frame values.")
                             storyboard.AddCornerRadiusKeyFrames(target, New CornerRadiiProperty(DirectCast(target, RectangleElement)), frames, frames.Max(Function(frame) frame.KeyTime), repeatForever)
                     End Select
+                    Dim delay = ParseDuration(GetAttributeString(animationXml, "BeginTime", "0:0:0")) + ParseDuration(GetAttributeString(storyboardXml, "BeginTime", "0:0:0"))
+                    Dim reverse = GetAttributeBoolean(animationXml, "AutoReverse", GetAttributeBoolean(storyboardXml, "AutoReverse", False))
+                    Dim speed = GetAttributeSingle(animationXml, "SpeedRatio", 1) * GetAttributeSingle(storyboardXml, "SpeedRatio", 1)
+                    If speed <= 0 Then Throw New InvalidDataException("Animation SpeedRatio must be positive.")
+                    storyboard.SetLastTiming(delay, reverse, speed, GetAttributeString(animationXml, "FillBehavior", GetAttributeString(storyboardXml, "FillBehavior", "HoldEnd")) = "Stop")
                 Catch ex As Exception
                     _unsupportedFeatures.Add("Storyboard " & name & ": " & ex.Message)
                 End Try
@@ -596,7 +713,7 @@ Namespace [Shared].Drawing.Designer
         Private Function CreateAnimationProperty(target As SceneElement, propertyPath As String,
                                                  ByRef relativeToCurrent As Boolean) As ElementProperty
             Dim normalized = propertyPath.Replace("(", String.Empty).Replace(")", String.Empty).
-                Replace(" ", String.Empty).ToLowerInvariant()
+                Replace(" ", String.Empty).ToLowerInvariant().Replace(".solidcolorbrush.color", String.Empty)
             relativeToCurrent = False
             If normalized.Contains(".effect.") Then
                 If target.VisualEffect Is Nothing Then Throw New NotSupportedException("Animation targets an effect without a native adapter: " & propertyPath)
@@ -697,6 +814,7 @@ Namespace [Shared].Drawing.Designer
                 Dim owner As SceneElement = Nothing
                 While ownerNode IsNot Nothing AndAlso owner Is Nothing
                     Dim ownerXml = TryCast(ownerNode, XmlElement)
+                    If ownerXml IsNot Nothing AndAlso (ownerXml.LocalName = "Style" OrElse ownerXml.LocalName.EndsWith("Template", StringComparison.Ordinal) OrElse ownerXml.LocalName = "ResourceDictionary" OrElse ownerXml.LocalName.EndsWith(".Resources", StringComparison.Ordinal)) Then Exit While
                     If ownerXml IsNot Nothing Then _xmlElements.TryGetValue(ownerXml, owner)
                     ownerNode = ownerNode.ParentNode
                 End While
@@ -705,10 +823,28 @@ Namespace [Shared].Drawing.Designer
                 Dim begin = TryCast(trigger.SelectSingleNode(".//*[local-name()='BeginStoryboard']"), XmlElement)
                 If begin Is Nothing Then Continue For
                 Dim key = ParseStaticResourceKey(GetAttributeString(begin, "Storyboard", String.Empty))
-                If String.IsNullOrWhiteSpace(key) OrElse Not _storyboards.ContainsKey(key) Then Continue For
-                Dim eventName = GetAttributeString(trigger, "RoutedEvent", String.Empty).ToLowerInvariant()
+                If String.IsNullOrWhiteSpace(key) Then
+                    Dim inline = TryCast(begin.SelectSingleNode("*[local-name()='Storyboard']"), XmlElement)
+                    If inline Is Nothing Then Continue For
+                    key = "__inline" & _storyboards.Count.ToString(CultureInfo.InvariantCulture)
+                    For Each animation As XmlElement In inline.ChildNodes.OfType(Of XmlElement)()
+                        If Not animation.HasAttribute("Storyboard.TargetName") Then animation.SetAttribute("Storyboard.TargetName", ownerXmlName(owner))
+                    Next
+                    _storyboards(key) = CreateStoryboard(inline, key)
+                End If
+                If Not _storyboards.ContainsKey(key) Then Continue For
+                Dim eventName = GetAttributeString(trigger, "RoutedEvent", String.Empty).Split("."c).Last().ToLowerInvariant()
                 Dim storyboardKey = key
                 _explicitStoryboardTriggers.Add(storyboardKey)
+                If ImportedEventRouting Then
+                    Dim routedName = GetAttributeString(trigger, "RoutedEvent", String.Empty).Split("."c).Last()
+                    Dim routing = If(routedName.StartsWith("Preview", StringComparison.Ordinal), SceneEventRouting.Tunnel, If({"Loaded", "Unloaded", "SizeChanged", "MouseEnter", "MouseLeave"}.Contains(routedName), SceneEventRouting.Direct, SceneEventRouting.Bubble))
+                    Dim eventOwner = owner
+                    Dim sourceName = GetAttributeString(trigger, "SourceName", String.Empty)
+                    If sourceName.Length > 0 AndAlso Not _namedElements.TryGetValue(sourceName, eventOwner) Then Throw New InvalidDataException("Unknown event trigger SourceName: " & sourceName)
+                    SceneEvents.AddHandler(eventOwner, SceneRoutedEvent.Register(routedName, routing), Sub(sender, args) BeginStoryboard(storyboardKey))
+                    Continue For
+                End If
                 Select Case eventName
                     Case "loaded"
                         AddHandler owner.Loaded, Sub() BeginStoryboard(storyboardKey)
@@ -723,6 +859,14 @@ Namespace [Shared].Drawing.Designer
                 End Select
             Next
         End Sub
+
+        Private Function ownerXmlName(owner As SceneElement) As String
+            Dim entry = _namedElements.FirstOrDefault(Function(pair) pair.Value Is owner)
+            If entry.Key IsNot Nothing Then Return entry.Key
+            Dim name = "__owner" & _namedElements.Count.ToString(CultureInfo.InvariantCulture)
+            _namedElements(name) = owner
+            Return name
+        End Function
 
         ''' <summary>
         ''' Legacy wShare controls conventionally keep storyboards named after
@@ -778,6 +922,15 @@ Namespace [Shared].Drawing.Designer
                 If Not TypeOf node Is XmlElement Then Continue For
                 Dim tabXml = DirectCast(node, XmlElement)
                 If tabXml.LocalName <> "TabItem" Then Continue For
+                If ImportedEventRouting Then
+                    control.AddTab(GetAttributeString(tabXml, "Header", "Tab"), ParseElement(tabXml))
+                    Dim headerXml = TryCast(tabXml.SelectSingleNode("*[local-name()='TabItem.Header']/*"), XmlElement)
+                    If headerXml IsNot Nothing Then
+                        control.Tabs.Last().HeaderContent = ParseElement(headerXml)
+                        control.SetTabs(control.Tabs)
+                    End If
+                    Continue For
+                End If
                 Dim contentNodes = VisualChildNodes(tabXml).OfType(Of XmlElement)().ToArray()
                 Dim content As SceneElement = Nothing
                 If contentNodes.Length = 1 Then
@@ -796,6 +949,7 @@ Namespace [Shared].Drawing.Designer
         End Sub
 
         Private Sub ApplyCommonProperties(element As SceneElement, xmlElement As XmlElement)
+            If TypeOf element Is RectangleElement Then ApplyRoundedSurface(DirectCast(element, RectangleElement), xmlElement)
             ' --- Position: Canvas.Left/Top take precedence over X/Y ---
             ' These values are incorporated into the element's Margin so the
             ' layout system (AlignChild) uses them as positional offsets.
@@ -995,6 +1149,12 @@ Namespace [Shared].Drawing.Designer
             If Not String.IsNullOrEmpty(fontName) Then
                 text.Font = fontName
             End If
+            If xmlElement.HasAttribute("FontFamily") Then text.FontFamily = xmlElement.GetAttribute("FontFamily")
+            If xmlElement.HasAttribute("FontWeight") Then
+                Dim converter As New System.Windows.FontWeightConverter()
+                text.FontWeight = DirectCast(converter.ConvertFromInvariantString(xmlElement.GetAttribute("FontWeight")), System.Windows.FontWeight).ToOpenTypeWeight()
+            End If
+            If xmlElement.HasAttribute("FontSize") Then text.FontScale = GetAttributeSingle(xmlElement, "FontSize", 12) * 0.75F / 12
 
             ' Set text last so wrapping uses the correct parameters
             text.Text = GetAttributeString(xmlElement, "Text", xmlElement.InnerText.Trim())
@@ -1091,6 +1251,7 @@ Namespace [Shared].Drawing.Designer
             checkBox.IsChecked = GetAttributeBoolean(xmlElement, "IsChecked", False)
             checkBox.IsThreeState = GetAttributeBoolean(xmlElement, "IsThreeState", False)
             checkBox.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", checkBox.ForegroundColor)
+            checkBox.BackgroundColor = GetAttributeColor(xmlElement, "Background", checkBox.BackgroundColor)
             Return checkBox
         End Function
 
@@ -1100,6 +1261,7 @@ Namespace [Shared].Drawing.Designer
             radioButton.GroupName = GetAttributeString(xmlElement, "GroupName", "")
             radioButton.IsChecked = GetAttributeBoolean(xmlElement, "IsChecked", False)
             radioButton.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", radioButton.ForegroundColor)
+            radioButton.BackgroundColor = GetAttributeColor(xmlElement, "Background", radioButton.BackgroundColor)
             Return radioButton
         End Function
 
@@ -1196,7 +1358,7 @@ Namespace [Shared].Drawing.Designer
 
         Private Function CreateStackPanel(xmlElement As XmlElement) As SceneElement
             Dim stackPanel As New StackPanel(_scene)
-            Dim orientationStr = GetAttributeString(xmlElement, "Orientation", "Vertical")
+            Dim orientationStr = GetAttributeString(xmlElement, "Orientation", If(xmlElement.LocalName = "Menu", "Horizontal", "Vertical"))
             stackPanel.Orientation = If(orientationStr.ToLower() = "horizontal", Orientation.Horizontal, Orientation.Vertical)
             stackPanel.Spacing = GetAttributeSingle(xmlElement, "Spacing", 4.0F)
             stackPanel.BackgroundColor = GetAttributeColor(xmlElement, "Background", Color.Transparent)
@@ -1276,9 +1438,9 @@ Namespace [Shared].Drawing.Designer
 
         Private Function CreateBorder(xmlElement As XmlElement) As SceneElement
             Dim border As New Border(_scene)
-            border.BackgroundColor = GetAttributeColor(xmlElement, "Background", New Color(50, 50, 50))
-            border.BorderColor = GetAttributeColor(xmlElement, "BorderBrush", border.BorderColor)
-            border.BorderThickness = GetAttributeSingle(xmlElement, "BorderThickness", border.BorderThickness)
+            border.BackgroundColor = GetAttributeColor(xmlElement, "Background", Color.Transparent)
+            border.BorderColor = GetAttributeColor(xmlElement, "BorderBrush", Color.Transparent)
+            border.BorderThickness = GetUniformBorderThickness(xmlElement, 0)
             Return border
         End Function
 
@@ -1467,16 +1629,19 @@ Namespace [Shared].Drawing.Designer
 
             If sizeStr.ToLower() = "auto" Then
                 def.Size = -1 ' Auto
+                def.SizeMode = GridSizeMode.Auto
             ElseIf sizeStr.EndsWith("*") Then
                 def.Size = 0 ' Star
+                def.SizeMode = GridSizeMode.Star
                 Dim starStr = sizeStr.TrimEnd("*"c)
                 If Not String.IsNullOrEmpty(starStr) Then
-                    Single.TryParse(starStr, def.Star)
+                    Single.TryParse(starStr, Globalization.NumberStyles.Float, Globalization.CultureInfo.InvariantCulture, def.Star)
                 Else
                     def.Star = 1.0F
                 End If
             Else
-                Single.TryParse(sizeStr, def.Size)
+                Single.TryParse(sizeStr, Globalization.NumberStyles.Float, Globalization.CultureInfo.InvariantCulture, def.Size)
+                def.SizeMode = GridSizeMode.Pixel
             End If
 
             def.MinSize = GetAttributeSingle(xmlElement, "MinHeight", 0)
@@ -1532,6 +1697,10 @@ Namespace [Shared].Drawing.Designer
 
         Private Function GetAttributeColor(xmlElement As XmlElement, name As String, defaultValue As Color) As Color
             Dim str = GetAttributeString(xmlElement, name, "")
+            If String.IsNullOrEmpty(str) Then
+                Dim brush = TryCast(xmlElement.SelectSingleNode("*[substring-after(local-name(), '.')='" & name & "']/*[local-name()='SolidColorBrush']"), XmlElement)
+                If brush IsNot Nothing Then str = brush.GetAttribute("Color")
+            End If
             If String.IsNullOrEmpty(str) Then Return defaultValue
             Return ParseColor(ResolveColorText(xmlElement, str), defaultValue)
         End Function
@@ -1566,6 +1735,9 @@ Namespace [Shared].Drawing.Designer
                 Case "darkgray", "darkgrey" : Return Color.DarkGray
                 Case "lightgray", "lightgrey" : Return Color.LightGray
             End Select
+
+            Dim named = GetType(Color).GetProperty(colorString, Reflection.BindingFlags.Public Or Reflection.BindingFlags.Static Or Reflection.BindingFlags.IgnoreCase)
+            If named IsNot Nothing AndAlso named.PropertyType Is GetType(Color) Then Return DirectCast(named.GetValue(Nothing), Color)
 
             ' Handle hex colors
             If colorString.StartsWith("#") Then

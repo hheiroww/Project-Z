@@ -13,5 +13,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic.Workspaces" Version="5.0.0" />
     <Compile Include="../Project Z WPF Compatibility/Capabilities.cs" Link="Capabilities.cs" />
     <Compile Include="../Project Z WPF Compatibility/XamlSupport.cs" Link="XamlSupport.cs" />
+    <Compile Include="../Project Z WPF Compatibility/NativeMarkup.cs" Link="NativeMarkup.cs" />
+    <Compile Include="../Project Z WPF Compatibility/MarkupTranslation.cs" Link="MarkupTranslation.cs" />
   </ItemGroup>
 </Project>

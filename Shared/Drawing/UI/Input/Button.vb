@@ -11,6 +11,11 @@ Namespace [Shared].Drawing.UI.Input
     <Serializable>
     Public Class Button
         Inherits RectangleElement
+        Public Property IsDefault As Boolean
+        Public Property IsCancel As Boolean
+        Public Overrides Function GetCopyText() As String
+            Return Text
+        End Function
 
 #Region "Properties"
 
@@ -130,6 +135,7 @@ Namespace [Shared].Drawing.UI.Input
         Public Property MouseDownBackgroundProperty As New MouseDownBackgroundColorProperty(Me)
         Public Property MouseOverBackgroundBrush As XamlGradientBrush
         Public Property MouseDownBackgroundBrush As XamlGradientBrush
+        Public Property UseImportedStateBackground As Boolean
 
         Public Property ForegroundProperty As New ForegroundColorProperty(TextElement)
 
@@ -237,7 +243,9 @@ Namespace [Shared].Drawing.UI.Input
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
             Dim DrawColor As Color
 
-            If isMouseDown Then
+            If UseImportedStateBackground Then
+                DrawColor = BackgroundColor
+            ElseIf isMouseDown Then
                 DrawColor = MouseDownBackgroundColor
             ElseIf isMouseOver OrElse isSelected Then
                 DrawColor = MouseOverBackgroundColor
@@ -245,7 +253,7 @@ Namespace [Shared].Drawing.UI.Input
                 DrawColor = BackgroundColor
             End If
 
-            Dim stateBrush = If(isMouseDown, MouseDownBackgroundBrush, If(isMouseOver, MouseOverBackgroundBrush, BackgroundBrush))
+            Dim stateBrush = If(UseImportedStateBackground, BackgroundBrush, If(isMouseDown, MouseDownBackgroundBrush, If(isMouseOver, MouseOverBackgroundBrush, BackgroundBrush)))
             DrawBackground(DrawColor, Not isMouseDown AndAlso Not isMouseOver, stateBrush)
             ' The scene renders the registered text child after this background.
             ' Drawing it here as well doubles its coverage and nests its batch.

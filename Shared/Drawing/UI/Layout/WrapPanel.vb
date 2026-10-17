@@ -33,6 +33,7 @@ Namespace [Shared].Drawing.UI.Layout
         End Sub
 
         Public Sub ArrangeChildren()
+            If ImportedLayout IsNot Nothing Then Return
             If Size.X <= 0 OrElse Size.Y <= 0 Then Return
             Dim cursorX As Single = Position.X + Padding.Left
             Dim cursorY As Single = Position.Y + Padding.Top

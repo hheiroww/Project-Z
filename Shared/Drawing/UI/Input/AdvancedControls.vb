@@ -19,9 +19,34 @@ Namespace [Shared].Drawing.UI.Input
         Private _headerText As TextElement
         Private _dropDownButton As TextElement
         Private _itemHeight As Single = 28.0F
-        Private ReadOnly ownerScene As Scene
+        Private Shadows ReadOnly ownerScene As Scene
 
         Public Property DismissDistance As Single = 28.0F
+        Public Property ItemIsEnabled As Func(Of Integer, Boolean)
+        Public Property ItemAppearance As Action(Of Integer, RectangleElement, TextElement)
+
+        Private editor As Textbox
+        Public Event TextChanged()
+        Private _isEditable As Boolean
+        Public Property IsEditable As Boolean
+            Get
+                Return _isEditable
+            End Get
+            Set(value As Boolean)
+                _isEditable = value
+                editor.isVisible = value
+                _headerText.isVisible = Not value
+                AlignHeader()
+            End Set
+        End Property
+        Public Property EditableText As String
+            Get
+                Return editor.Text
+            End Get
+            Set(value As String)
+                editor.Text = value
+            End Set
+        End Property
 
         Public Event SelectionChanged(sender As ComboBox, selectedIndex As Integer)
 
@@ -96,6 +121,9 @@ Namespace [Shared].Drawing.UI.Input
                 .isMouseBypassEnabled = True
             }
             Children.Add(_dropDownButton)
+            editor = New Textbox(scene) With {.isVisible = False, .BackgroundColor = Color.Transparent, .ForegroundColor = Color.White}
+            Children.Add(editor)
+            AddHandler editor.OnTextChanged, Sub() RaiseEvent TextChanged()
             AddHandler MouseLeftClick, Sub(point) IsDropDownOpen = Not IsDropDownOpen
             If ownerScene IsNot Nothing Then
                 AddHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
@@ -130,6 +158,7 @@ Namespace [Shared].Drawing.UI.Input
         Private Sub UpdateVisual()
             If _selectedIndex >= 0 AndAlso _selectedIndex < _items.Count Then
                 _headerText.Text = _items(_selectedIndex)
+                If editor IsNot Nothing Then editor.Text = _items(_selectedIndex)
             Else
                 _headerText.Text = ""
             End If
@@ -138,6 +167,10 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub AlignHeader()
+            If editor IsNot Nothing Then
+                editor.Position = Position + New Vector2(4, 2)
+                editor.Size = New Vector2(Math.Max(0, Size.X - 30), Math.Max(0, Size.Y - 4))
+            End If
             _headerText.Position = New Vector2(Position.X + 8, Position.Y + (Size.Y - _headerText.Size.Y) / 2)
             _dropDownButton.Position = New Vector2(Position.X + Size.X - 24, Position.Y + (Size.Y - _dropDownButton.Size.Y) / 2)
         End Sub
@@ -165,6 +198,7 @@ Namespace [Shared].Drawing.UI.Input
                         .BackgroundColor = If(i = _selectedIndex, New Color(60, 100, 60), New Color(55, 55, 55)),
                         .IsOverlay = True
                     }
+                    itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(i)
 
                     Dim itemText As New TextElement(Scene) With {
                         .Text = _items(i),
@@ -174,10 +208,12 @@ Namespace [Shared].Drawing.UI.Input
                     }
 
                     itemBg.Children.Add(itemText)
+                    If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(i, itemBg, itemText)
                     _dropDownItems.Add(itemBg)
                     Scene.AddElement(itemBg)
 
                     AddHandler itemBg.MouseLeftClick, Sub(p)
+                                                          If Not itemBg.isEnabled Then Return
                                                           SelectedIndex = index
                                                           IsDropDownOpen = False
                                                       End Sub
@@ -234,10 +270,97 @@ Namespace [Shared].Drawing.UI.Input
 
         ''' <summary>Optional native item visuals, used by imported live DataTemplates.</summary>
         Public Property ItemVisualFactory As Func(Of Integer, SceneElement)
+        Public Property ReleaseItemVisual As Action(Of Integer, SceneElement)
+        Public Property VirtualizeItemTemplates As Boolean = True
+        Public Property ItemIsEnabled As Func(Of Integer, Boolean)
+        Public Property ItemAppearance As Action(Of Integer, RectangleElement, TextElement)
+        Private _headerVisual As SceneElement
+        Public Property HeaderVisual As SceneElement
+            Get
+                Return _headerVisual
+            End Get
+            Set(value As SceneElement)
+                If _headerVisual IsNot Nothing Then
+                    Children.Remove(_headerVisual)
+                    _headerVisual.Dispose()
+                End If
+                _headerVisual = value
+                If value IsNot Nothing Then Children.Add(value)
+                Invalidate()
+            End Set
+        End Property
+        Public Property HeaderHeight As Single = 24.0F
+        Public Property ItemsOrientation As Orientation = Orientation.Vertical
+        Public Property WrapItems As Boolean
+        Public Property ItemWidth As Single = 100.0F
+        Private ReadOnly Property HeaderOffset As Single
+            Get
+                Return If(_headerVisual Is Nothing, 0.0F, HeaderHeight)
+            End Get
+        End Property
+        Private Function ItemLocation(index As Integer) As Vector2
+            If WrapItems Then
+                Dim columns = Math.Max(1, CInt(Math.Floor(Size.X / Math.Max(1.0F, ItemWidth))))
+                Return New Vector2((index Mod columns) * ItemWidth, (index \ columns) * _itemHeight)
+            End If
+            If ItemsOrientation = Orientation.Horizontal Then Return New Vector2(index * ItemWidth, 0)
+            Dim top As Single
+            For row = 0 To Math.Min(index, _itemElements.Count) - 1
+                top += _itemElements(row).Size.Y
+            Next
+            Return New Vector2(0, top)
+        End Function
+        Private ReadOnly Property ContentHeight As Single
+            Get
+                If _items.Count = 0 Then Return 0
+                Return ItemLocation(_items.Count - 1).Y + If(WrapItems OrElse ItemsOrientation = Orientation.Horizontal, _itemHeight, If(_itemElements.Count = 0, _itemHeight, _itemElements.Last().Size.Y))
+            End Get
+        End Property
 
         Private _items As New List(Of String)
         Private _selectedIndex As Integer = -1
         Private _itemElements As New List(Of RectangleElement)
+        Private deferredItemLayout As Integer
+        Private estimatedTemplateHeight As Single = 24
+        Private ReadOnly Property HasVirtualTemplates As Boolean
+            Get
+                Return VirtualizeItemTemplates AndAlso ItemVisualFactory IsNot Nothing AndAlso _items.Count > 64 AndAlso Not WrapItems AndAlso ItemsOrientation = Orientation.Vertical
+            End Get
+        End Property
+        Private ReadOnly selectedIndices As New HashSet(Of Integer)
+        ''' <summary>0 = single, 1 = multiple, 2 = extended selection.</summary>
+        Public Property SelectionMode As Integer
+        Public ReadOnly Property SelectedIndexes As Integer()
+            Get
+                Return selectedIndices.OrderBy(Function(index) index).ToArray()
+            End Get
+        End Property
+
+        Public Sub SetSelection(indexes As IEnumerable(Of Integer))
+            Dim values = indexes.Distinct().ToArray()
+            If values.Any(Function(index) index < 0 OrElse index >= _items.Count) Then Throw New ArgumentOutOfRangeException(NameOf(indexes))
+            If SelectionMode = 0 AndAlso values.Length > 1 Then Throw New InvalidOperationException("Single selection permits one item.")
+            selectedIndices.Clear()
+            selectedIndices.UnionWith(values)
+            _selectedIndex = values.DefaultIfEmpty(-1).First()
+            UpdateItemColors()
+            RaiseEvent SelectionChanged(Me, _selectedIndex)
+        End Sub
+
+        Public Sub SelectIndex(index As Integer, control As Boolean, shift As Boolean)
+            If SelectionMode = 0 OrElse (SelectionMode = 2 AndAlso Not control AndAlso Not shift) Then
+                SelectedIndex = index
+            ElseIf SelectionMode = 2 AndAlso shift AndAlso _selectedIndex >= 0 Then
+                Dim anchor = _selectedIndex
+                Dim range = Enumerable.Range(Math.Min(anchor, index), Math.Abs(anchor - index) + 1)
+                SetSelection(If(control, selectedIndices.Concat(range), range).ToArray())
+                _selectedIndex = anchor
+            Else
+                Dim nextSelection = New HashSet(Of Integer)(selectedIndices)
+                If Not nextSelection.Add(index) Then nextSelection.Remove(index)
+                SetSelection(nextSelection)
+            End If
+        End Sub
         Private _itemHeight As Single = 24.0F
         Private _scrollOffset As Single = 0
         Private _selectionColor As Color = New Color(60, 100, 60)
@@ -261,6 +384,8 @@ Namespace [Shared].Drawing.UI.Input
             Set(value As Integer)
                 If value >= -1 AndAlso value < _items.Count Then
                     _selectedIndex = value
+                    selectedIndices.Clear()
+                    If value >= 0 Then selectedIndices.Add(value)
                     UpdateItemColors()
                     RaiseEvent SelectionChanged(Me, _selectedIndex)
                 End If
@@ -301,20 +426,23 @@ Namespace [Shared].Drawing.UI.Input
             BackgroundColor = New Color(35, 35, 35)
             Size = New Vector2(200, 150)
             Clip = True
+            VirtualizationViewport = Me
             AddHandler MouseWheel, AddressOf HandleMouseWheel
         End Sub
 
         Private Sub HandleMouseWheel(delta As Integer, point As Point)
             If delta = 0 Then Return
             _scrollOffset -= (delta / 120.0F) * _itemHeight * 3
-            Dim maxOffset = Math.Max(0.0F, _items.Count * _itemHeight - Size.Y)
+            Dim maxOffset = Math.Max(0.0F, ContentHeight - (Size.Y - HeaderOffset))
             _scrollOffset = Math.Max(0.0F, Math.Min(_scrollOffset, maxOffset))
             Invalidate()
         End Sub
 
         Public Sub AddItem(item As String)
             _items.Add(item)
-            RebuildItems()
+            AppendItemVisual(_items.Count - 1)
+            ' Child insertion invalidates the list. Resolve the whole batch on
+            ' the next scene validation instead of remeasuring every prior row.
         End Sub
 
         Public Sub RemoveItem(item As String)
@@ -335,6 +463,9 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub RebuildItems()
+            selectedIndices.RemoveWhere(Function(index) index >= _items.Count)
+            deferredItemLayout += 1
+            Try
             ' Clear existing elements
             For Each elem In _itemElements
                 Children.Remove(elem)
@@ -343,51 +474,108 @@ Namespace [Shared].Drawing.UI.Input
             _itemElements.Clear()
 
             ' Create new item elements
-            Dim yOffset As Single = 0
             For i As Integer = 0 To _items.Count - 1
-                Dim index As Integer = i
+                AppendItemVisual(i)
+            Next
+            Finally
+                deferredItemLayout -= 1
+            End Try
+            Invalidate()
+        End Sub
+
+        Private Sub AppendItemVisual(index As Integer)
+            deferredItemLayout += 1
+            Try
                 Dim itemBg As New RectangleElement(Scene) With {
-                    .Position = New Vector2(0, yOffset),
+                    .Position = New Vector2(0, index * _itemHeight),
                     .Size = New Vector2(Size.X, _itemHeight),
-                    .BackgroundColor = If(i = _selectedIndex, _selectionColor, Color.Transparent)
+                    .BackgroundColor = If(selectedIndices.Contains(index), _selectionColor, Color.Transparent)
                 }
+                itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(index)
 
                 Dim itemText As New TextElement(Scene) With {
-                    .Text = _items(i),
+                    .Text = _items(index),
                     .ForegroundColor = Color.White,
                     .Margin = New Thickness(6, 2, 0, 0),
                     .isMouseBypassEnabled = True
                 }
 
                 If ItemVisualFactory IsNot Nothing Then
-                    itemBg.Children.Add(ItemVisualFactory(i))
+                    If Not HasVirtualTemplates Then itemBg.Children.Add(ItemVisualFactory(index))
                     itemText.Dispose()
                 Else
                     itemBg.Children.Add(itemText)
+                    If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(index, itemBg, itemText)
                 End If
                 _itemElements.Add(itemBg)
                 Children.Add(itemBg)
 
                 AddHandler itemBg.MouseLeftClick, Sub(p)
-                                                      SelectedIndex = index
+                                                      If Not itemBg.isEnabled Then Return
+                                                      Dim keys = Microsoft.Xna.Framework.Input.Keyboard.GetState()
+                                                      SelectIndex(index, keys.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftControl) OrElse keys.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightControl), keys.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftShift) OrElse keys.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightShift))
                                                   End Sub
-
-                yOffset += _itemHeight
-            Next
-            Invalidate()
+            Finally
+                deferredItemLayout -= 1
+            End Try
         End Sub
 
         Protected Overrides Sub AlignChildren()
+            If deferredItemLayout > 0 Then Return
+            If _headerVisual IsNot Nothing Then
+                _headerVisual.Position = Position
+                _headerVisual.Size = New Vector2(Size.X, HeaderHeight)
+            End If
+            Dim top As Single
+            Dim rowWidth = If(WrapItems OrElse ItemsOrientation = Orientation.Horizontal, ItemWidth, Size.X)
+            Dim virtualTemplates = HasVirtualTemplates
+            Dim attached = Not virtualTemplates OrElse (Scene IsNot Nothing AndAlso Scene.Elements.Contains(Me))
+            Dim ancestor = Parent
+            While attached AndAlso ancestor IsNot Nothing
+                attached = ancestor.isVisible
+                ancestor = ancestor.Parent
+            End While
             For index = 0 To _itemElements.Count - 1
                 Dim item = _itemElements(index)
-                item.Position = New Vector2(Position.X, Position.Y + index * _itemHeight - _scrollOffset)
-                item.Size = New Vector2(Size.X, _itemHeight)
+                Dim height = If(virtualTemplates, Math.Max(_itemHeight, estimatedTemplateHeight), _itemHeight)
+                Dim nearViewport = attached AndAlso top + height >= _scrollOffset - 64 AndAlso top <= _scrollOffset + Size.Y + 64
+                If virtualTemplates AndAlso nearViewport AndAlso item.Children.Count = 0 Then
+                    item.Children.Add(ItemVisualFactory(index))
+                ElseIf virtualTemplates AndAlso Not nearViewport AndAlso item.Children.Count > 0 Then
+                    Dim previousView = item.Children(0)
+                    item.Children.Remove(previousView)
+                    If ReleaseItemVisual IsNot Nothing Then ReleaseItemVisual.Invoke(index, previousView)
+                    previousView.Dispose()
+                End If
+                If ItemVisualFactory IsNot Nothing AndAlso Not WrapItems AndAlso ItemsOrientation = Orientation.Vertical AndAlso item.Children.Count > 0 Then
+                    Dim view = item.Children(0)
+                    Dim desired = If(view.ImportedMeasure Is Nothing, view.Size, view.ImportedMeasure.Invoke(Math.Max(1, rowWidth)))
+                    If Single.IsFinite(desired.Y) Then height = Math.Max(_itemHeight, desired.Y)
+                    If virtualTemplates Then estimatedTemplateHeight = height
+                    If view.ImportedMeasure IsNot Nothing Then view.Size = New Vector2(rowWidth, height)
+                End If
+                Dim location = If(WrapItems OrElse ItemsOrientation = Orientation.Horizontal, ItemLocation(index), New Vector2(0, top))
+                item.Position = Position + location + New Vector2(0, HeaderOffset - _scrollOffset)
+                item.Size = New Vector2(rowWidth, height)
+                top += height
             Next
+        End Sub
+
+        Public Sub ScrollIntoView(index As Integer)
+            If index < 0 OrElse index >= _items.Count Then Throw New ArgumentOutOfRangeException(NameOf(index))
+            AlignChildren()
+            Dim top = ItemLocation(index).Y
+            If top < _scrollOffset Then _scrollOffset = top
+            Dim viewportHeight = Math.Max(0.0F, Size.Y - HeaderOffset)
+            Dim height = If(index < _itemElements.Count, _itemElements(index).Size.Y, _itemHeight)
+            If top + height > _scrollOffset + viewportHeight Then _scrollOffset = top + height - viewportHeight
+            _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, Math.Max(0, ContentHeight - viewportHeight)))
+            AlignChildren()
         End Sub
 
         Private Sub UpdateItemColors()
             For i As Integer = 0 To _itemElements.Count - 1
-                _itemElements(i).BackgroundColor = If(i = _selectedIndex, _selectionColor, Color.Transparent)
+                _itemElements(i).BackgroundColor = If(selectedIndices.Contains(i), _selectionColor, Color.Transparent)
             Next
         End Sub
     End Class
@@ -417,14 +605,23 @@ Namespace [Shared].Drawing.UI.Input
                 Return _selectedIndex
             End Get
             Set(value As Integer)
-                If value >= 0 AndAlso value < _tabs.Count Then
-                    _selectedIndex = value
-                    UpdateTabs()
+                If value = _selectedIndex Then Return
+                If value >= -1 AndAlso value < _tabs.Count Then
+                      _selectedIndex = value
+                      UpdateTabs(False)
                     RaiseEvent SelectionChanged(Me, _selectedIndex)
                 End If
             End Set
         End Property
 
+        Public Sub SetTabs(tabs As IEnumerable(Of TabItem))
+            Dim previousContent = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
+            _tabs = tabs.ToList()
+            If _selectedIndex < 0 OrElse _selectedIndex >= _tabs.Count OrElse Not _tabs(_selectedIndex).IsVisible Then _selectedIndex = _tabs.FindIndex(Function(tab) tab.IsVisible)
+            UpdateTabs()
+            Dim selectedContent = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
+            If previousContent IsNot selectedContent Then RaiseEvent SelectionChanged(Me, _selectedIndex)
+        End Sub
         Public Property TabHeaderHeight As Single
             Get
                 Return _tabHeaderHeight
@@ -470,28 +667,40 @@ Namespace [Shared].Drawing.UI.Input
             End If
         End Sub
 
-        Private Sub UpdateTabs()
+        Private Sub UpdateTabs(Optional rebuildHeaders As Boolean = True)
+            If Not rebuildHeaders Then
+                Dim visibleIndex = 0
+                For index = 0 To _tabs.Count - 1
+                    If Not _tabs(index).IsVisible Then Continue For
+                    _tabHeaders(visibleIndex).BackgroundColor = If(index = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
+                    visibleIndex += 1
+                Next
+            Else
             ' Clear existing headers
             For Each header In _tabHeaders
+                For Each child In header.Children.ToArray()
+                    If child IsNot header.TextElement Then header.Children.Remove(child)
+                Next
                 Children.Remove(header)
+                header.Dispose()
             Next
             _tabHeaders.Clear()
 
-            ' Clear content area children
-            _contentArea.Children.Clear()
-
-            If _tabs.Count = 0 Then Return
-
             ' Create tab headers
-            Dim tabWidth As Single = Size.X / _tabs.Count
+            Dim tabWidth As Single = Size.X / Math.Max(1, _tabs.Where(Function(tab) tab.IsVisible).Count())
+            Dim visibleIndex = 0
             For i As Integer = 0 To _tabs.Count - 1
+                If Not _tabs(i).IsVisible Then Continue For
                 Dim index As Integer = i
                 Dim header As New Button(Scene)
                 header.CornerRadii = New CornerRadii(4, 4, 0, 0)
                 header.AutoSize = ButtonAutoSize.None
-                header.Text = _tabs(i).Header
-                header.Position = New Vector2(Position.X + i * tabWidth, Position.Y)
+                header.Text = If(_tabs(i).HeaderContent Is Nothing, _tabs(i).Header, String.Empty)
+                If _tabs(i).HeaderContent IsNot Nothing Then header.Children.Add(_tabs(i).HeaderContent)
+                header.Position = New Vector2(Position.X + visibleIndex * tabWidth, Position.Y)
                 header.Size = New Vector2(tabWidth, _tabHeaderHeight)
+                visibleIndex += 1
+                header.isEnabled = _tabs(i).IsEnabled
                 header.BackgroundColor = If(i = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
 
                 AddHandler header.MouseLeftClick, Sub(p)
@@ -501,17 +710,18 @@ Namespace [Shared].Drawing.UI.Input
                 _tabHeaders.Add(header)
                 Children.Add(header)
             Next
+            End If
 
             ' Update content area
             _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
             _contentArea.Size = New Vector2(Size.X, Size.Y - _tabHeaderHeight)
 
-            ' Add selected tab content
-            If _selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count Then
-                Dim content = _tabs(_selectedIndex).Content
-                If content IsNot Nothing Then
-                    _contentArea.Children.Add(content)
-                End If
+            ' Preserve the active subtree when only a header or selection style
+            ' changes. Detaching every refresh also discards focus and input.
+            Dim content = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
+            If _contentArea.Children.Count <> If(content Is Nothing, 0, 1) OrElse (content IsNot Nothing AndAlso Not _contentArea.Children.Contains(content)) Then
+                _contentArea.Children.Clear()
+                If content IsNot Nothing Then _contentArea.Children.Add(content)
             End If
         End Sub
 
@@ -520,9 +730,17 @@ Namespace [Shared].Drawing.UI.Input
             For index = 0 To _tabHeaders.Count - 1
                 _tabHeaders(index).Position = New Vector2(Position.X + index * tabWidth, Position.Y)
                 _tabHeaders(index).Size = New Vector2(tabWidth, _tabHeaderHeight)
+                Dim header = _tabHeaders(index)
+                For Each child In header.Children.Where(Function(element) element IsNot header.TextElement)
+                    child.Position = header.Position + New Vector2(6, 2)
+                Next
             Next
             _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
             _contentArea.Size = New Vector2(Size.X, Math.Max(0, Size.Y - _tabHeaderHeight))
+            For Each child In _contentArea.Children
+                child.Position = _contentArea.Position
+                child.Size = _contentArea.Size
+            Next
         End Sub
     End Class
 
@@ -531,7 +749,10 @@ Namespace [Shared].Drawing.UI.Input
     ''' </summary>
     Public Class TabItem
         Public Property Header As String
+        Public Property HeaderContent As SceneElement
         Public Property Content As SceneElement
+        Public Property IsVisible As Boolean = True
+        Public Property IsEnabled As Boolean = True
     End Class
 
     ''' <summary>
@@ -549,7 +770,70 @@ Namespace [Shared].Drawing.UI.Input
         Private _scrollbarWidth As Single = 12.0F
         Private _canScrollVertically As Boolean = True
         Private _canScrollHorizontally As Boolean = False
+        Private _verticalVisibility As Integer = 1
+        Private _horizontalVisibility As Integer = 0
         Private _scrollVelocity As Vector2 = Vector2.Zero
+
+        ' Values match Disabled, Auto, Hidden, Visible. Hidden retains scrolling.
+        Public Property VerticalScrollBarVisibility As Integer
+            Get
+                Return _verticalVisibility
+            End Get
+            Set(value As Integer)
+                If value < 0 OrElse value > 3 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                _verticalVisibility = value
+                _canScrollVertically = value <> 0
+                ClampScrollOffset()
+                UpdateContentPosition()
+                UpdateScrollbars()
+            End Set
+        End Property
+
+        Public Property HorizontalScrollBarVisibility As Integer
+            Get
+                Return _horizontalVisibility
+            End Get
+            Set(value As Integer)
+                If value < 0 OrElse value > 3 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                _horizontalVisibility = value
+                _canScrollHorizontally = value <> 0
+                ClampScrollOffset()
+                UpdateContentPosition()
+                UpdateScrollbars()
+            End Set
+        End Property
+
+        Public ReadOnly Property VerticalScrollBarIsVisible As Boolean
+            Get
+                Return _verticalScrollbar IsNot Nothing AndAlso _verticalScrollbar.isVisible
+            End Get
+        End Property
+
+        Public ReadOnly Property HorizontalScrollBarIsVisible As Boolean
+            Get
+                Return _horizontalScrollbar IsNot Nothing AndAlso _horizontalScrollbar.isVisible
+            End Get
+        End Property
+
+        Private Function Viewport() As Vector2
+            Dim showVertical = _verticalVisibility = 3
+            Dim showHorizontal = _horizontalVisibility = 3
+            For pass = 0 To 2
+                If _content IsNot Nothing Then
+                    If _verticalVisibility = 1 Then showVertical = _content.Size.Y > Math.Max(0, Size.Y - If(showHorizontal, _scrollbarWidth, 0))
+                    If _horizontalVisibility = 1 Then showHorizontal = _content.Size.X > Math.Max(0, Size.X - If(showVertical, _scrollbarWidth, 0))
+                End If
+            Next
+            Return New Vector2(Math.Max(0, Size.X - If(showVertical, _scrollbarWidth, 0)), Math.Max(0, Size.Y - If(showHorizontal, _scrollbarWidth, 0)))
+        End Function
+
+        Public ReadOnly Property ScrollableSize As Vector2
+            Get
+                If _content Is Nothing Then Return Vector2.Zero
+                Dim available = Viewport()
+                Return New Vector2(If(_canScrollHorizontally, Math.Max(0, _content.Size.X - available.X), 0), If(_canScrollVertically, Math.Max(0, _content.Size.Y - available.Y), 0))
+            End Get
+        End Property
 
         Public Property Content As SceneElement
             Get
@@ -582,6 +866,7 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Boolean)
                 _canScrollVertically = value
+                _verticalVisibility = If(value, 1, 0)
                 UpdateScrollbars()
             End Set
         End Property
@@ -592,6 +877,7 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Boolean)
                 _canScrollHorizontally = value
+                _horizontalVisibility = If(value, 1, 0)
                 UpdateScrollbars()
             End Set
         End Property
@@ -733,8 +1019,9 @@ Namespace [Shared].Drawing.UI.Input
                 Return
             End If
 
-            Dim maxScrollX = Math.Max(0, _content.Size.X - Size.X + If(_canScrollVertically, _scrollbarWidth, 0))
-            Dim maxScrollY = Math.Max(0, _content.Size.Y - Size.Y + If(_canScrollHorizontally, _scrollbarWidth, 0))
+            Dim available = ScrollableSize
+            Dim maxScrollX = available.X
+            Dim maxScrollY = available.Y
 
             _scrollOffset.X = Math.Max(0, Math.Min(_scrollOffset.X, maxScrollX))
             _scrollOffset.Y = Math.Max(0, Math.Min(_scrollOffset.Y, maxScrollY))
@@ -755,18 +1042,19 @@ Namespace [Shared].Drawing.UI.Input
                 Return
             End If
 
-            Dim viewportWidth = Size.X - If(_canScrollVertically, _scrollbarWidth, 0)
-            Dim viewportHeight = Size.Y - If(_canScrollHorizontally, _scrollbarWidth, 0)
+            Dim available = Viewport()
+            Dim viewportWidth = available.X
+            Dim viewportHeight = available.Y
 
             ' Vertical scrollbar
-            If _canScrollVertically AndAlso _content.Size.Y > viewportHeight Then
+            If _verticalVisibility = 3 OrElse _verticalVisibility = 1 AndAlso _content.Size.Y > viewportHeight Then
                 _verticalScrollbar.isVisible = True
                 _verticalTrack.isVisible = True
                 _verticalTrack.Position = New Vector2(Position.X + Size.X - _scrollbarWidth, Position.Y)
                 _verticalTrack.Size = New Vector2(_scrollbarWidth, Math.Max(0, viewportHeight))
-                Dim scrollRatio = viewportHeight / _content.Size.Y
+                Dim scrollRatio = If(_content.Size.Y > 0, Math.Min(1, viewportHeight / _content.Size.Y), 1)
                 Dim thumbHeight = Math.Min(viewportHeight, Math.Max(20, viewportHeight * scrollRatio))
-                Dim thumbOffset = (_scrollOffset.Y / (_content.Size.Y - viewportHeight)) * (viewportHeight - thumbHeight)
+                Dim thumbOffset = If(_content.Size.Y > viewportHeight, (_scrollOffset.Y / (_content.Size.Y - viewportHeight)) * (viewportHeight - thumbHeight), 0)
 
                 _verticalScrollbar.Position = New Vector2(Position.X + Size.X - _scrollbarWidth, Position.Y + thumbOffset)
                 _verticalScrollbar.Size = New Vector2(_scrollbarWidth, thumbHeight)
@@ -776,14 +1064,14 @@ Namespace [Shared].Drawing.UI.Input
             End If
 
             ' Horizontal scrollbar
-            If _canScrollHorizontally AndAlso _content.Size.X > viewportWidth Then
+            If _horizontalVisibility = 3 OrElse _horizontalVisibility = 1 AndAlso _content.Size.X > viewportWidth Then
                 _horizontalScrollbar.isVisible = True
                 _horizontalTrack.isVisible = True
                 _horizontalTrack.Position = New Vector2(Position.X, Position.Y + Size.Y - _scrollbarWidth)
                 _horizontalTrack.Size = New Vector2(Math.Max(0, viewportWidth), _scrollbarWidth)
-                Dim scrollRatio = viewportWidth / _content.Size.X
+                Dim scrollRatio = If(_content.Size.X > 0, Math.Min(1, viewportWidth / _content.Size.X), 1)
                 Dim thumbWidth = Math.Min(viewportWidth, Math.Max(20, viewportWidth * scrollRatio))
-                Dim thumbOffset = (_scrollOffset.X / (_content.Size.X - viewportWidth)) * (viewportWidth - thumbWidth)
+                Dim thumbOffset = If(_content.Size.X > viewportWidth, (_scrollOffset.X / (_content.Size.X - viewportWidth)) * (viewportWidth - thumbWidth), 0)
 
                 _horizontalScrollbar.Position = New Vector2(Position.X + thumbOffset, Position.Y + Size.Y - _scrollbarWidth)
                 _horizontalScrollbar.Size = New Vector2(thumbWidth, _scrollbarWidth)
@@ -794,6 +1082,19 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Protected Overrides Sub AlignChildren()
+            If _content IsNot Nothing AndAlso _content.ImportedMeasure IsNot Nothing Then
+                ' Imported stacks keep their natural scroll extent, while the
+                ' non-scrolling axis follows the viewport instead of a stale
+                ' parser default. Re-measure if automatic scrollbars consume space.
+                For pass = 0 To 2
+                    Dim available = Viewport()
+                    Dim desired = _content.ImportedMeasure.Invoke(Math.Max(1, available.X))
+                    Dim arranged As New Vector2(If(_canScrollHorizontally, Math.Max(available.X, desired.X), available.X),
+                                               If(_canScrollVertically, Math.Max(available.Y, desired.Y), available.Y))
+                    If arranged = _content.Size Then Exit For
+                    _content.Size = arranged
+                Next
+            End If
             ClampScrollOffset()
             UpdateContentPosition()
             UpdateScrollbars()
@@ -848,6 +1149,11 @@ Namespace [Shared].Drawing.UI.Input
         Private _expandedHeight As Single = 150.0F
 
         Public Event ExpandedChanged(sender As Expander, isExpanded As Boolean)
+        Public ReadOnly Property HeaderElement As Button
+            Get
+                Return _headerButton
+            End Get
+        End Property
 
         Public Property Header As String
             Get
@@ -1018,6 +1324,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Sub Show(position As Vector2)
             Me.Position = position
+            _textElement.Position = position + New Vector2(6, 4)
             isVisible = True
         End Sub
 
@@ -1043,6 +1350,12 @@ Namespace [Shared].Drawing.UI.Input
         Private _contentArea As RectangleElement
         Private _headerHeight As Single = 20.0F
         Private _borderColor As Color = New Color(80, 80, 80)
+
+        Public ReadOnly Property HeaderHeight As Single
+            Get
+                Return _headerHeight
+            End Get
+        End Property
 
         Public Property Header As String
             Get
@@ -1102,8 +1415,8 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
         Protected Overrides Sub AlignChildren()
             _headerText.Position = New Vector2(Position.X + 10, Position.Y + 2)
-            _contentArea.Position = New Vector2(Position.X + 4, Position.Y + _headerHeight)
-            _contentArea.Size = New Vector2(Math.Max(0, Size.X - 8), Math.Max(0, Size.Y - _headerHeight - 4))
+            _contentArea.Position = New Vector2(Position.X + 4 + Padding.Left, Position.Y + _headerHeight + Padding.Top)
+            _contentArea.Size = New Vector2(Math.Max(0, Size.X - 8 - Padding.Left - Padding.Right), Math.Max(0, Size.Y - _headerHeight - 4 - Padding.Top - Padding.Bottom))
         End Sub
     End Class
 

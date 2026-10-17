@@ -69,8 +69,17 @@ Namespace [Shared].Animations
             ' Hack to enable the concurrent binding of animations
             If BindQueue.Count > 0 Then
                 Dim pending = BindQueue.ToArray()
-                BindQueue.Clear()
                 For Each binding In pending
+                    Dim pendingAnimation = DirectCast(binding(0), AnimationBase)
+                    pendingAnimation.gameTime = gameTime
+                    If pendingAnimation.WaitingToStart Then Continue For
+                    If pendingAnimation.CaptureFromOnStart Then
+                        Dim startingValue = DirectCast(binding(1), ElementProperty).GetValue()
+                        If pendingAnimation.RelativeToStart Then pendingAnimation.To = Convert.ToDouble(pendingAnimation.To) + Convert.ToDouble(startingValue) - Convert.ToDouble(pendingAnimation.From)
+                        pendingAnimation.From = startingValue
+                        pendingAnimation.CaptureFromOnStart = False
+                    End If
+                    BindQueue.Remove(binding)
                     If binding Is Nothing Then Continue For
                     Dim Animation As AnimationBase = CType(binding(0), AnimationBase)
                     Dim TargetProperty As ElementProperty = CType(binding(1), ElementProperty)
@@ -99,6 +108,13 @@ Namespace [Shared].Animations
             For i As Integer = InactiveAnimations.Count - 1 To 0 Step -1
                 Dim A As AnimationBase = InactiveAnimations(i)
                 ActiveAnimations.Remove(A)
+                If A.RestoreBaseOnCompletion Then
+                    Dim owner = propertyOwners.FirstOrDefault(Function(p) p.Animation Is A)
+                    If owner IsNot Nothing Then
+                        owner.Target.SetValue(owner.BaseValue)
+                        propertyOwners.Remove(owner)
+                    End If
+                End If
                 InactiveAnimations.RemoveAt(i)
             Next
 

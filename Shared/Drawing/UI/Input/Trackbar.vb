@@ -63,6 +63,8 @@ Namespace [Shared].Drawing.UI.Input
         Private _Font As String = Content.Fonts.SegoeUI.GetResourceName(12)
 
         Public Property FixedInterval As Boolean = True
+        Public Property TickFrequency As Double = 1
+        Public Property IsSnapToTickEnabled As Boolean
 
         Public Property ShowValue As Boolean = True
 
@@ -91,6 +93,7 @@ Namespace [Shared].Drawing.UI.Input
             Dim span = Math.Max(1, Size.X - Slider.Size.X - Padding.Left - Padding.Right)
             Dim fraction = Math.Clamp((x - Position.X - Padding.Left - Slider.Size.X / 2) / span, 0, 1)
             Dim selected = MinimumValue + fraction * (MaximumValue - MinimumValue)
+            If IsSnapToTickEnabled AndAlso TickFrequency > 0 Then selected = MinimumValue + Math.Round((selected - MinimumValue) / TickFrequency) * TickFrequency
             Value = If(FixedInterval, Math.Round(selected), selected)
         End Sub
 

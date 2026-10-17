@@ -110,6 +110,7 @@ Namespace [Shared].Drawing.UI.Layout
         ''' Arranges child elements according to the orientation.
         ''' </summary>
         Public Sub ArrangeChildren()
+            If ImportedLayout IsNot Nothing Then Return
             Dim currentOffset As Single = 0
             Dim maxCrossSize As Single = 0
 

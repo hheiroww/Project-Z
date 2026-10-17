@@ -40,6 +40,7 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Protected Overrides Sub AlignChildren()
+            MyBase.AlignChildren()
             Dim thickness = Math.Max(0, BorderThickness)
             For Each edge In edges
                 edge.BackgroundColor = BorderColor
@@ -49,11 +50,6 @@ Namespace [Shared].Drawing.UI.Input
             edges(1).Position = New Vector2(Position.X, Position.Y + Size.Y - thickness) : edges(1).Size = New Vector2(Size.X, thickness)
             edges(2).Position = Position : edges(2).Size = New Vector2(thickness, Size.Y)
             edges(3).Position = New Vector2(Position.X + Size.X - thickness, Position.Y) : edges(3).Size = New Vector2(thickness, Size.Y)
-            For Each child In Children
-                If Not edges.Cast(Of SceneElement)().Contains(child) Then
-                    child.Position = New Vector2(Position.X + Padding.Left, Position.Y + Padding.Top)
-                End If
-            Next
         End Sub
 
     End Class
@@ -82,6 +78,20 @@ Namespace [Shared].Drawing.UI.Input
     <Serializable>
     Public Class RichTextBox
         Inherits Textbox
+        ''' <summary>Project-Z elements embedded after the editable vector text.</summary>
+        Public ReadOnly Property Elements As New List(Of SceneElement)
+        Protected Overrides Sub AlignChildren()
+            MyBase.AlignChildren()
+            Dim y = TextElement.Position.Y + TextElement.Size.Y + Padding.Bottom
+            For Each element In Elements
+                element.Position = New Vector2(Position.X + Padding.Left, y)
+                y += element.Size.Y + element.Margin.Top + element.Margin.Bottom
+            Next
+        End Sub
+        Public Overrides Function GetCopyText() As String
+            If SelectionLength > 0 Then Return MyBase.GetCopyText()
+            Return String.Join(Environment.NewLine, New String() {Text}.Concat(Elements.Select(Function(element) element.GetCopyText())).Where(Function(value) Not String.IsNullOrEmpty(value)))
+        End Function
         Public Sub New(scene As Scene)
             MyBase.New(scene)
             AcceptsReturn = True
@@ -127,7 +137,7 @@ Namespace [Shared].Drawing.UI.Input
     <Serializable>
     Public Class ContextMenu
         Inherits StackPanel
-        Private ReadOnly ownerScene As Scene
+        Private Shadows ReadOnly ownerScene As Scene
         Public Property DismissDistance As Single = 28.0F
         Public Property IsOpen As Boolean
             Get

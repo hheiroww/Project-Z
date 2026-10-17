@@ -21,6 +21,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Property SpreadMethod As String = "Pad"
         Public Property Radius As New Vector2(0.5F)
         Private texture As Texture2D
+        Private ReadOnly deviceTextures As New Dictionary(Of GraphicsDevice, Texture2D)
         Private previousGeometry As (Width As Integer, Height As Integer, Corners As CornerRadii, Border As Single, BorderColor As Color)
         Private previousGradient As (Radial As Boolean, Start As Vector2, [End] As Vector2, Center As Vector2, Radius As Vector2, Origin As Vector2, Opacity As Single, Absolute As Boolean, Spread As String)
         Private previousStops As (Offset As Single, Color As Color)() = Array.Empty(Of (Single, Color))()
@@ -41,13 +42,15 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Function GetTexture(device As GraphicsDevice, width As Integer, height As Integer, corners As CornerRadii,
                                    Optional border As Single = 0, Optional borderColor As Color = Nothing) As Texture2D
             Dim logicalWidth = Math.Max(1, width), logicalHeight = Math.Max(1, height)
+            Dim switchedDevice = texture IsNot Nothing AndAlso texture.GraphicsDevice IsNot device
+            If texture Is Nothing OrElse switchedDevice Then deviceTextures.TryGetValue(device, texture)
             corners = corners.Fit(logicalWidth, logicalHeight)
             border = Math.Max(0, border)
             width = Math.Clamp(width, 1, 512)
             height = Math.Clamp(height, 1, 512)
             Dim geometry = (logicalWidth, logicalHeight, corners, border, borderColor)
             Dim gradient = (IsRadial, StartPoint, EndPoint, Center, Me.Radius, GradientOrigin, Opacity, AbsoluteMapping, SpreadMethod)
-            Dim unchanged = texture IsNot Nothing AndAlso previousGeometry.Equals(geometry) AndAlso previousGradient.Equals(gradient) AndAlso previousStops.Length = Stops.Count
+            Dim unchanged = Not switchedDevice AndAlso texture IsNot Nothing AndAlso Not texture.IsDisposed AndAlso previousGeometry.Equals(geometry) AndAlso previousGradient.Equals(gradient) AndAlso previousStops.Length = Stops.Count
             If unchanged Then
                 For i = 0 To Stops.Count - 1
                     If previousStops(i).Offset <> Stops(i).Offset OrElse previousStops(i).Color <> Stops(i).Color Then
@@ -124,9 +127,10 @@ Namespace [Shared].Drawing.UI.Primitives
                     End If
                 End SyncLock
             End If
-            If texture Is Nothing OrElse texture.Width <> width OrElse texture.Height <> height Then
+            If texture Is Nothing OrElse texture.IsDisposed OrElse texture.Width <> width OrElse texture.Height <> height Then
                 texture?.Dispose()
                 texture = New Texture2D(device, width, height)
+                deviceTextures(device) = texture
             End If
             texture.SetData(pixels)
             _PixelData = pixels
@@ -150,7 +154,8 @@ Namespace [Shared].Drawing.UI.Primitives
         End Function
 
         Public Sub Dispose() Implements IDisposable.Dispose
-            texture?.Dispose()
+            For Each cached In deviceTextures.Values : cached.Dispose() : Next
+            deviceTextures.Clear()
             texture = Nothing
             _PixelData = Nothing
         End Sub

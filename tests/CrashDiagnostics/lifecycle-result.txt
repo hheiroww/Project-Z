@@ -1,0 +1,1 @@
+PASS: actual DX12 runtime; hidden/minimized main with active chat, all windows hidden, visible restoration; seconds=210.0; textureUploads=175920; GPU completions=2117; renderErrors=0; chat=visible=True;ticks=5629;frames=1989;requested=False;animating=False;queued=0;size=900x620

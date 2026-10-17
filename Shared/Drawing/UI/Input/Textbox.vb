@@ -15,10 +15,15 @@ Namespace [Shared].Drawing.UI.Input
     <Serializable>
     Public Class Textbox
         Inherits RectangleElement
+        Public Overrides Function GetCopyText() As String
+            If MaskCharacter.HasValue OrElse TypeOf Me Is PasswordBox Then Return String.Empty
+            Return If(SelectionLength > 0, SelectedText, Text)
+        End Function
 
 #Region "Properties"
         ''' <summary>Allows selection and copy while preventing user edits. Code may still set Text.</summary>
         Private readOnlyValue As Boolean
+        Public Property IsReadOnlyCaretVisible As Boolean = True
         Public Property IsReadOnly As Boolean
             Get
                 Return readOnlyValue
@@ -61,6 +66,8 @@ Namespace [Shared].Drawing.UI.Input
         End Property
         Private _VerticalTextAlignment As VerticalAlignment = VerticalAlignment.Top
         Public Property AcceptsReturn As Boolean = True
+        ''' <summary>Raised once on Enter for a single-line input, without inserting a newline.</summary>
+        Public Event Submitted()
         Public Property SelectionLength As Integer
             Get
                 Return _SelectionLength
@@ -169,6 +176,15 @@ Namespace [Shared].Drawing.UI.Input
         Private layoutText, layoutFont As String
         Private layoutWidth As Single = -1
         Private textScroll As Vector2
+        Private _wrapText As Boolean = True
+        Public Property WrapText As Boolean
+            Get
+                Return _wrapText
+            End Get
+            Set(value As Boolean)
+                _wrapText = value : layoutWidth = -1 : UpdateTextbox()
+            End Set
+        End Property
         Private selectionAnchor As Integer
         Private draggingSelection As Boolean
         Private dragPoint As Point
@@ -224,7 +240,7 @@ Namespace [Shared].Drawing.UI.Input
             Try
                 Dim display = If(_MaskCharacter.HasValue, New String(_MaskCharacter.Value, Text.Length), Text)
                 Dim available = New Vector2(Math.Max(1, Size.X - TextPadding.X * 2 - 1), Math.Max(1, Size.Y - TextPadding.Y * 2))
-                Dim wrapWidth = If(AcceptsReturn, available.X, Single.MaxValue)
+                Dim wrapWidth = If(AcceptsReturn AndAlso WrapText, available.X, Single.MaxValue)
                 Dim lineHeight = CSng(Scene.TextLineSpacing(Font))
                 If inputLayout Is Nothing OrElse display <> layoutText OrElse Font <> layoutFont OrElse wrapWidth <> layoutWidth Then
                     inputLayout = New TextInputLayout(display, wrapWidth, lineHeight, Function(line) Scene.MeasureText(Font, line).X)
@@ -286,7 +302,7 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub UpdateCaretVisibility()
-            If Not CanSelect OrElse Not isSelected Then
+            If Not CanSelect OrElse Not isSelected OrElse (IsReadOnly AndAlso Not IsReadOnlyCaretVisible) Then
                 Caret.BackgroundColor = Color.Transparent
                 Return
             End If
@@ -423,8 +439,18 @@ Namespace [Shared].Drawing.UI.Input
             If IsReadOnly Then Return False
 #If WINDOWS Then
             Try
-                If Not System.Windows.Forms.Clipboard.ContainsText() Then Return False
-                ReplaceSelection(System.Windows.Forms.Clipboard.GetText())
+                Dim data = System.Windows.Forms.Clipboard.GetDataObject()
+                If data Is Nothing Then Return False
+                Dim format = If(data.GetDataPresent(System.Windows.Forms.DataFormats.UnicodeText), System.Windows.Forms.DataFormats.UnicodeText, System.Windows.Forms.DataFormats.Text)
+                Dim context As New ScenePastingContext(data, format)
+                Dim pasteEvent = SceneRoutedEvent.Register("Pasting", SceneEventRouting.Bubble)
+                SceneEvents.RaiseEvent(Me, New SceneRoutedEventArgs(pasteEvent, Me, context))
+                If context.Cancelled Then Return False
+                Dim replacement = TryCast(context.DataObject, System.Windows.Forms.IDataObject)
+                If replacement Is Nothing OrElse Not replacement.GetDataPresent(context.FormatToApply) Then Return False
+                Dim text = TryCast(replacement.GetData(context.FormatToApply), String)
+                If text Is Nothing Then Return False
+                ReplaceSelection(text)
                 Return True
             Catch ex As System.Runtime.InteropServices.ExternalException
                 Return False
@@ -506,6 +532,12 @@ Namespace [Shared].Drawing.UI.Input
             Return position
         End Function
 
+        Private Sub Textbox_OnSubmit(Key As Keys, KeyboardState As KeyboardState) Handles Me.OnKeyDown
+            If Key = Keys.Enter AndAlso Not AcceptsReturn AndAlso Not KeyboardState.IsKeyDown(Keys.LeftControl) AndAlso
+               Not KeyboardState.IsKeyDown(Keys.RightControl) AndAlso Not KeyboardState.IsKeyDown(Keys.LeftAlt) AndAlso
+               Not KeyboardState.IsKeyDown(Keys.RightAlt) Then RaiseEvent Submitted()
+        End Sub
+
         Private Sub Textbox_OnKeyPress(Key As Keys, KeyboardState As KeyboardState) Handles Me.OnKeyPress
             ShowCaret()
             Dim preInput As New PreTextInputEventArgs(Key, KeyboardState)
@@ -563,6 +595,19 @@ Namespace [Shared].Drawing.UI.Input
             UpdateTextbox()
             Return inputLayout.HitTest(point.ToVector2() + Position - TextElement.Position, Scene.TextLineSpacing(Font))
         End Function
+
+        Public Function GetCharacterIndexFromPoint(point As Vector2, snapToText As Boolean) As Integer
+            If Not snapToText AndAlso (point.X < 0 OrElse point.Y < 0 OrElse point.X > Size.X OrElse point.Y > Size.Y) Then Return -1
+            Return HitIndex(New Point(CInt(point.X), CInt(point.Y)))
+        End Function
+        Public Property CaretColor As Color
+            Get
+                Return Caret.BackgroundColor
+            End Get
+            Set(value As Color)
+                Caret.BackgroundColor = value
+            End Set
+        End Property
 
         Private Sub Textbox_OnMouseLeftDown(point As Point) Handles Me.MouseLeftDown
             Dim modifiers = Scene.CurrentKeyboardState

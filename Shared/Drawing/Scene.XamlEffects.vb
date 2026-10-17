@@ -44,7 +44,7 @@ Namespace [Shared].Drawing
             While index < limit
                 Dim element = ordered(index)
                 If Not IsEffectivelyVisible(element) Then index += 1 : Continue While
-                Dim fx = element.VisualEffect
+                Dim fx = element.DrawingEffect
                 If fx Is Nothing OrElse Not fx.IsActive OrElse element Is skipEffect Then
                     DrawElementRecursive(element, device, viewport, forceClip)
                     index += 1
@@ -75,7 +75,7 @@ Namespace [Shared].Drawing
                                 device.ScissorRectangle = New Rectangle(0, 0, physicalBounds.Width, physicalBounds.Height)
                                 device.RasterizerState = RasterizerState.CullNone
                                 DrawEffectRange(ordered, startIndex, endIndex, device, bounds, forceClip, element)
-                            End Sub)
+                            End Sub, element)
                     Finally
                         EffectRenderOffset = previousOffset
                         device.SetRenderTargets(targets)
@@ -88,7 +88,7 @@ Namespace [Shared].Drawing
                     Dim clip = viewport
                     Dim ancestor = element.Parent
                     While ancestor IsNot Nothing
-                        If ancestor.Clip Then clip = Rectangle.Intersect(clip, ancestor.Rectangle)
+                        If ancestor.Clip Then clip = Rectangle.Intersect(clip, ancestor.ClippingRectangle)
                         ancestor = ancestor.Parent
                     End While
                     clip.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
@@ -100,7 +100,7 @@ Namespace [Shared].Drawing
                         device.ScissorRectangle = clip
                         Dim destination = bounds
                         destination.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
-                        fx.Composite(device, texture, Quality.ScaleRectangle(destination))
+                        fx.Composite(device, texture, Quality.ScaleRectangle(destination), element, 0, (element.RotationPivot - New Vector2(bounds.X, bounds.Y)) * Quality.RenderScale)
                         device.RasterizerState = previousRasterizer
                         device.ScissorRectangle = previousScissor
                     End If

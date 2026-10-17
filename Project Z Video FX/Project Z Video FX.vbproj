@@ -24,10 +24,6 @@
     <ProjectReference Include="..\Project Z Windows.vbproj" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Lidgren.Network">
-      <HintPath>bin\Windows\Debug\Lidgren.Network.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="NAudio">
       <HintPath>..\Project Z Audio\bin\Debug\NAudio.dll</HintPath>
       <Private>True</Private>

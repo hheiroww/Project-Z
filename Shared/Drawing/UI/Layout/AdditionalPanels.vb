@@ -12,17 +12,19 @@ Namespace [Shared].Drawing.UI.Layout
             BackgroundColor = Color.Transparent
         End Sub
         Protected Overrides Sub AlignChildren()
-            Dim count = Children.Count
+            Dim visibleChildren = Children.Where(Function(child) child.isVisible).ToArray()
+            Dim count = visibleChildren.Length
             If count = 0 Then Return
-            Dim columnsToUse = If(Columns > 0, Columns, CInt(Math.Ceiling(Math.Sqrt(count))))
+            Dim columnsToUse = If(Columns > 0, Columns, If(Rows > 0, CInt(Math.Ceiling(count / CDbl(Rows))), CInt(Math.Ceiling(Math.Sqrt(count)))))
             Dim rowsToUse = If(Rows > 0, Rows, CInt(Math.Ceiling(count / CDbl(columnsToUse))))
-            Dim cellWidth = Size.X / Math.Max(1, columnsToUse)
-            Dim cellHeight = Size.Y / Math.Max(1, rowsToUse)
+            Dim cellWidth = Math.Max(0, Size.X - Padding.Left - Padding.Right) / Math.Max(1, columnsToUse)
+            Dim cellHeight = Math.Max(0, Size.Y - Padding.Top - Padding.Bottom) / Math.Max(1, rowsToUse)
             For index = 0 To count - 1
                 Dim column = index Mod columnsToUse
                 Dim row = index \ columnsToUse
-                Children(index).Position = New Vector2(Position.X + column * cellWidth, Position.Y + row * cellHeight)
-                Children(index).Size = New Vector2(cellWidth, cellHeight)
+                Dim child = visibleChildren(index), margin = child.Margin
+                child.Position = New Vector2(Position.X + Padding.Left + column * cellWidth + margin.Left, Position.Y + Padding.Top + row * cellHeight + margin.Top)
+                child.Size = New Vector2(Math.Max(0, cellWidth - margin.Left - margin.Right), Math.Max(0, cellHeight - margin.Top - margin.Bottom))
             Next
         End Sub
     End Class
@@ -46,6 +48,9 @@ Namespace [Shared].Drawing.UI.Layout
         Public Sub AddChild(element As SceneElement, dock As Dock)
             docks(element) = dock
             Children.Add(element)
+        End Sub
+        Public Sub SetDock(element As SceneElement, dock As Dock)
+            docks(element) = dock
         End Sub
         Protected Overrides Sub AlignChildren()
             Dim left = Position.X + Padding.Left

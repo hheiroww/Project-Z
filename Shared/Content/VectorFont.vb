@@ -10,12 +10,55 @@ Namespace [Shared].Content
         Implements IDisposable
         Private ReadOnly face As Media.Typeface
         Private ReadOnly emSize As Double
-        Private ReadOnly meshes As New Dictionary(Of String, VertexPositionColor())(StringComparer.Ordinal)
-        Private ReadOnly measurements As New Dictionary(Of String, Vector2)(StringComparer.Ordinal)
+        Private ReadOnly meshes As New TextCache(Of VertexPositionColor())(256)
+        Private ReadOnly measurements As New TextCache(Of Vector2)(1024)
+        ' Evict a single cold entry, preserving the visible labels when changing
+        ' log lines or model rows fill the bounded cache.
+        Private NotInheritable Class TextCache(Of T)
+            Private ReadOnly capacity As Integer
+            Private ReadOnly entries As New Dictionary(Of String, (Value As T, Node As LinkedListNode(Of String)))(StringComparer.Ordinal)
+            Private ReadOnly recent As New LinkedList(Of String)
+            Public Sub New(capacity As Integer)
+                Me.capacity = capacity
+            End Sub
+            Public Function TryGetValue(key As String, ByRef value As T) As Boolean
+                Dim entry As (Value As T, Node As LinkedListNode(Of String)) = Nothing
+                If Not entries.TryGetValue(key, entry) Then Return False
+                recent.Remove(entry.Node)
+                recent.AddFirst(entry.Node)
+                value = entry.Value
+                Return True
+            End Function
+            Public Sub Add(key As String, value As T)
+                If entries.Count >= capacity Then
+                    entries.Remove(recent.Last.Value)
+                    recent.RemoveLast()
+                End If
+                entries.Add(key, (value, recent.AddFirst(key)))
+            End Sub
+            Public Sub Clear()
+                entries.Clear()
+                recent.Clear()
+            End Sub
+        End Class
         Private effect As BasicEffect
         Private clipRasterizer As RasterizerState
+        Private ownerDevice As GraphicsDevice
+        Private deviceDisposing As EventHandler(Of EventArgs)
         Public ReadOnly Property FilePath As String
         Public ReadOnly Property LineSpacing As Integer
+
+        Public Sub New(familyName As String, weight As Integer, pointSize As Single)
+            If String.IsNullOrWhiteSpace(familyName) Then Throw New ArgumentException("Font family is required.", NameOf(familyName))
+            If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
+            face = New Media.Typeface(New Media.FontFamily(familyName), System.Windows.FontStyles.Normal,
+                System.Windows.FontWeight.FromOpenTypeWeight(weight), System.Windows.FontStretches.Normal)
+            Dim glyphFace As Media.GlyphTypeface = Nothing
+            If face.TryGetGlyphTypeface(glyphFace) Then FilePath = glyphFace.FontUri.LocalPath
+            emSize = pointSize * 96.0 / 72.0
+            LineSpacing = CInt(Math.Ceiling(New Media.FormattedText("Mg", CultureInfo.CurrentUICulture,
+                System.Windows.FlowDirection.LeftToRight, face, emSize, Media.Brushes.White, 1.0).Height))
+        End Sub
 
         Public Sub New(path As String, pointSize As Single)
             If pointSize <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
@@ -44,7 +87,6 @@ Namespace [Shared].Content
             If Not measurements.TryGetValue(text, size) Then
                 Dim formatted = Format(text)
                 size = New Vector2(CSng(formatted.WidthIncludingTrailingWhitespace), CSng(formatted.Height))
-                If measurements.Count >= 1024 Then measurements.Clear()
                 measurements.Add(text, size)
             End If
             Return size
@@ -78,7 +120,6 @@ Namespace [Shared].Content
                 Next
             Next
             result = vertices.ToArray()
-            If meshes.Count >= 256 Then meshes.Clear()
             meshes.Add(text, result)
             Return result
         End Function
@@ -90,7 +131,9 @@ Namespace [Shared].Content
             If effect Is Nothing Then
                 effect = New BasicEffect(device) With {.VertexColorEnabled = True}
                 clipRasterizer = New RasterizerState With {.CullMode = CullMode.None, .ScissorTestEnable = True, .MultiSampleAntiAlias = True}
-                AddHandler device.Disposing, Sub(sender, args) Dispose()
+                ownerDevice = device
+                deviceDisposing = Sub(sender, args) Dispose()
+                AddHandler ownerDevice.Disposing, deviceDisposing
             End If
             If vertices(0).Color <> color Then
                 For i = 0 To vertices.Length - 1
@@ -119,6 +162,9 @@ Namespace [Shared].Content
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
+            If ownerDevice IsNot Nothing AndAlso deviceDisposing IsNot Nothing Then RemoveHandler ownerDevice.Disposing, deviceDisposing
+            ownerDevice = Nothing
+            deviceDisposing = Nothing
             effect?.Dispose()
             effect = Nothing
             clipRasterizer?.Dispose()

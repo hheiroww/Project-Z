@@ -21,6 +21,8 @@ Namespace [Shared].Drawing.UI.Advanced
         Private _ownsTexture As Boolean
         Public Property Source As String = String.Empty
         Public Property Stretch As ImageStretch = ImageStretch.Uniform
+        ''' <summary>Optional pixel region for native sprite sheets and ImageBrush viewboxes.</summary>
+        Public Property SourceRectangle As Rectangle?
         Public Property Tint As Color = Color.White
         Public Property OpacityMaskBrush As Primitives.XamlGradientBrush
         Public Property MaskCornerRadius As Func(Of Single)
@@ -65,23 +67,43 @@ Namespace [Shared].Drawing.UI.Advanced
         End Sub
 
         Public Sub Load(stream As Stream)
+            ' Preserve the usable image if decode/upload fails. Disposing it
+            ' first left a disposed texture installed after a failed reload.
+            Dim replacement = Texture2D.FromStream(Scene.graphicsDevice, stream)
             If _ownsTexture AndAlso _texture IsNot Nothing Then _texture.Dispose()
-            _texture = Texture2D.FromStream(Scene.graphicsDevice, stream)
+            _texture = replacement
             _ownsTexture = True
+            InvalidateTexturePixels()
             If Size = Vector2.Zero Then Size = New Vector2(_texture.Width, _texture.Height)
+        End Sub
+
+        Public Sub LoadPixels(width As Integer, height As Integer, pixels As Color())
+            If width <= 0 OrElse height <= 0 OrElse pixels Is Nothing OrElse pixels.LongLength <> CLng(width) * height Then Throw New ArgumentException("Image dimensions do not match its pixel buffer.")
+            Dim replacement As New Texture2D(Scene.graphicsDevice, width, height)
+            Try
+                replacement.SetData(pixels)
+            Catch
+                replacement.Dispose() : Throw
+            End Try
+            If _ownsTexture AndAlso _texture IsNot Nothing Then _texture.Dispose()
+            _texture = replacement : _ownsTexture = True : InvalidateTexturePixels()
+            If Size = Vector2.Zero Then Size = New Vector2(width, height)
         End Sub
 
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
             If _texture Is Nothing Then Return
             Dim drawTexture = _texture
             Dim destination = Rectangle
-            Dim source As Rectangle? = Nothing
-            Dim sourceAspect = CSng(_texture.Width) / Math.Max(1, _texture.Height)
+            Dim sourceBounds = If(SourceRectangle, New Rectangle(0, 0, _texture.Width, _texture.Height))
+            sourceBounds = Microsoft.Xna.Framework.Rectangle.Intersect(sourceBounds, New Rectangle(0, 0, _texture.Width, _texture.Height))
+            If sourceBounds.Width <= 0 OrElse sourceBounds.Height <= 0 Then Return
+            Dim source As Rectangle? = sourceBounds
+            Dim sourceAspect = CSng(sourceBounds.Width) / Math.Max(1, sourceBounds.Height)
             Dim targetAspect = CSng(Math.Max(1, Rectangle.Width)) / Math.Max(1, Rectangle.Height)
 
             Select Case Stretch
                 Case ImageStretch.None
-                    destination = New Rectangle(Rectangle.X, Rectangle.Y, _texture.Width, _texture.Height)
+                    destination = New Rectangle(Rectangle.X, Rectangle.Y, sourceBounds.Width, sourceBounds.Height)
                 Case ImageStretch.Uniform
                     Dim useWidth = targetAspect < sourceAspect
                     Dim width As Integer
@@ -101,11 +123,11 @@ Namespace [Shared].Drawing.UI.Advanced
                     ' Enlarging the destination (the old behavior) let pixels
                     ' escape card/avatar bounds whenever scissoring was absent.
                     If sourceAspect > targetAspect Then
-                        Dim cropWidth = Math.Max(1, CInt(_texture.Height * targetAspect))
-                        source = New Rectangle((_texture.Width - cropWidth) \ 2, 0, cropWidth, _texture.Height)
+                        Dim cropWidth = Math.Max(1, CInt(sourceBounds.Height * targetAspect))
+                        source = New Rectangle(sourceBounds.X + (sourceBounds.Width - cropWidth) \ 2, sourceBounds.Y, cropWidth, sourceBounds.Height)
                     ElseIf sourceAspect < targetAspect Then
-                        Dim cropHeight = Math.Max(1, CInt(_texture.Width / targetAspect))
-                        source = New Rectangle(0, (_texture.Height - cropHeight) \ 2, _texture.Width, cropHeight)
+                        Dim cropHeight = Math.Max(1, CInt(sourceBounds.Width / targetAspect))
+                        source = New Rectangle(sourceBounds.X, sourceBounds.Y + (sourceBounds.Height - cropHeight) \ 2, sourceBounds.Width, cropHeight)
                     End If
             End Select
 

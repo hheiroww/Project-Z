@@ -35,6 +35,12 @@ Namespace [Shared].Animations
             End Get
         End Property
 
+        Friend Sub SetLastTiming(delay As TimeSpan, autoReverse As Boolean, speedRatio As Double, restoreBase As Boolean)
+            If tracks.Count = 0 Then Return
+            Dim track = tracks.Last()
+            track.BeginDelay = delay : track.AutoReverse = autoReverse : track.SpeedRatio = speedRatio : track.RestoreBase = restoreBase
+        End Sub
+
         Public Sub New(name As String)
             Me.Name = If(name, String.Empty)
         End Sub
@@ -132,8 +138,15 @@ Namespace [Shared].Animations
                     animation = New DoubleAnimation(easing, first, last, track.Duration, gameTime, False)
                 End If
                 animation.AutoRepeat = track.RepeatForever
+                animation.BeginDelay = track.BeginDelay
+                animation.AutoReverse = track.AutoReverse
+                animation.SpeedRatio = track.SpeedRatio
+                animation.RestoreBaseOnCompletion = track.RestoreBase
+                animation.CaptureFromOnStart = track.DoubleKeyFrames Is Nothing AndAlso track.ColorKeyFrames Is Nothing AndAlso track.CornerKeyFrames Is Nothing AndAlso
+                    If(track.IsColor, Not track.FromColor.HasValue, Not track.FromDouble.HasValue)
+                animation.RelativeToStart = track.RelativeToCurrent
                 track.Target.BindAnimation(track.TargetProperty, animation)
-                animation.Start()
+                animation.StartAtNextTick()
                 activeTracks.Add(New KeyValuePair(Of SceneElement, AnimationBase)(track.Target, animation))
                 started.Add(animation)
             Next
@@ -155,6 +168,10 @@ Namespace [Shared].Animations
             Public DoubleKeyFrames As List(Of XamlDoubleKeyFrame)
             Public ColorKeyFrames As List(Of XamlColorKeyFrame)
             Public CornerKeyFrames As List(Of XamlCornerRadiusKeyFrame)
+            Public BeginDelay As TimeSpan
+            Public AutoReverse As Boolean
+            Public SpeedRatio As Double = 1.0R
+            Public RestoreBase As Boolean
         End Class
     End Class
 

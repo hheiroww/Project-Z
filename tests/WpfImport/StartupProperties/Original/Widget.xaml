@@ -1,0 +1,15 @@
+<UserControl x:Class="StartupProperties.Widget" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <UserControl.Resources>
+    <SolidColorBrush x:Key="ScopedBrush" Color="Green"/>
+    <Style x:Key="ScopedTextStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="21"/></Style>
+    <Style TargetType="ContextMenu"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border CornerRadius="7" Padding="8"><ItemsPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style>
+  </UserControl.Resources>
+  <StackPanel>
+    <TextBlock x:Name="Label" Text="Original custom content"><TextBlock.ToolTip><ToolTip Placement="Right"><StackPanel><TextBlock Text="First tooltip line"/><TextBlock Text="Second tooltip line"/><ItemsControl ItemsSource="{Binding TooltipRows}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></ToolTip></TextBlock.ToolTip></TextBlock>
+    <Button x:Name="PopupTarget" Content="Popup target"><Button.ContextMenu><ContextMenu x:Name="OwnedMenu"><MenuItem Header="Copy"/></ContextMenu></Button.ContextMenu></Button>
+    <ItemsControl x:Name="Rows" Height="60" ItemsSource="{Binding Rows}">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate><DataTemplate><TextBlock x:Name="RowText" Text="{Binding}" Foreground="{StaticResource ScopedBrush}" Style="{StaticResource ScopedTextStyle}"/></DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

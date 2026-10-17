@@ -15,7 +15,9 @@ Namespace [Shared].Drawing.UI.Advanced
 
         Public Property Vectors As Vector2()
             Get
-                Return _vectorCache
+                SyncLock _vectors
+                    Return _vectors.ToArray()
+                End SyncLock
             End Get
             Set(value As Vector2())
                 ClearVectorPoints()
@@ -228,6 +230,10 @@ Namespace [Shared].Drawing.UI.Advanced
 
         Private Sub Triangulate()
             If _vectors.Count < 3 Then
+                _MeshData = Nothing
+                _FallbackMeshData = Nothing
+                Bounds = Vector2.Zero
+                Triangulated = True
                 Return
             End If
 
@@ -356,7 +362,7 @@ Namespace [Shared].Drawing.UI.Advanced
                                                            Color.White, 1000)
             wireFramePrimitiveBatch = New PrimitiveBatch(spriteBatch.GraphicsDevice,
                                                            WhitePlain,
-                                                           RenderProperties.WireFrameColor, Vectors.Length * 2)
+                                                           RenderProperties.WireFrameColor, Math.Max(4, Vectors.Length * 2))
 
             AddHandler RenderProperties.OnWireFrameColorChanged, Sub(c) wireFramePrimitiveBatch.Color = c
             Triangulated = False
@@ -389,7 +395,16 @@ Namespace [Shared].Drawing.UI.Advanced
                 Next
             Next
             primitiveBatch.End()
-
+            If RenderProperties.WireFrame AndAlso Vectors.Length > 1 Then
+                wireFramePrimitiveBatch.Color = ApplyOpacity(RenderProperties.WireFrameColor)
+                wireFramePrimitiveBatch.Begin(PrimitiveType.LineList)
+                Dim outline = Vectors
+                For index = 0 To outline.Length - 1
+                    wireFramePrimitiveBatch.AddVertex(Position + outline(index))
+                    wireFramePrimitiveBatch.AddVertex(Position + outline((index + 1) Mod outline.Length))
+                Next
+                wireFramePrimitiveBatch.End()
+            End If
         End Sub
 
         Protected Friend Overloads Function ContainsPoint(p As Vector2) As Boolean

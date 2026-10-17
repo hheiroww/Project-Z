@@ -1,7 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Rule Name="ProjectZ" DisplayName="Project-Z" PageTemplate="generic" Order="200" xmlns="http://schemas.microsoft.com/build/2009/properties">
   <Rule.DataSource><DataSource Persistence="ProjectFile" SourceOfDefaultValue="AfterContext" HasConfigurationCondition="false" /></Rule.DataSource>
-  <Rule.Categories><Category Name="Xaml" DisplayName="XAML conversion" /></Rule.Categories>
+  <Rule.Categories>
+    <Category Name="Application" DisplayName="Application startup" />
+    <Category Name="SceneManager" DisplayName="Scene manager" />
+    <Category Name="Rendering" DisplayName="Rendering quality" />
+    <Category Name="Xaml" DisplayName="XAML conversion" />
+  </Rule.Categories>
+  <BoolProperty Name="ProjectZGenerateApplication" DisplayName="Generate Application startup" Category="Application" Description="Generate a static Application.cs (Application.vb for VB) from these settings. Imported WPF applications enable this automatically." />
+  <StringProperty Name="ProjectZMainWindow" DisplayName="Main window" Category="Application" Description="Fully qualified imported Window type. Default preserves App.xaml startup and application startup handlers." />
+  <EnumProperty Name="ProjectZShutdownMode" DisplayName="Shutdown mode" Category="Application">
+    <EnumValue Name="Default" DisplayName="Preserve application setting" />
+    <EnumValue Name="OnLastWindowClose" DisplayName="Last window closes" />
+    <EnumValue Name="OnMainWindowClose" DisplayName="Main window closes" />
+    <EnumValue Name="OnExplicitShutdown" DisplayName="Explicit shutdown" />
+  </EnumProperty>
+  <IntProperty Name="ProjectZFramesPerSecond" DisplayName="Frame rate limit" Category="SceneManager" MinValue="1" MaxValue="1000" />
+  <EnumProperty Name="ProjectZAntiAliasingSamples" DisplayName="Anti-aliasing samples" Category="Rendering" Description="Smooth native vector text and geometry. Default is 4x; DirectX 12 uses supersampling.">
+    <EnumValue Name="0" DisplayName="Off" /><EnumValue Name="2" DisplayName="2x" /><EnumValue Name="4" DisplayName="4x" /><EnumValue Name="8" DisplayName="8x" /><EnumValue Name="16" DisplayName="16x" />
+  </EnumProperty>
+  <EnumProperty Name="ProjectZTextureFiltering" DisplayName="Texture filtering" Category="Rendering" Description="Default is 16x anisotropic filtering.">
+    <EnumValue Name="Bilinear" DisplayName="Bilinear" /><EnumValue Name="Trilinear" DisplayName="Trilinear" /><EnumValue Name="Anisotropic2x" DisplayName="2x anisotropic" /><EnumValue Name="Anisotropic4x" DisplayName="4x anisotropic" /><EnumValue Name="Anisotropic8x" DisplayName="8x anisotropic" /><EnumValue Name="Anisotropic16x" DisplayName="16x anisotropic" />
+  </EnumProperty>
+  <IntProperty Name="ProjectZInitialWidth" DisplayName="Initial viewport width" Category="SceneManager" MinValue="1" MaxValue="16384" />
+  <IntProperty Name="ProjectZInitialHeight" DisplayName="Initial viewport height" Category="SceneManager" MinValue="1" MaxValue="16384" />
+  <IntProperty Name="ProjectZMinimumWidth" DisplayName="Minimum viewport width" Category="SceneManager" MinValue="1" MaxValue="16384" />
+  <IntProperty Name="ProjectZMinimumHeight" DisplayName="Minimum viewport height" Category="SceneManager" MinValue="1" MaxValue="16384" />
+  <BoolProperty Name="ProjectZAutoResizeViewport" DisplayName="Automatically resize viewport" Category="SceneManager" />
+  <BoolProperty Name="ProjectZHardwareInput" DisplayName="Hardware input" Category="SceneManager" />
+  <BoolProperty Name="ProjectZDebugEnabled" DisplayName="Debug overlay" Category="SceneManager" />
+  <BoolProperty Name="ProjectZConsoleEnabled" DisplayName="Scene console" Category="SceneManager" />
+  <StringProperty Name="ProjectZContentRoot" DisplayName="Content directory" Category="SceneManager" />
+  <StringProperty Name="ProjectZBackgroundColor" DisplayName="Background color" Category="SceneManager" Description="Native scene clear color as #RRGGBB or #AARRGGBB." />
   <EnumProperty Name="ProjectZXamlMode" DisplayName="XAML conversion mode" Category="Xaml" Description="Generate only the designer to preserve hand-adapted code-behind, or convert both. Code-behind conversion always includes the designer.">
     <EnumValue Name="Disabled" DisplayName="Disabled" />
     <EnumValue Name="DesignerOnly" DisplayName="Designer only" />

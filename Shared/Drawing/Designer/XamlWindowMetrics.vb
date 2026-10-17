@@ -14,7 +14,7 @@ Namespace [Shared].Drawing.Designer
         Public Shared Function ReadRowHeight(path As String, gridName As String, row As Integer, fallback As Single) As Single
             Dim doc As New XmlDocument With {.XmlResolver = Nothing}
             doc.Load(path)
-            Dim grid = doc.SelectNodes("//*").Cast(Of XmlElement)().FirstOrDefault(Function(node) node.GetAttribute("x:Name") = gridName)
+            Dim grid = doc.SelectNodes("//*").Cast(Of XmlElement)().FirstOrDefault(Function(node) node.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml") = gridName)
             If grid Is Nothing Then Return fallback
             Dim rows = grid.SelectNodes("*[local-name()='Grid.RowDefinitions']/*")
             If row < 0 OrElse row >= rows.Count Then Return fallback
@@ -23,7 +23,7 @@ Namespace [Shared].Drawing.Designer
         Public Shared Function ReadMargin(path As String, name As String) As Thickness
             Dim doc As New XmlDocument With {.XmlResolver = Nothing}
             doc.Load(path)
-            Dim element = doc.SelectNodes("//*").Cast(Of XmlElement)().FirstOrDefault(Function(node) node.GetAttribute("x:Name") = name)
+            Dim element = doc.SelectNodes("//*").Cast(Of XmlElement)().FirstOrDefault(Function(node) node.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml") = name)
             If element Is Nothing OrElse Not element.HasAttribute("Margin") Then Return New Thickness(0)
             Dim values = element.GetAttribute("Margin").Split(","c).Select(Function(value) CInt(Single.Parse(value, CultureInfo.InvariantCulture))).ToArray()
             If values.Length = 1 Then Return New Thickness(values(0))

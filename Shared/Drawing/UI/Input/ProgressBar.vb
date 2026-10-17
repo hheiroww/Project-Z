@@ -12,6 +12,16 @@ Namespace [Shared].Drawing.UI.Input
     <Serializable>
     Public Class ProgressBar
         Inherits RectangleElement
+        Private _orientation As Layout.Orientation
+        Public Property Orientation As Layout.Orientation
+            Get
+                Return _orientation
+            End Get
+            Set(value As Layout.Orientation)
+                _orientation = value
+                UpdateProgress()
+            End Set
+        End Property
 
 #Region "Properties"
 
@@ -261,6 +271,12 @@ Namespace [Shared].Drawing.UI.Input
 
                 ProgressFill.Position = New Vector2(innerX, BorderThickness)
                 ProgressFill.Size = New Vector2(fillWidth, innerHeight)
+            End If
+            If _orientation = Layout.Orientation.Vertical Then
+                Dim ratio As Single = If(_IsIndeterminate, _indeterminateWidth, CSng(Math.Clamp((_Value - _Minimum) / Math.Max(1, _Maximum - _Minimum), 0, 1)))
+                Dim fillHeight As Single = innerHeight * ratio
+                ProgressFill.Position = New Vector2(innerX, BorderThickness + If(_IsIndeterminate, _indeterminateOffset * innerHeight, innerHeight - fillHeight))
+                ProgressFill.Size = New Vector2(innerWidth, fillHeight)
             End If
 
             ' Update percentage text

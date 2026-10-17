@@ -110,7 +110,7 @@ Namespace [Shared].Drawing.Designer
 
         Private Sub ParseElementsRecursive(xmlElement As XmlElement)
             ' Check for x:Name or Name attribute
-            Dim name = xmlElement.GetAttribute("x:Name")
+            Dim name = xmlElement.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml")
             If String.IsNullOrEmpty(name) Then
                 name = xmlElement.GetAttribute("Name")
             End If

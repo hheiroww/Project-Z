@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><AssemblyName>ControlsCodegen.Windows</AssemblyName><Nullable>enable</Nullable><ProjectZXamlMode>DesignerAndCodeBehind</ProjectZXamlMode><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+  <ItemGroup><Compile Include="../Original/View.xaml.cs" Link="View.xaml.cs"/><ProjectZXaml Include="../Original/View.xaml"/><ProjectZXamlSource Include="../Original/View.xaml.cs"/></ItemGroup>
+  <Import Project="../../../../Project Z XAML Codegen/ProjectZ.Xaml.targets"/>
+</Project>

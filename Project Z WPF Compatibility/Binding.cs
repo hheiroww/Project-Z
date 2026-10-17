@@ -17,11 +17,15 @@ public class RelativeSource
     public RelativeSource() { }
     public RelativeSource(RelativeSourceMode mode) => Mode = mode;
 }
+#nullable disable
+// Preserve the original WPF converter contract's oblivious nullability so
+// unchanged legacy converters do not acquire annotation mismatch warnings.
 public interface IValueConverter
 {
-    object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture);
-    object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture);
+    object Convert(object value, Type targetType, object parameter, CultureInfo culture);
+    object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture);
 }
+#nullable restore
 public class Binding
 {
     public static readonly object DoNothing = new();
@@ -30,6 +34,7 @@ public class Binding
     public PropertyPath Path { get; set; } = new("");
     public object? Source { get => source; set { source = value; HasSource = true; } }
     public string? ElementName { get; set; }
+    public string? StringFormat { get; set; }
     public RelativeSource? RelativeSource { get; set; }
     public BindingMode Mode { get; set; }
     public UpdateSourceTrigger UpdateSourceTrigger { get; set; }
@@ -106,6 +111,7 @@ public sealed class BindingExpression : IDisposable
             if (ReferenceEquals(value, Binding.DoNothing)) return;
             if (ReferenceEquals(value, DependencyProperty.UnsetValue)) value = binding.FallbackValue;
             if (ReferenceEquals(value, DependencyProperty.UnsetValue)) throw new InvalidOperationException("Binding returned UnsetValue without a fallback.");
+            if(binding.StringFormat!=null && targetType==typeof(string)) value=string.Format(CultureInfo.CurrentCulture,binding.StringFormat,value);
             value = Coerce(value, targetType);
             if (targetProperty != null) targetProperty.SetValue(target, value); else target.SetValue(dependencyProperty!, value);
             LastError = null; oneTimeDone = mode == BindingMode.OneTime && Root() != null;
@@ -138,6 +144,26 @@ public sealed class BindingExpression : IDisposable
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (value == null) return type.IsValueType ? Activator.CreateInstance(type) : null;
         if (type.IsInstanceOfType(value)) return value;
+        if (type == typeof(string)) return value.ToString();
+        if(type==typeof(char)) return value.ToString() is {Length:1} character ? character[0] : throw new ArgumentException("A character value is required.");
+        if (type == typeof(FontWeight)) return FontWeights.Parse(value.ToString()!);
+        if (type == typeof(Media.FontFamily)) return new Media.FontFamily(value.ToString()!);
+        if (typeof(Media.Brush).IsAssignableFrom(type)) return new Media.SolidColorBrush(Media.Color.FromNative(new global::ProjectZ.Shared.Drawing.Designer.SceneXamlParser(null!).ReadImportedColor(value.ToString()!)));
+        if (type == typeof(Media.Color)) return Media.Color.FromNative(new global::ProjectZ.Shared.Drawing.Designer.SceneXamlParser(null!).ReadImportedColor(value.ToString()!));
+        if (type == typeof(Uri)) return new Uri(value.ToString()!, UriKind.RelativeOrAbsolute);
+        if (type == typeof(System.Drawing.Color)) { var color = new global::ProjectZ.Shared.Drawing.Designer.SceneXamlParser(null!).ReadImportedColor(value.ToString()!); return System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B); }
+        if (type == typeof(GridLength))
+        {
+            var text = value.ToString()!;
+            return text == "Auto" ? GridLength.Auto : text.EndsWith('*') ? new GridLength(text.Length == 1 ? 1 : double.Parse(text[..^1], CultureInfo.InvariantCulture), GridUnitType.Star) : new GridLength(double.Parse(text, CultureInfo.InvariantCulture));
+        }
+        if (type == typeof(Input.Cursor)) return typeof(Input.Cursors).GetProperty(value.ToString()!)?.GetValue(null) ?? Input.Cursors.Arrow;
+        if (type == typeof(Point)) { var points = value.ToString()!.Split(','); return new Point(double.Parse(points[0], CultureInfo.InvariantCulture), double.Parse(points[1], CultureInfo.InvariantCulture)); }
+        if (type == typeof(Rect)) { var points = value.ToString()!.Split(',').Select(p => double.Parse(p, CultureInfo.InvariantCulture)).ToArray(); return new Rect(points[0], points[1], points[2], points[3]); }
+        if (type == typeof(Thickness)) { var parts = value.ToString()!.Split(',').Select(p => double.Parse(p, CultureInfo.InvariantCulture)).ToArray(); return parts.Length == 1 ? new Thickness(parts[0]) : parts.Length == 2 ? new Thickness(parts[0], parts[1], parts[0], parts[1]) : new Thickness(parts[0], parts[1], parts[2], parts[3]); }
+        if (type == typeof(CornerRadius)) { var parts = value.ToString()!.Split(',').Select(p => double.Parse(p, CultureInfo.InvariantCulture)).ToArray(); return parts.Length == 1 ? new CornerRadius(parts[0]) : new CornerRadius(parts[0], parts[1], parts[2], parts[3]); }
+        if (type == typeof(TextDecorationCollection)) { var decorations = new TextDecorationCollection(); foreach (var name in value.ToString()!.Split(',')) decorations.Add(new TextDecoration { Location = Enum.Parse<TextDecorationLocation>(name.Trim(), true) }); return decorations; }
+        if (type == typeof(Media.ImageSource)) return new Media.Imaging.BitmapImage(new Uri(value.ToString()!, UriKind.RelativeOrAbsolute));
         if (type.IsEnum) return Enum.Parse(type, value.ToString()!);
         return System.Convert.ChangeType(value, type, CultureInfo.CurrentCulture);
     }

@@ -1,4 +1,4 @@
-﻿Imports System.Collections.Generic
+Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 Imports Microsoft.Xna.Framework.Input
@@ -33,6 +33,8 @@ Namespace [Shared].Drawing
             End Set
         End Property
         Private _UseHardwareInput As Boolean = False
+        ''' <summary>Route this HWND's queued mouse messages through the scene event system.</summary>
+        Public Property UseWindowMessagesInput As Boolean
 #End If
 
         Public Property LimitFPS As Integer
@@ -113,15 +115,50 @@ Namespace [Shared].Drawing
         Private Class KeyboardMessageWindow
             Inherits System.Windows.Forms.NativeWindow
             Public ReadOnly Messages As New System.Collections.Concurrent.ConcurrentQueue(Of (Id As Integer, Value As Integer, Flags As Long))
-            Public Sub New(handle As IntPtr)
+            Private ReadOnly capturePointer As Boolean
+            Private leftPressed, rightPressed As Boolean
+            Public ReadOnly Property PointerButtonsPressed As Boolean
+                Get
+                    Return leftPressed OrElse rightPressed
+                End Get
+            End Property
+            Public Sub New(handle As IntPtr, capturePointer As Boolean)
+                Me.capturePointer = capturePointer
                 AssignHandle(handle)
             End Sub
             Protected Overrides Sub WndProc(ByRef m As System.Windows.Forms.Message)
+                If capturePointer Then
+                    Select Case m.Msg
+                        Case &H201 : leftPressed = True
+                        Case &H204 : rightPressed = True
+                        Case &H202 : leftPressed = False
+                        Case &H205 : rightPressed = False
+                        Case &H8 : leftPressed = False : rightPressed = False
+                    End Select
+                End If
                 Select Case m.Msg
                     Case &H100, &H101, &H102, &H104, &H105, &H8
                         Messages.Enqueue((m.Msg, CInt(m.WParam.ToInt64()), m.LParam.ToInt64()))
+                    Case &H215
+                        ' Win32 releases capture synchronously after mouse-up.
+                        ' Do not cancel a completed gesture when its queued scene
+                        ' messages have not yet reached the next frame.
+                        If capturePointer AndAlso (leftPressed OrElse rightPressed) AndAlso m.LParam <> Handle Then
+                            leftPressed = False : rightPressed = False
+                            Messages.Enqueue((m.Msg, 0, m.LParam.ToInt64()))
+                        End If
+                    Case &H200, &H201, &H202, &H204, &H205, &H20A, &H2A3, &H1F
+                        If capturePointer Then
+                            Dim value = m.WParam.ToInt64() And &HFFFFFFFFL
+                            If value > Integer.MaxValue Then value -= &H100000000L
+                            Messages.Enqueue((m.Msg, CInt(value), m.LParam.ToInt64()))
+                        End If
                 End Select
                 MyBase.WndProc(m)
+                ' SDL updates its capture policy in the original window procedure.
+                ' Establish ours afterward so it cannot release a new press.
+                If capturePointer AndAlso (m.Msg = &H201 OrElse m.Msg = &H204) Then SetNativeCapture(Handle)
+                If capturePointer AndAlso (m.Msg = &H202 OrElse m.Msg = &H205) AndAlso Not leftPressed AndAlso Not rightPressed AndAlso GetNativeCapture() = Handle Then ReleaseNativeCapture()
             End Sub
         End Class
 
@@ -129,13 +166,22 @@ Namespace [Shared].Drawing
             If nativeKeyboard Is Nothing Then
                 Dim hwnd = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
                 If hwnd = IntPtr.Zero Then Return
-                nativeKeyboard = New KeyboardMessageWindow(hwnd)
+                nativeKeyboard = New KeyboardMessageWindow(hwnd, UseWindowMessagesInput)
             End If
             ActiveScene.UsesNativeTextInput = True
             Dim entry As (Id As Integer, Value As Integer, Flags As Long)
             While nativeKeyboard.Messages.TryDequeue(entry)
+                If Environment.GetEnvironmentVariable("PROJECTZ_TRACE_POINTER") = "1" Then Console.Error.WriteLine($"PZ_INPUT window={Sender.Window.Title} msg={entry.Id:X} flags={entry.Flags:X} left={ExternalLeftDown}")
                 If entry.Id = &H8 Then
-                    ExternalKeys.Clear()
+                    CancelExternalInput()
+                    Continue While
+                End If
+                If entry.Id >= &H200 OrElse entry.Id = &H1F Then
+                    ' SDL can release capture before its corresponding mouse-up
+                    ' reaches this subclass. A queued normal release to no HWND
+                    ' must not cancel an already received complete gesture.
+                    If entry.Id = &H215 AndAlso entry.Flags = 0 AndAlso Not nativeKeyboard.PointerButtonsPressed Then Continue While
+                    ProcessWindowPointer(entry.Id, entry.Value, entry.Flags)
                     Continue While
                 End If
                 If entry.Id = &H102 Then
@@ -156,6 +202,65 @@ Namespace [Shared].Drawing
                 End If
             End While
         End Sub
+
+        Private Shared Function SignedCoordinate(value As Long) As Integer
+            Dim coordinate = CInt(value And &HFFFFL)
+            Return If(coordinate > Short.MaxValue, coordinate - &H10000, coordinate)
+        End Function
+
+        Private Sub ProcessWindowPointer(id As Integer, value As Integer, flags As Long)
+            If nativeKeyboard Is Nothing Then Return
+            Dim previous = UseExternalInput
+            UseExternalInput = True
+            Try
+                If id = &H215 OrElse id = &H1F Then
+                    If ExternalLeftDown OrElse ExternalRightDown Then CancelExternalInput()
+                    Return
+                End If
+                If id = &H2A3 Then
+                    InjectMouseLeave()
+                    Return
+                End If
+                Dim bounds As NativeRect
+                If Not GetClientRect(nativeKeyboard.Handle, bounds) Then Return
+                Dim point As New NativePoint With {.X = SignedCoordinate(flags), .Y = SignedCoordinate(flags >> 16)}
+                If id = &H20A AndAlso Not ScreenToClient(nativeKeyboard.Handle, point) Then Return
+                Dim width = Math.Max(1, bounds.Right - bounds.Left), height = Math.Max(1, bounds.Bottom - bounds.Top)
+                Select Case id
+                    Case &H200
+                        Dim tracking As New NativeMouseTracking With {.Size = CUInt(Marshal.SizeOf(Of NativeMouseTracking)()), .Flags = 2, .Handle = nativeKeyboard.Handle}
+                        TrackNativeMouseEvent(tracking)
+                        InjectMouseMove(point.X, point.Y, width, height)
+                    Case &H201 : InjectMouseLeftDown(point.X, point.Y, width, height)
+                    Case &H202 : InjectMouseLeftUp(point.X, point.Y, width, height)
+                    Case &H204 : InjectMouseRightDown(point.X, point.Y, width, height)
+                    Case &H205 : InjectMouseRightUp(point.X, point.Y, width, height)
+                    Case &H20A : InjectMouseWheel(point.X, point.Y, width, height, SignedCoordinate(CLng(value) >> 16))
+                End Select
+            Finally
+                UseExternalInput = previous
+            End Try
+        End Sub
+
+        <DllImport("user32.dll", EntryPoint:="SetCapture")>
+        Private Shared Function SetNativeCapture(handle As IntPtr) As IntPtr
+        End Function
+        <DllImport("user32.dll", EntryPoint:="ReleaseCapture")>
+        Private Shared Function ReleaseNativeCapture() As Boolean
+        End Function
+        <DllImport("user32.dll", EntryPoint:="GetCapture")>
+        Private Shared Function GetNativeCapture() As IntPtr
+        End Function
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativeMouseTracking
+            Public Size As UInteger
+            Public Flags As UInteger
+            Public Handle As IntPtr
+            Public HoverTime As UInteger
+        End Structure
+        <DllImport("user32.dll", EntryPoint:="TrackMouseEvent")>
+        Private Shared Function TrackNativeMouseEvent(ByRef tracking As NativeMouseTracking) As Boolean
+        End Function
 #End If
 
         Private Sub DetectKeyPress(gameTime As GameTime)
@@ -699,14 +804,18 @@ Namespace [Shared].Drawing
             If Not inside Then Return
             HardwareRightDown = True
             SetHardwareMouseState(point)
-            ActiveScene.MouseRightClick(point)
+            ActiveScene.MouseRightDown(point)
         End Sub
 
         Private Sub MouseHook_RightButtonUp(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.RightButtonUp
             HardwareRightDown = False
             Dim inside As Boolean
             Dim point = ToRelativePoint(mouseStruct, inside)
-            If inside Then SetHardwareMouseState(point)
+            If inside Then
+                SetHardwareMouseState(point)
+                ActiveScene.MouseRightUp(point)
+                ActiveScene.MouseRightClick(point)
+            End If
         End Sub
 
         Private Sub MouseHook_MouseWheel(mouseStruct As MouseHook.MSLLHOOKSTRUCT) Handles MouseHook.MouseWheel
@@ -740,7 +849,7 @@ Namespace [Shared].Drawing
         End Function
 
         Private Sub DetectMouseEvents(gameTime As GameTime, Optional nativePosition As Boolean = False)
-            Dim State As MouseState = Mouse.GetState()
+            Dim State As MouseState = Mouse.GetState(Sender.Window)
             Dim scaledPosition As Point
             If nativePosition Then
                 If Not TryGetNativeViewportPoint(scaledPosition) Then
@@ -781,8 +890,10 @@ Namespace [Shared].Drawing
             End If
 
             'Right Button
+            If LastState.RightButton = ButtonState.Released AndAlso State.RightButton = ButtonState.Pressed Then ActiveScene.MouseRightDown(scaledPosition)
             If LastState.RightButton = ButtonState.Pressed AndAlso State.RightButton = ButtonState.Released Then
                 ' Mouse was clicked
+                ActiveScene.MouseRightUp(scaledPosition)
                 ActiveScene.MouseRightClick(scaledPosition)
             End If
 
@@ -931,13 +1042,16 @@ Namespace [Shared].Drawing
             Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
             ExternalRightDown = True
             SetExternalMouseState(point)
-            ActiveScene.MouseRightClick(point)
+            ActiveScene.MouseRightDown(point)
         End Sub
 
         Public Sub InjectMouseRightUp(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
             If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing Then Return
             ExternalRightDown = False
-            SetExternalMouseState(ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight))
+            Dim point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
+            SetExternalMouseState(point)
+            ActiveScene.MouseRightUp(point)
+            ActiveScene.MouseRightClick(point)
         End Sub
 
         Public Sub InjectMouseLeave()
@@ -964,6 +1078,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub InjectKeyDown(key As Keys, Optional isRepeat As Boolean = False)
+            key = NormalizeExternalModifier(key)
             If Not UseExternalInput OrElse ActiveScene Is Nothing Then Return
             ActiveScene.UsesNativeTextInput = False
             If ExternalKeys.Add(key) Then
@@ -973,10 +1088,26 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub InjectKeyUp(key As Keys)
+            key = NormalizeExternalModifier(key)
             If Not UseExternalInput OrElse ActiveScene Is Nothing OrElse Not ExternalKeys.Remove(key) Then Return
             Dim state As New KeyboardState(ExternalKeys.ToArray())
             ActiveScene.KeyUp(key, state)
         End Sub
+
+        Public Sub InjectTextInput(text As String)
+            If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing Then Return
+            ActiveScene.InsertNativeText(text)
+        End Sub
+
+        Private Shared Function NormalizeExternalModifier(key As Keys) As Keys
+            ' WinForms emits generic VK_CONTROL/SHIFT/MENU; XNA checks sided keys.
+            Select Case CInt(key)
+                Case 16 : Return Keys.LeftShift
+                Case 17 : Return Keys.LeftControl
+                Case 18 : Return Keys.LeftAlt
+                Case Else : Return key
+            End Select
+        End Function
 
         Private Function GetDifference(StartPoint As Point, EndPoint As Point) As Point
             Dim DifferenceX As Integer = 0, DifferenceY As Integer = 0
@@ -1105,8 +1236,8 @@ Namespace [Shared].Drawing
 #End If
                 End If
 #If WINDOWS Then
-                If Not UseHardwareInput AndAlso Not UseExternalInput Then
-                    DetectMouseEvents(gameTime)
+                If Not UseExternalInput AndAlso Not UseWindowMessagesInput Then
+                    DetectMouseEvents(gameTime, UseHardwareInput)
                 End If
 #ElseIf LINUX Then
                 DetectMouseEvents(gameTime)
@@ -1149,6 +1280,10 @@ Namespace [Shared].Drawing
         End Sub
 
         Private Sub InitializeViewportResize()
+#If WINDOWS Then
+            Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize()
+            Global.ProjectZ.RuntimeDiagnostics.GraphicsDiagnostics.Register(Sender.GraphicsDevice)
+#End If
             graphicsManager = TryCast(Sender.Services.GetService(GetType(IGraphicsDeviceManager)), GraphicsDeviceManager)
             AddHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
         End Sub

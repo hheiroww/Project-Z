@@ -1,0 +1,41 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZDiagnosticsToolsPath Condition="'$(ProjectZDiagnosticsToolsPath)' == ''">$(MSBuildThisFileDirectory)..\tools\diagnostics\</ProjectZDiagnosticsToolsPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <_ProjectZDiagnosticPackPayload Include="$(ProjectZDiagnosticsToolsPath)ProjectZ.Diagnostics.*" Exclude="$(ProjectZDiagnosticsToolsPath)*.pdb" />
+    <Content Include="@(_ProjectZDiagnosticPackPayload)">
+      <Link>%(_ProjectZDiagnosticPackPayload.Filename)%(_ProjectZDiagnosticPackPayload.Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <_ProjectZNativePayload Include="$(MSBuildThisFileDirectory)..\tools\native\win-x64\*" />
+    <Content Include="@(_ProjectZNativePayload)">
+      <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <!-- A separate payload path avoids duplicate publish-asset conflicts. -->
+  <Target Name="UseProjectZNativeGraphicsRuntime" AfterTargets="Build;Publish"
+          Condition="'$(RuntimeIdentifier)' != 'win-arm64' and '$(RuntimeIdentifier)' != 'win-x86' and '$(PlatformTarget)' != 'ARM64' and '$(PlatformTarget)' != 'x86' and '$(Prefer32Bit)' != 'true'">
+    <Copy SourceFiles="$(TargetDir)ProjectZ.Native\mgruntime.dll" DestinationFiles="$(TargetDir)mgruntime.dll"
+          Condition="Exists('$(TargetDir)ProjectZ.Native\mgruntime.dll')" />
+    <Copy SourceFiles="$(PublishDir)ProjectZ.Native\mgruntime.dll" DestinationFiles="$(PublishDir)mgruntime.dll"
+          Condition="'$(PublishDir)' != '' and Exists('$(PublishDir)ProjectZ.Native\mgruntime.dll')" />
+  </Target>
+  <!-- A helper next to a self-contained host must use that host's bundled CLR,
+       rather than search its hostfxr directory for globally installed frameworks. -->
+  <Target Name="UseProjectZBundledDiagnosticRuntime" AfterTargets="Build;Publish" Condition="'$(SelfContained)' == 'true'">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).runtimeconfig.json" DestinationFiles="$(TargetDir)ProjectZ.Diagnostics.runtimeconfig.json"
+          Condition="Exists('$(TargetDir)ProjectZ.Diagnostics.dll') and Exists('$(TargetDir)$(AssemblyName).runtimeconfig.json')" />
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).deps.json" DestinationFiles="$(TargetDir)ProjectZ.Diagnostics.deps.json"
+          Condition="Exists('$(TargetDir)ProjectZ.Diagnostics.dll') and Exists('$(TargetDir)$(AssemblyName).deps.json')" />
+    <Copy SourceFiles="$(PublishDir)$(AssemblyName).runtimeconfig.json" DestinationFiles="$(PublishDir)ProjectZ.Diagnostics.runtimeconfig.json"
+          Condition="Exists('$(PublishDir)ProjectZ.Diagnostics.dll') and Exists('$(PublishDir)$(AssemblyName).runtimeconfig.json')" />
+    <Copy SourceFiles="$(PublishDir)$(AssemblyName).deps.json" DestinationFiles="$(PublishDir)ProjectZ.Diagnostics.deps.json"
+          Condition="Exists('$(PublishDir)ProjectZ.Diagnostics.dll') and Exists('$(PublishDir)$(AssemblyName).deps.json')" />
+  </Target>
+</Project>
