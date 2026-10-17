@@ -820,7 +820,16 @@ if (targetPath.Split('/').Any(segment => segment == ".."))
     }
     void Add(string code, string file, SyntaxNode node, string message) { var line = node.GetLocation().GetLineSpan().StartLinePosition; issues.Add(new(code, file, line.Line + 1, line.Character + 1, message)); }
     static bool IsGenerated(string path) => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "obj" or "bin") || path.EndsWith(".g.cs") || path.EndsWith(".g.vb");
-    internal static string SourceRelative(string directory, string path) { var relative = Path.GetRelativePath(directory, path); return relative.StartsWith("..") ? Path.Combine("Linked", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path)))[..8], Path.GetFileName(path)) : relative; }
+    internal static string SourceRelative(string directory, string path)
+    {
+        var relative = Path.GetRelativePath(directory, path);
+        // Different drives or UNC shares have no relative path. Treat their
+        // rooted result as an external asset before Path.Combine can discard
+        // the generated destination (for example, a C: NuGet cache on D: CI).
+        return Path.IsPathRooted(relative) || relative.StartsWith("..")
+            ? Path.Combine("Linked", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path)))[..8], Path.GetFileName(path))
+            : relative;
+    }
     string SafePath(string relative) { var path = Path.GetFullPath(Path.Combine(output, relative)); if (!path.StartsWith(output + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Output path escapes destination."); return path; }
     void Write(string relative, string text) => WriteBytes(relative, new UTF8Encoding(false).GetBytes(text));
     void WriteBytes(string relative, byte[] data)

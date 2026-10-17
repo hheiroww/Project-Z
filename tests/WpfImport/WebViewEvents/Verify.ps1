@@ -15,6 +15,7 @@ try {
     Invoke-Checked (@('build','tests/WpfImport/HeadlessMarkup/HeadlessMarkup.csproj') + $build) 'webview-events-headless-build.log'
     Invoke-Checked @('tests/WpfImport/HeadlessMarkup/bin/Release/net8.0-windows7.0/HeadlessMarkup.dll') 'webview-events-headless.log'
     Invoke-Checked (@('build','Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj') + $build) 'webview-events-generator-build.log'
+    & (Join-Path $PSScriptRoot '../VerifySourcePaths.ps1')
     Invoke-Checked @('restore','tests/WpfImport/WebViewEvents/Original/Original.csproj','-v:q') 'webview-events-original-restore.log'
     Invoke-Checked @('Project Z XAML Codegen/bin/Release/net8.0/ProjectZ.XamlCodegen.dll','import','tests/WpfImport/WebViewEvents/Original/Original.csproj','--output','artifacts/wpf-import/webview-events','--root-directory','stable-entry') 'webview-events-fixture-import.log'
     $report = Get-Content -Raw -LiteralPath (Join-Path $evidence 'webview-events/projectz-import.report.json') | ConvertFrom-Json
