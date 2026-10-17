@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $repository = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$assembly = [Reflection.Assembly]::LoadFrom((Join-Path $repository 'Project Z XAML Codegen/bin/Release/net8.0/ProjectZ.XamlCodegen.dll'))
+# Keep the generator replaceable when later checks rebuild it in this process.
+$assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes((Join-Path $repository 'Project Z XAML Codegen/bin/Release/net8.0/ProjectZ.XamlCodegen.dll')))
 $importer = $assembly.GetType('ProjectImporter', $true)
 $method = $importer.GetMethod('SourceRelative', [Reflection.BindingFlags]'Static,NonPublic')
 $directory = 'D:\a\Project-Z\Project-Z\tests\WpfImport\WebViewEvents\Original'
