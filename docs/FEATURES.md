@@ -221,7 +221,7 @@ live under `obj`; edit shader source, never generated output. The offline
 | `Button` | Click-interactive button with auto-sizing and animation support |
 | `CheckBox` | Three-state checkbox (checked, unchecked, indeterminate) |
 | `RadioButton` | Grouped single-selection with automatic mutual exclusion |
-| `Textbox` | Editable text input with alignment and padding |
+| `Textbox` | Editable text with alignment, padding and automatic [offline spelling](Spellchecking.md), red squiggles, suggestions and a custom dictionary |
 | `Trackbar` | Value slider with tooltip, min/max range |
 | `ProgressBar` | Determinate progress display |
 
