@@ -95,13 +95,13 @@ Namespace [Shared].Drawing.UI.Primitives
                     If cursor < Text.Length Then cursor += 1
                 Next
                 lineNumber += 1
-                Dim width = Scene.MeasureText(Font, line).X * scale
+                Dim width = MeasureContent(line).X
                 Dim available = Math.Max(0, Size.X - Padding.Left - Padding.Right)
                 Dim x As Single = If(UseXamlTextLayout, Padding.Left + If(TextAlignment = HorizontalAlignment.Center, (available - width) / 2, If(TextAlignment = HorizontalAlignment.Right, available - width, 0)), 0)
                 For i = 0 To line.Length - 1
                     If i >= indices.Count OrElse indices(i) >= Text.Length OrElse Text(indices(i)) <> line(i) Then Exit For ' synthetic ellipsis
-                    Dim left = Scene.MeasureText(Font, line.Substring(0, i)).X * scale
-                    Dim right = Scene.MeasureText(Font, line.Substring(0, i + 1)).X * scale
+                    Dim left = MeasureContent(line.Substring(0, i)).X
+                    Dim right = MeasureContent(line.Substring(0, i + 1)).X
                     result.Add((indices(i), New Rectangle(CInt(Math.Floor(x + left)), CInt(Math.Floor(y)), Math.Max(1, CInt(Math.Ceiling(right - left))), CInt(Math.Ceiling(spacing)))))
                 Next
                 y += spacing

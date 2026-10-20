@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.17.1</Version>
+	<Version>2026.10.20.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.17.1 fixes NuGet restore by bundling the internal model-import bridge without requiring an unpublished ProjectZ.ModelImport package. Includes the DX12 runtime, automatic diagnostics, and WPF importer fixes from 2026.10.17.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.20.1 adds automatic offline textbox spellchecking, red squiggles, right-click suggestions and persistent custom dictionaries. Includes native studio controls, placeholder inputs and vector text improvements. Uses public SocketJack 2026.10.17.3 and retains the bundled model importer, diagnostics observer and native DX12 runtime.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -82,7 +82,7 @@
 	<PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
 	<PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
 	<PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
-	<PackageReference Include="SocketJack" Version="2026.15.0" Condition="!Exists('$(SocketJackProject)')" />
+	<PackageReference Include="SocketJack" Version="2026.10.17.3" Condition="!Exists('$(SocketJackProject)')" />
 	<PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
 	<PackageReference Include="LibTessDotNet" Version="1.1.15" />
 	<PackageReference Include="Microsoft.Web.WebView2" Version="$(ProjectZWebView2SdkVersion)" />
@@ -101,6 +101,7 @@
 
 <ItemGroup>
 	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
+	<ProjectReference Include="Project Z XAML Codegen\ProjectZ.XamlCodegen.csproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
 </ItemGroup>
 
@@ -189,6 +190,10 @@
   </Target>
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
+    <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
+    <None Include="Project Z Application\Content\Fonts\Segoe UI\*.xnb" Pack="true" PackagePath="tools\content\Fonts\Segoe UI\" />
+    <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
+    <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
     <Content Include="ThirdParty\MonoGame.Native\win-x64\mgruntime.dll;ThirdParty\MonoGame.Native\win-x64\runtime.json;ThirdParty\MonoGame.Native\LICENSE*" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
       <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -197,6 +202,15 @@
       <PackagePath>tools\native\win-x64\</PackagePath>
     </Content>
   </ItemGroup>
+  <Target Name="IncludeProjectZXamlCodegenRuntime" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <!-- Preserve build-host and satellite subdirectories; the DLL alone cannot run. -->
+      <_ProjectZXamlCodegenPayload Include="$(MSBuildThisFileDirectory)Project Z XAML Codegen\bin\$(Configuration)\net8.0\**\*"
+            Exclude="$(MSBuildThisFileDirectory)Project Z XAML Codegen\bin\$(Configuration)\net8.0\**\*.pdb" />
+      <None Include="@(_ProjectZXamlCodegenPayload)" Pack="true"
+            PackagePath="tools\xaml-codegen\%(_ProjectZXamlCodegenPayload.RecursiveDir)%(_ProjectZXamlCodegenPayload.Filename)%(_ProjectZXamlCodegenPayload.Extension)" />
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />
   </ItemGroup>

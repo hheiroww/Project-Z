@@ -56,7 +56,7 @@ Namespace [Shared].Drawing
                     If IsEffectivelyVisible(ordered(last)) Then bounds = Rectangle.Union(bounds, ordered(last).Rectangle)
                     last += 1
                 End While
-                bounds.Inflate(fx.Padding, fx.Padding)
+                bounds.Inflate(fx.EffectivePadding(Quality), fx.EffectivePadding(Quality))
                 ' Clipping the source target remaps UVs when a card scrolls offscreen,
                 ' changing distortion frequency/phase. Clip the final composite only.
                 If bounds.Width > 0 AndAlso bounds.Height > 0 AndAlso bounds.Intersects(viewport) Then

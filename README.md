@@ -1,4 +1,8 @@
-# ⚡ Project Z 2026.10.17.1
+# ⚡ Project Z 2026.10.20.1
+
+Version 2026.10.20.1 adds automatic offline textbox spellchecking with red squiggles, right-click suggestions and persistent custom dictionaries. It also includes native studio controls, placeholder inputs and vector text improvements, and uses public SocketJack 2026.10.17.3. [Configure spelling and custom dictionaries](docs/Spellchecking.md).
+
+NuGet consumers receive the compiled sample fonts, diagnostics/native runtime, license notices and complete XAML code-generation tool. Native `ProjectZSceneXaml` build items work without a local framework checkout.
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 
@@ -34,12 +38,12 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2026.10.17.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2026.10.20.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2026.10.17.1
+## 📦 Install 2026.10.20.1
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.17.1
+dotnet add package ProjectZ --version 2026.10.20.1
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)
@@ -408,8 +412,8 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:ProjectZGraphicsBackend=Di
 
 The build restores the pinned MGFXC tool and compiles XAML shaders for the selected backend. Edit `Resources/XamlEffects.fx`; generated binaries belong under `obj`.
 
-The framework Release build also creates `bin/Release/ProjectZ.2026.10.17.1.nupkg`.
-The package version is `2026.10.17.1`. The package includes the internal model-import DLL and restores its
+The framework Release build also creates `bin/Release/ProjectZ.2026.10.20.1.nupkg`.
+The package version is `2026.10.20.1`. The package includes the internal model-import DLL and restores its
 public dependencies, including SocketJack, from NuGet. Local SocketJack source
 development is opt-in with `-p:UseLocalSocketJack=true`; leave this off when
 building a package for distribution.

@@ -63,6 +63,10 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "build-native-scenes") return NativeSceneCompiler.Run(args[1]);
+        if (args.Length == 3 && args[0] == "export-native-scene") return NativeSceneExporter.Run(args[1], args[2]);
+        if (args.Length == 3 && args[0] == "export-native-objects") return NativeObjectExporter.Run(args[1], args[2]);
+        if (args.Length == 3 && args[0] == "consolidate-native-styles") return NativeStyleConsolidator.Run(args[1], args[2]);
         if (args.Length == 2 && args[0] == "build-views") return BuildViewImporter.Run(args[1]);
         if (args.Length > 0 && args[0] == "import-view") return ViewImporter.Run(args[1..]);
         if (args.Length > 0 && args[0] == "import") return ProjectImporter.Run(args[1..]);

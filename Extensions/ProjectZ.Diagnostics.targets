@@ -1,11 +1,23 @@
 <Project>
   <PropertyGroup>
+    <ProjectZXamlGeneratorDll Condition="'$(ProjectZXamlGeneratorDll)' == '' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll')">$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll</ProjectZXamlGeneratorDll>
+    <ProjectZNativeXamlTool Condition="'$(ProjectZNativeXamlTool)' == '' and '$(ProjectZXamlGeneratorDll)' != ''">$(ProjectZXamlGeneratorDll)</ProjectZNativeXamlTool>
     <ProjectZDiagnosticsToolsPath Condition="'$(ProjectZDiagnosticsToolsPath)' == ''">$(MSBuildThisFileDirectory)..\tools\diagnostics\</ProjectZDiagnosticsToolsPath>
   </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets"
+          Condition="'$(ProjectZNativeXamlIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets')" />
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\tools\content\Fonts\**\*.xnb">
+      <Link>Content\Fonts\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup>
     <_ProjectZDiagnosticPackPayload Include="$(ProjectZDiagnosticsToolsPath)ProjectZ.Diagnostics.*" Exclude="$(ProjectZDiagnosticsToolsPath)*.pdb" />
     <Content Include="@(_ProjectZDiagnosticPackPayload)">
-      <Link>%(_ProjectZDiagnosticPackPayload.Filename)%(_ProjectZDiagnosticPackPayload.Extension)</Link>
+      <Link>%(Filename)%(Extension)</Link>
+      <TargetPath>%(Filename)%(Extension)</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

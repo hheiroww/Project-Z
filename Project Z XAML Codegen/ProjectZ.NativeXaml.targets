@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZNativeXamlIntegrationImported>true</ProjectZNativeXamlIntegrationImported>
+    <ProjectZNativeXamlToolProject Condition="'$(ProjectZNativeXamlToolProject)' == ''">$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZNativeXamlToolProject>
+    <ProjectZNativeXamlTool Condition="'$(ProjectZNativeXamlTool)' == ''">$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll</ProjectZNativeXamlTool>
+  </PropertyGroup>
+  <Target Name="ProjectZCollectNativeXamlPages" BeforeTargets="PrepareForBuild" Condition="'@(ProjectZSceneXaml)' != ''">
+    <ItemGroup>
+      <!-- These templates belong to Project-Z, even in a consumer that enables WPF. -->
+      <Page Remove="@(ProjectZSceneXaml)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+    </ItemGroup>
+  </Target>
+  <Target Name="ProjectZCompileNativeXaml" BeforeTargets="CoreCompile" Condition="'@(ProjectZSceneXaml)' != ''">
+    <Error Condition="'$(Language)' != 'C#'" Text="Native scene templates currently require C#." />
+    <PropertyGroup><_ProjectZNativeXamlDirectory>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZNativeXaml'))</_ProjectZNativeXamlDirectory></PropertyGroup>
+    <MakeDir Directories="$(_ProjectZNativeXamlDirectory)" />
+    <WriteLinesToFile File="$(_ProjectZNativeXamlDirectory)/pages" Lines="@(ProjectZSceneXaml->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <MSBuild Projects="$(ProjectZNativeXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" Condition="Exists('$(ProjectZNativeXamlToolProject)')" />
+    <Exec Command="dotnet &quot;$(ProjectZNativeXamlTool)&quot; build-native-scenes &quot;$(_ProjectZNativeXamlDirectory)/pages&quot;" />
+    <ReadLinesFromFile File="$(_ProjectZNativeXamlDirectory)/native-compile-items"><Output TaskParameter="Lines" ItemName="_ProjectZNativeCompile" /></ReadLinesFromFile>
+    <ItemGroup>
+      <Compile Include="@(_ProjectZNativeCompile)" />
+      <FileWrites Include="$(_ProjectZNativeXamlDirectory)/**/*" />
+    </ItemGroup>
+  </Target>
+</Project>

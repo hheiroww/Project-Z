@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZNativeXamlTool>$(MSBuildThisFileDirectory)../tools/net8.0/ProjectZ.Xaml.Build.dll</ProjectZNativeXamlTool>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)../tools/ProjectZ.NativeXaml.targets" Condition="'$(ProjectZNativeXamlIntegrationImported)' != 'true'" />
+</Project>

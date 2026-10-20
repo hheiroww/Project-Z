@@ -1,6 +1,10 @@
-# ⚡ Project Z 2026.10.17.1
+# ⚡ Project Z 2026.10.20.1
 
-Version 2026.10.17.1 fixes package restore: the internal `ProjectZ.ModelImport.dll` is bundled with ProjectZ, and consumers no longer need an unpublished `ProjectZ.ModelImport` package.
+Version 2026.10.20.1 adds automatic offline spellchecking to native textboxes: red squiggles, right-click spelling suggestions and **Add to dictionary** with a persistent, editable local word list. Checks run in the background using the installed Windows spelling language. Password and masked inputs are excluded. See [dictionary configuration](https://github.com/hheiroww/Project-Z/blob/master/docs/Spellchecking.md).
+
+This release also includes native studio controls, placeholder inputs and vector text improvements. It uses public SocketJack **2026.10.17.3**. The internal `ProjectZ.ModelImport.dll`, diagnostics observer and native DX12 runtime remain bundled; no unpublished importer package is required.
+
+Package consumers also receive the compiled Segoe UI sample fonts, third-party notices and the complete runnable XAML code-generation tool. Native `ProjectZSceneXaml` items compile through the packaged tool automatically. `ProjectZXamlGeneratorDll` points to `tools/xaml-codegen/ProjectZ.XamlCodegen.dll` for applications that invoke the importer explicitly.
 
 Project-Z automatically starts persistent diagnostics when a Windows `SceneManager` is created. Logs include full managed exceptions, while the bundled `ProjectZ.Diagnostics` observer records abrupt exits and captures native fault dumps. NuGet consumers receive the observer automatically, including for self-contained publishing.
 
@@ -40,12 +44,12 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Desktop integration** | Borderless/resizable windows, DWM composition requests, shared-device tool windows, tray menus, hotkeys, notifications, and capture workflows in heirowSnap. |
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
-> **📦 Release 2026.10.17.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+> **📦 Release 2026.10.20.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
 
-## 📦 Install 2026.10.17.1
+## 📦 Install 2026.10.20.1
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.17.1
+dotnet add package ProjectZ --version 2026.10.20.1
 ```
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ.svg?logo=nuget)](https://www.nuget.org/packages/ProjectZ)

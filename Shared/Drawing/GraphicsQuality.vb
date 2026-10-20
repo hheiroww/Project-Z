@@ -10,6 +10,7 @@ Namespace [Shared].Drawing
         Anisotropic4x
         Anisotropic8x
         Anisotropic16x
+        NearestNeighbor
     End Enum
 
     ' One configuration per device, shared by all of its scenes and tool windows.
@@ -34,6 +35,13 @@ Namespace [Shared].Drawing
                 CInt(value.Width * RenderScale.X), CInt(value.Height * RenderScale.Y))
         End Function
         Public Property Filtering As TextureFiltering = TextureFiltering.Anisotropic16x
+        ''' <summary>Align vector text origins and shaped advances to the output pixel grid.</summary>
+        Public Property PpiPerfectText As Boolean
+        Public Property EffectsEnabled As Boolean = True
+        Public Property BlurRadiusScale As Single = 1
+        Public Property ShadowOpacityScale As Single = 1
+        Public Property ChromaticAberrationScale As Single = 1
+        Public Property ShaderMotionSpeed As Single = 1
 
         Public Shared Function ForDevice(device As GraphicsDevice) As GraphicsQuality
             Return devices.GetValue(device, Function(key)
@@ -66,7 +74,8 @@ Namespace [Shared].Drawing
                     result = New SamplerState With {.AddressU = TextureAddressMode.Clamp, .AddressV = TextureAddressMode.Clamp,
                         .AddressW = TextureAddressMode.Clamp, .Filter = TextureFilter.Linear, .MaxAnisotropy = 1}
                     If Filtering = TextureFiltering.Bilinear Then result.Filter = TextureFilter.LinearMipPoint
-                    If Filtering >= TextureFiltering.Anisotropic2x Then
+                    If Filtering = TextureFiltering.NearestNeighbor Then result.Filter = TextureFilter.Point
+                    If Filtering >= TextureFiltering.Anisotropic2x AndAlso Filtering <= TextureFiltering.Anisotropic16x Then
                         result.Filter = TextureFilter.Anisotropic
                         result.MaxAnisotropy = 1 << (CInt(Filtering) - 1)
                     End If

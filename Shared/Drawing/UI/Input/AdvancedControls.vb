@@ -2,6 +2,7 @@ Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports ProjectZ.Shared.Drawing.UI.Layout
+Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports System.Collections.Generic
 
 Namespace [Shared].Drawing.UI.Input
@@ -17,7 +18,7 @@ Namespace [Shared].Drawing.UI.Input
         Private _isDropDownOpen As Boolean = False
         Private _dropDownItems As New List(Of RectangleElement)
         Private _headerText As TextElement
-        Private _dropDownButton As TextElement
+        Private _dropDownButton As PolygonElement
         Private _itemHeight As Single = 28.0F
         Private Shadows ReadOnly ownerScene As Scene
 
@@ -115,9 +116,8 @@ Namespace [Shared].Drawing.UI.Input
             }
             Children.Add(_headerText)
 
-            _dropDownButton = New TextElement(scene) With {
-                .Text = "v",
-                .ForegroundColor = Color.White,
+            _dropDownButton = New PolygonElement(scene, {New Vector2(0, 0), New Vector2(5, 5), New Vector2(10, 0), New Vector2(10, 3), New Vector2(5, 8), New Vector2(0, 3)}) With {
+                .Size = New Vector2(10, 8), .FillColor = New Color(210, 232, 224),
                 .isMouseBypassEnabled = True
             }
             Children.Add(_dropDownButton)
@@ -173,6 +173,8 @@ Namespace [Shared].Drawing.UI.Input
             End If
             _headerText.Position = New Vector2(Position.X + 8, Position.Y + (Size.Y - _headerText.Size.Y) / 2)
             _dropDownButton.Position = New Vector2(Position.X + Size.X - 24, Position.Y + (Size.Y - _dropDownButton.Size.Y) / 2)
+            _dropDownButton.RenderRotationOrigin = New Vector2(0.5F)
+            _dropDownButton.RenderRotation = If(_isDropDownOpen, 180, 0)
         End Sub
 
         Protected Overrides Sub AlignChildren()
@@ -180,6 +182,7 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub UpdateDropDown()
+            AlignHeader()
             ' Remove existing dropdown items
             For Each item In _dropDownItems
                 If Scene IsNot Nothing Then
@@ -195,7 +198,8 @@ Namespace [Shared].Drawing.UI.Input
                     Dim itemBg As New RectangleElement(Scene) With {
                         .Position = New Vector2(Position.X, yOffset),
                         .Size = New Vector2(Size.X, _itemHeight),
-                        .BackgroundColor = If(i = _selectedIndex, New Color(60, 100, 60), New Color(55, 55, 55)),
+                        .BackgroundColor = If(i = _selectedIndex, New Color(36, 84, 68, 246), New Color(16, 35, 30, 242)),
+                        .CornerRadius = 4, .BorderColor = New Color(122, 180, 161, 40), .BorderThickness = 1,
                         .IsOverlay = True
                     }
                     itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(i)

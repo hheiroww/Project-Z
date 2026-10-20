@@ -64,5 +64,5 @@ jobs:
         run: |
           $packages = @(Get-ChildItem bin/Release/ProjectZ.*.nupkg | Where-Object Name -NotLike '*.symbols.nupkg')
           if ($packages.Count -ne 1) { throw "Expected exactly one ProjectZ package." }
-          dotnet nuget push $packages[0].FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push $packages[0].FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

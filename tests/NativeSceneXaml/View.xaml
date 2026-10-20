@@ -1,0 +1,24 @@
+<SceneTemplates xmlns="urn:projectz:native-scene" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Class="Fixture.View">
+  <Using>System</Using>
+  <Resource x:Name="Heading" Type="string" Value="Native XAML" />
+  <Factory x:Name="Button" Returns="Control" Attach="Attach">
+    <Parameter Name="text" Attribute="Text" Type="string" />
+    <Parameter Name="action" Attribute="Click" Type="Action" />
+    <Parameter Name="width" Attribute="Width" Type="float" Default="42" />
+    <Element Type="Control">
+      <Set Property="Text" Type="string" Value="{Parameter text}" />
+      <Set Property="Width" Type="float" Value="{Parameter width}" />
+      <Event Name="Click" Action="{Parameter action}" When="element.Enabled" />
+    </Element>
+  </Factory>
+  <Button x:Name="CreateHeading" Factory="Button" Text="{Resource Heading}" Width="240" Height="30" Font="fixture_22" Click="{Parameter action}">
+    <Parameter Name="action" Type="Action" />
+  </Button>
+  <ObjectFactory x:Name="CreateObject" Type="Control">
+    <Parameter Name="width" Type="System.Func&lt;float&gt;" />
+    <Argument Type="View" Value="{Expression this}" />
+    <Set Property="Text" Type="string" Value="Object from XAML" />
+    <Set Property="Width" Type="float" Value="{Expression width()}" />
+  </ObjectFactory>
+  <Button x:Name="AdditionalLabel" Factory="Button" AutoCreate="true" Page="Home" Text="Added in XAML" Width="80" Click="{Expression () =&gt; { }}" />
+</SceneTemplates>

@@ -13,7 +13,7 @@ Imports System.Collections.Generic
 
 Namespace [Shared].Drawing.UI.Input
     <Serializable>
-    Public Class Textbox
+    Public Partial Class Textbox
         Inherits RectangleElement
         Public Overrides Function GetCopyText() As String
             If MaskCharacter.HasValue OrElse TypeOf Me Is PasswordBox Then Return String.Empty
@@ -350,6 +350,7 @@ Namespace [Shared].Drawing.UI.Input
             For Each bounds In SelectionBounds
                 spriteBatch.Draw(Texture, bounds, fill)
             Next
+            DrawSpellingErrors()
         End Sub
 
         Public Overrides Sub Tick(gameTime As GameTime)
@@ -359,6 +360,7 @@ Namespace [Shared].Drawing.UI.Input
                 MoveCaret(HitIndex(dragPoint), True)
             End If
             UpdateCaretVisibility()
+            UpdateSpellCheck()
         End Sub
 
         Public Sub [Select](start As Integer, length As Integer)
@@ -384,13 +386,15 @@ Namespace [Shared].Drawing.UI.Input
             End If
             If editMenu Is Nothing Then
                 editMenu = New ContextMenu(Scene) With {
-                    .Size = New Vector2(168, If(IsReadOnly OrElse TypeOf Me Is PasswordBox, 72, 136)),
+                    .Size = New Vector2(220, 8),
+                    .Spacing = 0,
                     .BackgroundColor = New Color(17, 23, 28)}
+                AddSpellingMenuItems(point)
                 Dim labels = If(IsReadOnly, If(TypeOf Me Is PasswordBox, {"Select all"}, {"Copy", "Select all"}), If(TypeOf Me Is PasswordBox, {"Paste", "Select all"}, {"Cut", "Copy", "Paste", "Select all"}))
                 For Each value In labels
                     Dim label = value
                     Dim item As New MenuItem(Scene) With {.Header = label, .AutoSize = ButtonAutoSize.None,
-                        .Size = New Vector2(160, 32), .ForegroundColor = Color.White,
+                        .Size = New Vector2(212, 32), .ForegroundColor = Color.White,
                         .BackgroundColor = New Color(17, 23, 28), .MouseOverBackgroundColor = New Color(42, 55, 49)}
                     AddHandler item.MouseLeftClick, Sub(p)
                                                         editMenu.IsOpen = False
@@ -403,6 +407,7 @@ Namespace [Shared].Drawing.UI.Input
                                                         Scene.FocusElement(Me)
                                                     End Sub
                     editMenu.AddItem(item)
+                    editMenu.Size = New Vector2(220, editMenu.Size.Y + 32)
                 Next
                 Scene.AddElement(editMenu)
             End If
