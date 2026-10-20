@@ -176,11 +176,15 @@
   <!-- Include all VB code files by default (SDK-style) -->
   <Target Name="IncludeProjectZDiagnosticsRuntime" BeforeTargets="AssignTargetPaths;_GetPackageFiles" Condition="'$(ProjectZDiagnosticsPrepared)' != 'true'">
     <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Build" Condition="'$(NoBuild)' != 'true'" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;Platform;ArtifactsPath;GeneratePackageOnBuild" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Restore;Publish" Condition="'$(NoBuild)' != 'true'"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true"
+             RemoveProperties="TargetFramework;Platform;ArtifactsPath;GeneratePackageOnBuild;PublishDir" />
     <PropertyGroup><ProjectZDiagnosticsPrepared>true</ProjectZDiagnosticsPrepared></PropertyGroup>
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\publish\ProjectZ.Diagnostics.exe')" Text="Build the standalone diagnostics observer before packaging." />
     <ItemGroup>
-      <_ProjectZDiagnosticPayload Include="$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.exe;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.dll;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.deps.json;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\ProjectZ.Diagnostics.runtimeconfig.json" />
+      <_ProjectZDiagnosticPayload Include="$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\publish\ProjectZ.Diagnostics.exe;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.dll;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.deps.json;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.runtimeconfig.json" />
       <Content Include="@(_ProjectZDiagnosticPayload)">
-        <Link>%(_ProjectZDiagnosticPayload.Filename)%(_ProjectZDiagnosticPayload.Extension)</Link>
+        <Link>%(Filename)%(Extension)</Link>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <Pack>true</Pack>
@@ -194,6 +198,7 @@
     <None Include="Project Z Application\Content\Fonts\Segoe UI\*.xnb" Pack="true" PackagePath="tools\content\Fonts\Segoe UI\" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
     <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
+    <None Include="ThirdParty\DotNetRuntime\*" Pack="true" PackagePath="licenses\DotNetRuntime\" />
     <Content Include="ThirdParty\MonoGame.Native\win-x64\mgruntime.dll;ThirdParty\MonoGame.Native\win-x64\runtime.json;ThirdParty\MonoGame.Native\LICENSE*" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
       <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

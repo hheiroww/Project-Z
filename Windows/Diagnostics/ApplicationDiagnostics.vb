@@ -8,6 +8,11 @@ Namespace RuntimeDiagnostics
 ' cannot take the log writer down with them. It observes second-chance faults;
 ' it never consumes application exceptions or tries to resume a damaged process.
 Public NotInheritable Class ApplicationDiagnostics
+#If PROJECTZ_DIAGNOSTICS_OBSERVER Then
+    <DllImport("user32.dll", EntryPoint:="MessageBoxW", CharSet:=CharSet.Unicode)>
+    Private Shared Function ObserverMessageBox(owner As IntPtr, text As String, caption As String, flags As UInteger) As Integer
+    End Function
+#End If
     Private Shared ReadOnly gate As New Object()
     Public Shared Property SessionPath As String
     Private Shared diagnosticFolder As String
@@ -74,10 +79,12 @@ Public NotInheritable Class ApplicationDiagnostics
         ' that the external observer still has a managed stack in that case.
         AddHandler AppDomain.CurrentDomain.FirstChanceException, Sub(sender, args) CaptureManagedContext(args.Exception)
         AddHandler TaskScheduler.UnobservedTaskException, Sub(sender, args) Report("Unobserved task", args.Exception)
+#If Not PROJECTZ_DIAGNOSTICS_OBSERVER Then
         AddHandler System.Windows.Forms.Application.ThreadException, Sub(sender, args)
                                                                          Report("Windows message callback", args.Exception)
                                                                          Environment.FailFast("Unhandled Windows message callback", args.Exception)
                                                                      End Sub
+#End If
         AddHandler AppDomain.CurrentDomain.ProcessExit, Sub(sender, args) Log("ProcessExit; code=" & Environment.ExitCode)
     End Sub
 
@@ -221,8 +228,12 @@ Public NotInheritable Class ApplicationDiagnostics
             Marshal.FreeHGlobal(events)
         End Try
         If nativeFault AndAlso Not silent Then
+#If PROJECTZ_DIAGNOSTICS_OBSERVER Then
+            ObserverMessageBox(IntPtr.Zero, displayName & " closed because of a native error. Diagnostic logs and a crash dump were saved in:" & Environment.NewLine & Folder, displayName & " error", &H10UI)
+#Else
             System.Windows.Forms.MessageBox.Show(displayName & " closed because of a native error. Diagnostic logs and a crash dump were saved in:" & Environment.NewLine & Folder,
                                                  displayName & " error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error)
+#End If
         End If
     End Sub
 

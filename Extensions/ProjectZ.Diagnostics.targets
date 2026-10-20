@@ -38,16 +38,6 @@
     <Copy SourceFiles="$(PublishDir)ProjectZ.Native\mgruntime.dll" DestinationFiles="$(PublishDir)mgruntime.dll"
           Condition="'$(PublishDir)' != '' and Exists('$(PublishDir)ProjectZ.Native\mgruntime.dll')" />
   </Target>
-  <!-- A helper next to a self-contained host must use that host's bundled CLR,
-       rather than search its hostfxr directory for globally installed frameworks. -->
-  <Target Name="UseProjectZBundledDiagnosticRuntime" AfterTargets="Build;Publish" Condition="'$(SelfContained)' == 'true'">
-    <Copy SourceFiles="$(TargetDir)$(AssemblyName).runtimeconfig.json" DestinationFiles="$(TargetDir)ProjectZ.Diagnostics.runtimeconfig.json"
-          Condition="Exists('$(TargetDir)ProjectZ.Diagnostics.dll') and Exists('$(TargetDir)$(AssemblyName).runtimeconfig.json')" />
-    <Copy SourceFiles="$(TargetDir)$(AssemblyName).deps.json" DestinationFiles="$(TargetDir)ProjectZ.Diagnostics.deps.json"
-          Condition="Exists('$(TargetDir)ProjectZ.Diagnostics.dll') and Exists('$(TargetDir)$(AssemblyName).deps.json')" />
-    <Copy SourceFiles="$(PublishDir)$(AssemblyName).runtimeconfig.json" DestinationFiles="$(PublishDir)ProjectZ.Diagnostics.runtimeconfig.json"
-          Condition="Exists('$(PublishDir)ProjectZ.Diagnostics.dll') and Exists('$(PublishDir)$(AssemblyName).runtimeconfig.json')" />
-    <Copy SourceFiles="$(PublishDir)$(AssemblyName).deps.json" DestinationFiles="$(PublishDir)ProjectZ.Diagnostics.deps.json"
-          Condition="Exists('$(PublishDir)ProjectZ.Diagnostics.dll') and Exists('$(PublishDir)$(AssemblyName).deps.json')" />
-  </Target>
+  <!-- ProjectZ.Diagnostics.exe carries its own CLR. Never substitute a host's
+       runtimeconfig/deps: single-file hosts need not extract their CLR beside it. -->
 </Project>

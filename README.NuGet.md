@@ -6,6 +6,8 @@ This release also includes native studio controls, placeholder inputs and vector
 
 Package consumers also receive the compiled Segoe UI sample fonts, third-party notices and the complete runnable XAML code-generation tool. Native `ProjectZSceneXaml` items compile through the packaged tool automatically. `ProjectZXamlGeneratorDll` points to `tools/xaml-codegen/ProjectZ.XamlCodegen.dll` for applications that invoke the importer explicitly.
 
+The Windows x64 diagnostics observer is a self-contained single-file executable with its own CLR. It requires no installed .NET Desktop 8 runtime, including when launched from a self-contained .NET 10 single-file host. Keep its executable intact; do not substitute the host's runtimeconfig or deps files.
+
 Project-Z automatically starts persistent diagnostics when a Windows `SceneManager` is created. Logs include full managed exceptions, while the bundled `ProjectZ.Diagnostics` observer records abrupt exits and captures native fault dumps. NuGet consumers receive the observer automatically, including for self-contained publishing.
 
 The implementation lives in `Windows/Diagnostics` and the crash observer builds from `Project Z Diagnostics/ProjectZ.Diagnostics.vbproj` in the Project-Z solution. Repository project-reference consumers use the same deployment targets through `Directory.Build.targets`; the diagnostics implementation and build rules belong to Project-Z. `tests/CrashDiagnostics/Consumer` verifies an independent consumer without downstream application references.

@@ -5,9 +5,13 @@
     <RootNamespace>ProjectZ</RootNamespace>
     <AssemblyName>ProjectZ.Diagnostics</AssemblyName>
     <StartupObject>ProjectZ.RuntimeDiagnostics.ObserverProgram</StartupObject>
-    <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
+    <DefineConstants>$(DefineConstants),PROJECTZ_DIAGNOSTICS_OBSERVER=-1</DefineConstants>
     <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <RollForward>Major</RollForward>
     <OptionStrict>On</OptionStrict>
     <OptionInfer>On</OptionInfer>

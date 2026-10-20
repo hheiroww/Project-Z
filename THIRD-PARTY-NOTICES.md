@@ -1,5 +1,8 @@
 # Third-party notices
 
+The self-contained diagnostics observer includes the .NET 8 runtime. Its MIT
+license and third-party notices are included under `licenses/DotNetRuntime`.
+
 Project-Z's native shader implementation includes adaptations from
 WPFPixelShaderLibrary. Its GNU General Public License version 3 text is included
 at `licenses/WPFPixelShaderLibrary/LICENSE` in the NuGet package. Corresponding

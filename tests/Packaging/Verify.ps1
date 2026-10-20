@@ -63,4 +63,33 @@ $consumerOutput = Join-Path $consumerRoot 'bin/Release/net8.0-windows7.0'
 foreach ($asset in @('Content/Fonts/Segoe UI/SegoeUI_12.xnb', 'ProjectZ.Native/mgruntime.dll', 'ProjectZ.Diagnostics.dll')) {
     if (!(Test-Path -LiteralPath (Join-Path $consumerOutput $asset))) { throw "Consumer is missing deployed asset: $asset" }
 }
+# Exercise only the packaged EXE in an isolated folder, without a host CLR/config beside it.
+$observerRoot = Join-Path $consumerRoot 'observer-isolation'
+New-Item -ItemType Directory -Path $observerRoot | Out-Null
+Copy-Item -LiteralPath (Join-Path $consumerOutput 'ProjectZ.Diagnostics.exe') -Destination $observerRoot
+$target = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"' -WindowStyle Hidden -PassThru
+$observer = $null
+try {
+    $session = Join-Path $observerRoot 'probe.log'
+    [IO.File]::WriteAllText($session, 'observer isolation')
+    $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $observerRoot 'ProjectZ.Diagnostics.exe'))
+    $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.WindowStyle = 'Hidden'
+    foreach ($argument in @('--diagnostics-watch', "$($target.Id)", '--diagnostics-session', $session, '--diagnostics-no-dialog')) { $start.ArgumentList.Add($argument) }
+    $start.Environment['DOTNET_ROOT_X64'] = Join-Path $observerRoot 'absent-runtime'
+    $start.Environment['DOTNET_MULTILEVEL_LOOKUP'] = '0'
+    $start.Environment['DOTNET_DISABLE_GUI_ERRORS'] = '1'
+    $start.Environment['DOTNET_BUNDLE_EXTRACT_BASE_DIR'] = Join-Path $observerRoot 'extract'
+    $observer = [Diagnostics.Process]::Start($start)
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    while (!(Test-Path -LiteralPath ($session + '.ready')) -and !$observer.HasExited -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
+    if (!(Test-Path -LiteralPath ($session + '.ready'))) { throw 'Standalone observer did not attach without an installed runtime.' }
+    Stop-Process -Id $target.Id -Force
+    if (!$observer.WaitForExit(5000)) { throw 'Standalone observer did not exit after the target.' }
+    $observerText = [IO.File]::ReadAllText([IO.Path]::ChangeExtension($session, '.observer.log'))
+    if ($observerText -notmatch 'Native observer attached' -or $observerText -notmatch 'Observed process exit') { throw 'Standalone observer missed process lifetime.' }
+    Write-Host 'OBSERVER_ISOLATION_OK packaged executable carries its own CLR.'
+} finally {
+    if (!$target.HasExited) { Stop-Process -Id $target.Id -Force }
+    if ($observer -and !$observer.HasExited) { Stop-Process -Id $observer.Id -Force }
+}
 Write-Host "PACKAGE_OK ProjectZ=$version; consumer=$consumerRoot"
