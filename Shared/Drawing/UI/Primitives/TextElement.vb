@@ -430,7 +430,11 @@ Namespace [Shared].Drawing.UI.Primitives
             Dim lines = content.Replace(vbCr, "").Split(ChrW(10))
             Dim width = Math.Max(0, Math.Min(Size.X, MaxSize.X) - Padding.Left - Padding.Right)
             Dim height = Math.Max(0, Math.Min(Size.Y, MaxSize.Y) - Padding.Top - Padding.Bottom)
-            Dim count = Math.Min(lines.Length, CInt(Math.Floor((height + 0.01F) / Math.Max(1, XamlLineSpacing))))
+            ' A first line only needs its glyph ink height; subsequent baselines
+            ' use line spacing. Short arranged labels must not disappear.
+            Dim firstLineHeight = MeasureContent(If(String.IsNullOrEmpty(lines(0)), " ", lines(0))).Y
+            Dim count = If(height + 0.01F < firstLineHeight, 0,
+                Math.Min(lines.Length, 1 + CInt(Math.Floor(Math.Max(0, height - firstLineHeight + 0.01F) / Math.Max(1, XamlLineSpacing)))))
             If count <= 0 Then Return String.Empty
             Dim result As New List(Of String)
             For index = 0 To count - 1
@@ -453,7 +457,11 @@ Namespace [Shared].Drawing.UI.Primitives
             Dim pixelMode = If(PpiPerfectText, Scene.Quality.PpiPerfectText)
             If Not measuredPixelMode.HasValue OrElse measuredPixelMode.Value <> pixelMode Then
                 measuredPixelMode = pixelMode
+                Dim arrangedSize = Size
                 UpdateWrappedText()
+                ' A render-time font mode refresh must preserve XAML's arranged
+                ' box and padding rather than replace it with smaller ink bounds.
+                If UseXamlTextLayout AndAlso arrangedSize.X > 0 AndAlso arrangedSize.Y > 0 Then Size = arrangedSize
             End If
             Dim textToDraw As String = If(_TextWrapping = TextWrapping.NoWrap, Text, WrappedText)
             If UseXamlTextLayout AndAlso Not String.IsNullOrEmpty(textToDraw) AndAlso

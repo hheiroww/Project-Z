@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.20.1</Version>
+	<Version>2026.10.20.2</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.20.1 adds automatic offline textbox spellchecking, red squiggles, right-click suggestions and persistent custom dictionaries. Includes native studio controls, placeholder inputs and vector text improvements. Uses public SocketJack 2026.10.17.3 and retains the bundled model importer, diagnostics observer and native DX12 runtime.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.20.2 fixes queued descendant registration and preserves short arranged XAML text during font-mode refresh. Includes automatic offline textbox spellchecking, red squiggles, right-click suggestions, persistent custom dictionaries, native studio controls and vector text improvements. Uses public SocketJack 2026.10.17.3 and retains the bundled model importer, diagnostics observer and native runtime.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>

@@ -466,9 +466,9 @@ Namespace [Shared].Drawing.UI
         Private Sub _Children_ChildAdded(c As SceneElement) Handles _Children.ChildAdded
             AddHandler c.Invalidated, AddressOf OnPreviewInvalidated
             Scene?.InvalidateRenderOrder()
-            If Scene.Elements.Contains(Me) Then
-                Scene.AddElement(c)
-            End If
+            ' Children created before their parent's first frame must join its
+            ' pending registration rather than wait for an unrelated rebuild.
+            If Scene IsNot Nothing AndAlso Scene.IsElementAttachedOrQueued(Me) Then Scene.AddElement(c)
         End Sub
 
         Private Sub _Children_ChildRemoved(c As SceneElement) Handles _Children.ChildRemoved

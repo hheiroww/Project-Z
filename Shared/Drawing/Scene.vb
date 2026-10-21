@@ -764,6 +764,13 @@ Namespace [Shared].Drawing
             Return ContainsElement(Element.GUID)
         End Function
 
+        Friend Function IsElementAttachedOrQueued(element As SceneElement) As Boolean
+            If element Is Nothing OrElse element.IsDisposed Then Return False
+            If AddQueue.Contains(element) Then Return True
+            Dim index As Integer
+            Return GUID_INDEX.TryGetValue(element.GUID, index) AndAlso Not RemoveQueue.Contains(index)
+        End Function
+
         Public Overloads Function ContainsElement(GUID As String) As Boolean
             If GUID_INDEX.ContainsKey(GUID) Then
                 Dim zIndex As Integer = GUID_INDEX(GUID)
