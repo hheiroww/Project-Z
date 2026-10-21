@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="ProjectZ.VisualStudio2026.Templates" Version="2026.10.20.1" Language="en-US" Publisher="hheiroww" />
+    <DisplayName>Project-Z for Visual Studio 2026</DisplayName>
+    <Description xml:space="preserve">C# and Visual Basic desktop project templates with DirectX 12, DirectX 11 and OpenGL renderer configurations.</Description>
+    <MoreInfo>https://github.com/hheiroww/Project-Z</MoreInfo>
+    <Tags>Project-Z,ProjectZ,MonoGame,DX12,DirectX,OpenGL,CSharp,VisualBasic</Tags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[18.0,)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName=".NET Framework" Version="[4.7.2,)" />
+  </Dependencies>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[18.0,)" DisplayName="Visual Studio core editor" />
+    <Prerequisite Id="Microsoft.VisualStudio.Workload.ManagedDesktop" Version="[18.0,)" DisplayName=".NET desktop development" />
+  </Prerequisites>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.ProjectTemplate" d:Source="File" Path="ProjectTemplates" />
+  </Assets>
+</PackageManifest>

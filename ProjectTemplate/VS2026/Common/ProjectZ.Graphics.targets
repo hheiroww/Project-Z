@@ -1,0 +1,17 @@
+<Project>
+  <ItemGroup>
+    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)ProjectZ.Graphics.xaml" />
+  </ItemGroup>
+  <Target Name="ValidateProjectZTemplateBackend" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11' and '$(ProjectZGraphicsBackend)' != 'OpenGL'" Text="Choose DirectX12, DirectX11 or OpenGL in Project Properties > Project-Z Graphics." />
+    <Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and !Exists('$(MSBuildThisFileDirectory)Runtime\$(ProjectZGraphicsBackend)\ProjectZ.dll')" Text="The selected renderer's ProjectZ.dll is missing. Keep the ProjectZ/Runtime folder with your project." />
+  </Target>
+  <Target Name="SelectProjectZTemplateNativePayload" BeforeTargets="AssignTargetPaths" Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12'">
+    <ItemGroup><Content Remove="@(_ProjectZNativePayload)" /></ItemGroup>
+  </Target>
+  <!-- SDK candidate discovery otherwise picks the first same-named DLL under
+       Runtime, even when the reference's HintPath selects a different backend. -->
+  <Target Name="PreferProjectZSelectedRenderer" BeforeTargets="ResolveAssemblyReferences">
+    <PropertyGroup><AssemblySearchPaths>{HintPathFromItem};$(AssemblySearchPaths)</AssemblySearchPaths></PropertyGroup>
+  </Target>
+</Project>

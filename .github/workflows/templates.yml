@@ -1,0 +1,28 @@
+name: Build Visual Studio 2026 templates
+on:
+  workflow_dispatch:
+  push:
+    tags: ['vs2026-*']
+permissions:
+  contents: read
+jobs:
+  templates:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Build DX11 and OpenGL runtimes and VSIX
+        shell: pwsh
+        run: ./ProjectTemplate/VS2026/Build.ps1
+      - name: Verify standalone CSharp and VB templates for every renderer
+        shell: pwsh
+        run: ./tests/ProjectTemplates/Verify.ps1 -SkipRuntime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-VisualStudio2026
+          path: artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
+          if-no-files-found: error

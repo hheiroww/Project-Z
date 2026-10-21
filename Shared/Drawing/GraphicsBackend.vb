@@ -3,6 +3,7 @@ Namespace [Shared].Drawing
     Public Enum ProjectZGraphicsBackend
         DirectX12
         DirectX11
+        OpenGL
     End Enum
 
     Public NotInheritable Class GraphicsBackendInfo
@@ -14,6 +15,8 @@ Namespace [Shared].Drawing
             Get
 #If PROJECTZ_DIRECTX11 Then
                 Return ProjectZGraphicsBackend.DirectX11
+#ElseIf PROJECTZ_OPENGL Then
+                Return ProjectZGraphicsBackend.OpenGL
 #Else
                 Return ProjectZGraphicsBackend.DirectX12
 #End If

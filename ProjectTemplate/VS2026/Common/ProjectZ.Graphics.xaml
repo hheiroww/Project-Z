@@ -1,0 +1,8 @@
+<Rule Name="ProjectZGraphics" DisplayName="Project-Z Graphics" PageTemplate="generic" Order="30" xmlns="http://schemas.microsoft.com/build/2009/properties">
+  <Rule.DataSource><DataSource Persistence="ProjectFile" HasConfigurationCondition="true" /></Rule.DataSource>
+  <EnumProperty Name="ProjectZGraphicsBackend" DisplayName="Graphics renderer" Description="Select the matching Project-Z framework and MonoGame runtime. Rebuild after changing renderer.">
+    <EnumValue Name="DirectX12" DisplayName="DirectX 12 (default)" />
+    <EnumValue Name="DirectX11" DisplayName="DirectX 11" />
+    <EnumValue Name="OpenGL" DisplayName="OpenGL (DesktopGL on Windows)" />
+  </EnumProperty>
+</Rule>

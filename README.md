@@ -12,7 +12,20 @@ Build expressive desktop tools, creative applications, and game interfaces with 
 ![XAML](https://img.shields.io/badge/UI-XAML-35e7c4?style=for-the-badge&labelColor=061b16)
 ![Windows](https://img.shields.io/badge/.NET-8_%26_10_WINDOWS-78bfff?style=for-the-badge&labelColor=061b16)
 
-**[Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)**
+**[Visual Studio 2026 installer](#visual-studio-2026-project-templates) · [Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)**
+
+## Visual Studio 2026 project templates
+
+> **NEW: Create a Project-Z application directly in Visual Studio 2026.** Install the **C# and Visual Basic** templates, press **F5**, and choose **DirectX 12, DirectX 11 or OpenGL** from the build configuration selector.
+
+**[⬇ Download the Visual Studio 2026 installer (.vsix)](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.20.1/ProjectZ.VisualStudio2026.vsix)** · [Release and checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.20.1) · [Setup and renderer guide](./ProjectTemplate/VS2026/README.md)
+
+1. Install Visual Studio 2026's **.NET desktop development** workload and the **.NET 10 SDK**.
+2. Open the downloaded `.vsix`, select your Visual Studio 2026 installation, and finish installation. Restart Visual Studio.
+3. Choose **File → New → Project**, search **Project-Z**, and select **Project-Z Desktop (C#)** or **Project-Z Desktop (Visual Basic)**.
+4. Run the starter scene. **Debug / Release** use DX12; **Debug-DX11 / Release-DX11** use DX11; **Debug-OpenGL / Release-OpenGL** use OpenGL. The **Project-Z Graphics** property page also lets you select a renderer.
+
+The generated Windows x64 projects restore public NuGet dependencies and include the alternate renderer assemblies. No Project-Z checkout or local framework build is needed.
 
 > **Embedded HTML5:** The [Project Z HTML5 engine](./Project%20Z%20HTML5/) now runs inside a native Project-Z window through `Html5EngineHost` and WebView2. Local content is mapped directly without an HTTP server; the included host project runs the Canvas2D test page under the existing DX12 game lifecycle.
 

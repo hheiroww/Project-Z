@@ -1,0 +1,46 @@
+<Project>
+  <PropertyGroup>
+    <Configurations>Debug;Release;Debug-DX11;Release-DX11;Debug-OpenGL;Release-OpenGL</Configurations>
+    <ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == '' and $(Configuration.EndsWith('-OpenGL'))">OpenGL</ProjectZGraphicsBackend>
+    <ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == '' and $(Configuration.EndsWith('-DX11'))">DirectX11</ProjectZGraphicsBackend>
+    <ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
+    <Optimize Condition="$(Configuration.StartsWith('Release'))">true</Optimize>
+    <DebugSymbols Condition="$(Configuration.StartsWith('Debug'))">true</DebugSymbols>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <ProjectZFrameworkVersion>2026.10.20.1</ProjectZFrameworkVersion>
+  </PropertyGroup>
+  <!-- Keep the public package's fonts, diagnostics, code generator and dependencies.
+       Alternate renderers use the matching framework binary shipped in this template. -->
+  <ItemGroup>
+    <PackageReference Include="ProjectZ" Version="[$(ProjectZFrameworkVersion)]" GeneratePathProperty="true">
+      <ExcludeAssets Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12'">compile;runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12'">
+    <!-- Excluding the DX12 package's managed assets also suppresses its
+         transitive assets. Declare the shared runtime dependencies directly. -->
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
+    <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
+    <PackageReference Include="SocketJack" Version="2026.10.17.3" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3124.44" />
+    <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" ExcludeAssets="all" />
+    <PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" ExcludeAssets="all" />
+    <Reference Include="ProjectZ">
+      <HintPath>$(MSBuildThisFileDirectory)Runtime\$(ProjectZGraphicsBackend)\ProjectZ.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="ProjectZ.ModelImport">
+      <HintPath>$(PkgProjectZ)\lib\net8.0-windows7.0\ProjectZ.ModelImport.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">
+    <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+  </ItemGroup>
+</Project>

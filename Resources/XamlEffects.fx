@@ -7,6 +7,15 @@ Texture2D OriginalTexture : register(t1);
 SamplerState OriginalSampler : register(s1);
 #define SAMPLE(p) SourceTexture.Sample(SourceSampler, p)
 #define ORIGINAL(p) OriginalTexture.Sample(OriginalSampler, p)
+#elif OPENGL
+#define SV_POSITION POSITION
+#define PS_MODEL ps_3_0
+#define PS_TARGET COLOR0
+sampler2D SourceTexture : register(s0);
+texture OriginalTexture;
+sampler2D OriginalSampler = sampler_state { Texture = <OriginalTexture>; };
+#define SAMPLE(p) tex2D(SourceTexture, p)
+#define ORIGINAL(p) tex2D(OriginalSampler, p)
 #else
 #define PS_MODEL ps_4_0
 #define PS_TARGET COLOR0

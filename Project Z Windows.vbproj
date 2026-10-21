@@ -35,6 +35,7 @@
 	<TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectZModelImport</TargetsForTfmSpecificBuildOutput>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">$(DefineConstants),PROJECTZ_DIRECTX12=-1</DefineConstants>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">$(DefineConstants),PROJECTZ_DIRECTX11=-1</DefineConstants>
+	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">$(DefineConstants),PROJECTZ_OPENGL=-1</DefineConstants>
 </PropertyGroup>
 
 <ItemGroup>
@@ -74,6 +75,7 @@
 	<Page Remove="heirowSnap Project Z\**" />
 	<Page Remove="heirowSnap Protocol\**" />
 	<Page Remove="tests\**" />
+	<Page Remove="ProjectTemplate\**" />
 </ItemGroup>
 
 <!-- MonoGame 3.8.5.1 native DX12 is the default. WindowsDX remains available
@@ -82,6 +84,7 @@
 	<PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
 	<PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
 	<PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
+	<PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" />
 	<PackageReference Include="SocketJack" Version="2026.10.17.3" Condition="!Exists('$(SocketJackProject)')" />
 	<PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
 	<PackageReference Include="LibTessDotNet" Version="1.1.15" />
@@ -92,7 +95,7 @@
 </ItemGroup>
 
 <Target Name="ValidateProjectZGraphicsBackend" BeforeTargets="PrepareForBuild">
-	<Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11'" Text="ProjectZGraphicsBackend must be DirectX12 or DirectX11." />
+	<Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11' and '$(ProjectZGraphicsBackend)' != 'OpenGL'" Text="ProjectZGraphicsBackend must be DirectX12, DirectX11 or OpenGL." />
 </Target>
 
 <ItemGroup Condition="Exists('$(SocketJackProject)')">
@@ -118,13 +121,20 @@
   <PropertyGroup>
     <XamlShaderProfile Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">DirectX_12</XamlShaderProfile>
     <XamlShaderProfile Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">DirectX_11</XamlShaderProfile>
+    <XamlShaderProfile Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">OpenGL</XamlShaderProfile>
+    <XamlShaderDefines>$(ProjectZGraphicsBackend.ToUpperInvariant())</XamlShaderDefines>
+    <XamlShaderDefines Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">PROJECTZ_OPENGL</XamlShaderDefines>
   </PropertyGroup>
   <Target Name="CompileProjectZXamlShaders" BeforeTargets="PrepareResources" Inputs="Resources\XamlEffects.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx">
     <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" />
-    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(ProjectZGraphicsBackend.ToUpperInvariant())" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(XamlShaderDefines)" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+  <Target Name="CompileProjectZOpenGLFxaa" BeforeTargets="PrepareResources" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" DependsOnTargets="CompileProjectZXamlShaders" Inputs="Resources\FXAA.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)FXAA.OpenGL.mgfx">
+    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\FXAA.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)FXAA.OpenGL.mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:OpenGL" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
   <ItemGroup>
     <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)FXAA.OpenGL.mgfx" LogicalName="ProjectZ.Resources.FXAA.mgfx" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".github\copilot-instructions.md" />

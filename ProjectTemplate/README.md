@@ -1,5 +1,7 @@
 # Project Z Application — Visual Studio Project Template
 
+> **Visual Studio 2026:** use the new [VSIX installer and graphics configuration guide](./VS2026/README.md). It installs standalone C# and VB templates with DX12, DX11 and OpenGL configurations. The manually zipped VB template described below is the older source-checkout template.
+
 A Visual Studio project template for creating new MonoGame game applications using the **Project Z** shared framework (SceneManager, Scene, ContentContainer, etc.).
 
 ---
