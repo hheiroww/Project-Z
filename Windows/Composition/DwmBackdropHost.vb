@@ -99,7 +99,7 @@ Namespace Windows.Composition
             ' An extended DWM frame only exposes its glass material where the
             ' client surface contributes zero-alpha black. A near-black RGB fill
             ' is opaque and was the solid background seen through the DX12 mask.
-            backdrop = New Form With {
+            backdrop = New BackdropForm With {
                 .AutoScaleMode = AutoScaleMode.None,
                 .BackColor = Global.System.Drawing.Color.Black,
                 .FormBorderStyle = FormBorderStyle.None,
@@ -108,7 +108,7 @@ Namespace Windows.Composition
                 .Text = "Project-Z DWM backdrop",
                 .Enabled = False
             }
-            backdrop.Show()
+            Dim unused = backdrop.Handle
             Composition = WindowsComposition.ApplyToHandle(backdrop.Handle, New WindowCompositionOptions With {
                 .Borderless = True,
                 .Resizable = False,
@@ -270,7 +270,7 @@ Namespace Windows.Composition
         Private Sub SynchronizeOwnerWindow()
             Dim visible = IsWindowVisible(owner) AndAlso Not IsIconic(owner)
             If Not visible Then
-                If lastVisible Then backdrop.Hide()
+                If backdrop.Visible Then backdrop.Hide()
                 lastVisible = False
                 Return
             End If
@@ -280,7 +280,10 @@ Namespace Windows.Composition
             Dim bounds = Global.System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom)
             If lastVisible AndAlso backdrop.Visible AndAlso bounds = lastBounds AndAlso
                NextVisibleWindow(owner) = backdrop.Handle Then Return
-            If Not backdrop.Visible Then backdrop.Show()
+            If Not backdrop.Visible Then
+                backdrop.Bounds = bounds
+                backdrop.Show()
+            End If
             ' Insert immediately below the DX12 HWND without stealing focus.
             LastPositionSucceeded = SetWindowPos(backdrop.Handle, owner, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
                                                  SwpNoActivate Or SwpShowWindow)
@@ -290,6 +293,27 @@ Namespace Windows.Composition
                 lastVisible = True
             End If
         End Sub
+
+        ' A material companion must never activate, including its first Show.
+        ' Activating a backdrop dismisses transient owners before their content
+        ' can be presented and can leave a blank material window behind.
+        Private NotInheritable Class BackdropForm
+            Inherits Form
+
+            Protected Overrides ReadOnly Property ShowWithoutActivation As Boolean
+                Get
+                    Return True
+                End Get
+            End Property
+
+            Protected Overrides ReadOnly Property CreateParams As CreateParams
+                Get
+                    Dim value = MyBase.CreateParams
+                    value.ExStyle = value.ExStyle Or &H8000000 Or &H80 ' NOACTIVATE / TOOLWINDOW
+                    Return value
+                End Get
+            End Property
+        End Class
 
         ' Windows enters a modal message loop during caption dragging/resizing.
         ' The Game update loop may not run there. Follow the committed native
