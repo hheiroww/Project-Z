@@ -890,20 +890,20 @@ Namespace [Shared].Drawing.UI.Input
             MyBase.New(scene)
             BackgroundColor = New Color(30, 30, 30)
             Clip = True
-            _verticalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
-            _horizontalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            _verticalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(38, 55, 57), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            _horizontalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(38, 55, 57), .zIndex = Integer.MaxValue - 1, .isVisible = False}
             Children.Add(_verticalTrack)
             Children.Add(_horizontalTrack)
 
             _verticalScrollbar = New RectangleElement(scene) With {
-                .BackgroundColor = New Color(60, 60, 60),
+                .BackgroundColor = New Color(126, 167, 172),
                 .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
             Children.Add(_verticalScrollbar)
 
             _horizontalScrollbar = New RectangleElement(scene) With {
-                .BackgroundColor = New Color(60, 60, 60),
+                .BackgroundColor = New Color(126, 167, 172),
                 .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
@@ -911,11 +911,15 @@ Namespace [Shared].Drawing.UI.Input
             AddHandler _verticalScrollbar.MouseLeftDown, Sub(p)
                                                             StopScrolling()
                                                             _verticalDragOffset = _scrollOffset.Y
+                                                            scene.CapturePointer(_verticalScrollbar)
                                                         End Sub
             AddHandler _horizontalScrollbar.MouseLeftDown, Sub(p)
                                                               StopScrolling()
                                                               _horizontalDragOffset = _scrollOffset.X
+                                                              scene.CapturePointer(_horizontalScrollbar)
                                                           End Sub
+            AddHandler _verticalScrollbar.MouseLeftUp, Sub(p) scene.ReleasePointerCapture(_verticalScrollbar)
+            AddHandler _horizontalScrollbar.MouseLeftUp, Sub(p) scene.ReleasePointerCapture(_horizontalScrollbar)
             AddHandler _verticalScrollbar.MouseDrag, Sub(current, start)
                                                         Dim travel = _verticalTrack.Size.Y - _verticalScrollbar.Size.Y
                                                         If travel > 0 Then ScrollTo(New Vector2(_scrollOffset.X, _verticalDragOffset + (current.Y - start.Y) * Math.Max(0, _content.Size.Y - _verticalTrack.Size.Y) / travel))

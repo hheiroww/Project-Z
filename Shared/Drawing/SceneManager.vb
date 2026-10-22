@@ -840,7 +840,7 @@ Namespace [Shared].Drawing
             If Not GetCursorPos(native) OrElse Not ScreenToClient(handle, native) OrElse Not GetClientRect(handle, rect) Then Return False
             Dim width = Math.Max(0, rect.Right - rect.Left)
             Dim height = Math.Max(0, rect.Bottom - rect.Top)
-            If native.X < 0 OrElse native.Y < 0 OrElse native.X >= width OrElse native.Y >= height Then Return False
+            If Not MouseDown AndAlso (native.X < 0 OrElse native.Y < 0 OrElse native.X >= width OrElse native.Y >= height) Then Return False
             point = ClientToViewport(New Point(native.X, native.Y), width, height)
             Return True
 #Else
