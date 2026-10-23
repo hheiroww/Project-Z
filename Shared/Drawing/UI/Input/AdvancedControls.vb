@@ -989,16 +989,20 @@ Namespace [Shared].Drawing.UI.Input
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
             Dim elapsed = CSng(gameTime.ElapsedGameTime.TotalSeconds)
-            If elapsed <= 0 OrElse elapsed > 0.25F OrElse _scrollVelocity = Vector2.Zero Then Return
+            If elapsed <= 0 OrElse _scrollVelocity = Vector2.Zero Then Return
 
             Dim before = _scrollOffset
-            ScrollBy(_scrollVelocity * elapsed)
-            If _scrollOffset.X = before.X AndAlso _scrollVelocity.X <> 0 Then _scrollVelocity.X = 0
-            If _scrollOffset.Y = before.Y AndAlso _scrollVelocity.Y <> 0 Then _scrollVelocity.Y = 0
-
-            Dim deceleration = Math.Max(0.0F, ScrollDeceleration) * elapsed
-            _scrollVelocity.X = ApproachZero(_scrollVelocity.X, deceleration)
-            _scrollVelocity.Y = ApproachZero(_scrollVelocity.Y, deceleration)
+            Dim rate = Math.Max(0.0F, ScrollDeceleration)
+            Dim nextVelocity As New Vector2(ApproachZero(_scrollVelocity.X, rate * elapsed), ApproachZero(_scrollVelocity.Y, rate * elapsed))
+            ' Integrate deceleration over real frame time, including a slow image
+            ' frame. Dropping long frames or using initial velocity for the whole
+            ' interval makes wheel travel depend on rendering speed.
+            Dim timeX = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.X) / rate), elapsed)
+            Dim timeY = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.Y) / rate), elapsed)
+            ScrollBy(New Vector2((_scrollVelocity.X + nextVelocity.X) * 0.5F * timeX, (_scrollVelocity.Y + nextVelocity.Y) * 0.5F * timeY))
+            If _scrollOffset.X = before.X Then nextVelocity.X = 0
+            If _scrollOffset.Y = before.Y Then nextVelocity.Y = 0
+            _scrollVelocity = nextVelocity
         End Sub
 
         Private Shared Function ApproachZero(value As Single, amount As Single) As Single
