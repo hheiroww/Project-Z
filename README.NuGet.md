@@ -1,4 +1,11 @@
-# ⚡ Project Z 2026.10.20.1
+# ⚡ Project Z 2026.10.23.1
+
+Version 2026.10.23.1 preserves the installed font's COLR/CPAL color layers when
+rendering shaped native text. Emoji keep their colors in textboxes, labels and
+buttons, including skin-tone and joined sequences supported by the system font.
+Font fallback, layout measurements, caret positions and text opacity continue to
+use the existing native text path. Fonts without compatible color layers retain
+their normal outlines. No emoji images or fonts are downloaded or bundled.
 
 Version 2026.10.20.1 adds automatic offline spellchecking to native textboxes: red squiggles, right-click spelling suggestions and **Add to dictionary** with a persistent, editable local word list. Checks run in the background using the installed Windows spelling language. Password and masked inputs are excluded. See [dictionary configuration](https://github.com/hheiroww/Project-Z/blob/master/docs/Spellchecking.md).
 

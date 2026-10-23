@@ -10,7 +10,7 @@ Namespace [Shared].Content
         Implements IDisposable
         Private ReadOnly face As Media.Typeface
         Private ReadOnly emSize As Double
-        Private ReadOnly meshes As New TextCache(Of VertexPositionColor())(256)
+        Private ReadOnly meshes As New TextCache(Of TextMesh)(256)
         Private ReadOnly measurements As New TextCache(Of Vector2)(1024)
         ' Evict a single cold entry, preserving the visible labels when changing
         ' log lines or model rows fill the bounded cache.
@@ -48,6 +48,26 @@ Namespace [Shared].Content
         Public ReadOnly Property FilePath As String
         Public ReadOnly Property LineSpacing As Integer
         Public Property PpiPerfectText As Boolean
+
+        Private NotInheritable Class TextMesh
+            Friend ReadOnly Vertices As VertexPositionColor()
+            Private ReadOnly colors As Color()
+            Private ReadOnly foreground As Boolean()
+            Private lastColor As Color?
+            Friend Sub New(vertices As List(Of VertexPositionColor), foreground As List(Of Boolean))
+                Me.Vertices = vertices.ToArray()
+                colors = vertices.Select(Function(vertex) vertex.Color).ToArray()
+                Me.foreground = foreground.ToArray()
+            End Sub
+            Friend Sub Apply(color As Color)
+                If lastColor.HasValue AndAlso lastColor.Value = color Then Return
+                Dim opacity = color.A / 255.0F
+                For index = 0 To Vertices.Length - 1
+                    Vertices(index).Color = If(foreground(index), color, colors(index) * opacity)
+                Next
+                lastColor = color
+            End Sub
+        End Class
 
         Public Shared Function AlignToPixelGrid(position As Vector2, Optional pixelsPerUnit As Single = 1) As Vector2
             If Not Single.IsFinite(pixelsPerUnit) OrElse pixelsPerUnit <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pixelsPerUnit))
@@ -101,11 +121,74 @@ Namespace [Shared].Content
             Return size
         End Function
 
-        Private Function Triangles(text As String, pixelPerfect As Boolean) As VertexPositionColor()
+        Private Function Triangles(text As String, pixelPerfect As Boolean) As TextMesh
             Dim key = If(pixelPerfect, "P:", "I:") & text
-            Dim result As VertexPositionColor() = Nothing
+            Dim result As TextMesh = Nothing
             If meshes.TryGetValue(key, result) Then Return result
-            Dim geometry = Format(text, pixelPerfect).BuildGeometry(New System.Windows.Point()).GetFlattenedPathGeometry(0.025, Media.ToleranceType.Absolute)
+            Dim formatted = Format(text, pixelPerfect)
+            Dim visual As New Media.DrawingVisual
+            Using context = visual.RenderOpen()
+                context.DrawText(formatted, New System.Windows.Point())
+            End Using
+            Dim drawing = visual.Drawing
+            Dim vertices As New List(Of VertexPositionColor)
+            Dim foreground As New List(Of Boolean)
+            If HasColorGlyphs(drawing) Then
+                AppendDrawing(drawing, Media.Matrix.Identity, vertices, foreground)
+            Else
+                AppendGeometry(formatted.BuildGeometry(New System.Windows.Point()), Color.White, True, Media.Matrix.Identity, vertices, foreground)
+            End If
+            result = New TextMesh(vertices, foreground)
+            meshes.Add(key, result)
+            Return result
+        End Function
+
+        Private Shared Function HasColorGlyphs(drawing As Media.Drawing) As Boolean
+            If TypeOf drawing Is Media.DrawingGroup Then Return DirectCast(drawing, Media.DrawingGroup).Children.Any(Function(child) HasColorGlyphs(child))
+            Dim glyphDrawing = TryCast(drawing, Media.GlyphRunDrawing)
+            If glyphDrawing Is Nothing Then Return False
+            Dim data = ColorFontLayers.ForTypeface(glyphDrawing.GlyphRun.GlyphTypeface)
+            Return data IsNot Nothing AndAlso glyphDrawing.GlyphRun.GlyphIndices.Any(Function(glyph) data.ForGlyph(glyph) IsNot Nothing)
+        End Function
+
+        Private Shared Sub AppendDrawing(drawing As Media.Drawing, transform As Media.Matrix, vertices As List(Of VertexPositionColor), foreground As List(Of Boolean))
+            If TypeOf drawing Is Media.DrawingGroup Then
+                Dim group = DirectCast(drawing, Media.DrawingGroup)
+                Dim matrix = Media.Matrix.Multiply(If(group.Transform Is Nothing, Media.Matrix.Identity, group.Transform.Value), transform)
+                For Each child In group.Children
+                    AppendDrawing(child, matrix, vertices, foreground)
+                Next
+                Return
+            End If
+            Dim glyphDrawing = TryCast(drawing, Media.GlyphRunDrawing)
+            If glyphDrawing Is Nothing Then Return
+            Dim run = glyphDrawing.GlyphRun
+            Dim data = ColorFontLayers.ForTypeface(run.GlyphTypeface)
+            If data Is Nothing Then
+                AppendGeometry(run.BuildGeometry(), Color.White, True, transform, vertices, foreground)
+                Return
+            End If
+            Dim advance As Double
+            For index = 0 To run.GlyphIndices.Count - 1
+                Dim layers = data.ForGlyph(run.GlyphIndices(index))
+                If layers Is Nothing Then layers = {New ColorFontLayers.Layer With {.Glyph = run.GlyphIndices(index), .Color = Color.White, .Foreground = True}}
+                Dim origin = run.BaselineOrigin
+                origin.X += If((run.BidiLevel And 1) <> 0, -advance, advance)
+                Dim offsets As System.Windows.Point() = Nothing
+                If run.GlyphOffsets IsNot Nothing AndAlso run.GlyphOffsets.Count > index Then offsets = {run.GlyphOffsets(index)}
+                For Each layer In layers
+                    Dim glyph As New Media.GlyphRun(run.GlyphTypeface, run.BidiLevel, run.IsSideways, run.FontRenderingEmSize, run.PixelsPerDip,
+                        {layer.Glyph}, origin, {run.AdvanceWidths(index)}, offsets, Nothing, Nothing, Nothing, Nothing, run.Language)
+                    AppendGeometry(glyph.BuildGeometry(), layer.Color, layer.Foreground, transform, vertices, foreground)
+                Next
+                advance += run.AdvanceWidths(index)
+            Next
+        End Sub
+
+        Private Shared Sub AppendGeometry(source As Media.Geometry, color As Color, useForeground As Boolean, transform As Media.Matrix, vertices As List(Of VertexPositionColor), foreground As List(Of Boolean))
+            Dim placed = source.Clone()
+            placed.Transform = New Media.MatrixTransform(Media.Matrix.Multiply(If(placed.Transform Is Nothing, Media.Matrix.Identity, placed.Transform.Value), transform))
+            Dim geometry = placed.GetFlattenedPathGeometry(0.025, Media.ToleranceType.Absolute)
             Dim tessellator As New Tess()
             For Each figure In geometry.Figures
                 If Not figure.IsFilled Then Continue For
@@ -121,25 +204,23 @@ Namespace [Shared].Content
                 tessellator.AddContour(points.Select(Function(p) New ContourVertex With {.Position = New Vec3(CSng(p.X), CSng(p.Y), 0)}).ToArray())
             Next
             tessellator.Tessellate(If(geometry.FillRule = Media.FillRule.Nonzero, WindingRule.NonZero, WindingRule.EvenOdd), ElementType.Polygons, 3)
-            Dim vertices As New List(Of VertexPositionColor)
             For i = 0 To tessellator.ElementCount * 3 - 1 Step 3
                 If tessellator.Elements(i) < 0 OrElse tessellator.Elements(i + 1) < 0 OrElse tessellator.Elements(i + 2) < 0 Then Continue For
                 For j = 0 To 2
                     Dim p = tessellator.Vertices(tessellator.Elements(i + j)).Position
-                    vertices.Add(New VertexPositionColor(New Vector3(p.X, p.Y, 0), Color.White))
+                    vertices.Add(New VertexPositionColor(New Vector3(p.X, p.Y, 0), color))
+                    foreground.Add(useForeground)
                 Next
             Next
-            result = vertices.ToArray()
-            meshes.Add(key, result)
-            Return result
-        End Function
+        End Sub
 
         Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2, Optional textScale As Single = 1, Optional pixelPerfect As Boolean? = Nothing)
             If String.IsNullOrWhiteSpace(text) Then Return
             Dim quality = Drawing.GraphicsQuality.ForDevice(device)
             Dim aligned = If(pixelPerfect, PpiPerfectText OrElse quality.PpiPerfectText)
             If aligned Then position = AlignToPixelGrid(position)
-            Dim vertices = Triangles(text, aligned)
+            Dim mesh = Triangles(text, aligned)
+            Dim vertices = mesh.Vertices
             If vertices.Length = 0 Then Return
             If effect Is Nothing Then
                 effect = New BasicEffect(device) With {.VertexColorEnabled = True}
@@ -148,11 +229,7 @@ Namespace [Shared].Content
                 deviceDisposing = Sub(sender, args) Dispose()
                 AddHandler ownerDevice.Disposing, deviceDisposing
             End If
-            If vertices(0).Color <> color Then
-                For i = 0 To vertices.Length - 1
-                    vertices(i).Color = color
-                Next
-            End If
+            mesh.Apply(color)
             Dim scale = Drawing.GraphicsQuality.ForDevice(device).RenderScale
             effect.World = Matrix.CreateScale(textScale, textScale, 1) * Matrix.CreateTranslation(position.X - offset.X, position.Y - offset.Y, 0) * Matrix.CreateScale(scale.X, scale.Y, 1)
             effect.Projection = Matrix.CreateOrthographicOffCenter(0, device.Viewport.Width, device.Viewport.Height, 0, 0, 1)

@@ -46,6 +46,30 @@ internal static class Program
                 "fractional point sizes resolve with culture-independent names");
             Require(!resources.TryGetVectorFont("SegoeUI_20,5", out var invalid) && invalid is null,
                 "culture-specific malformed names are not silently interpreted");
+            const string emojiText = "Hello 😂 ❤️ 👍🏽 👨‍👩‍👧‍👦";
+            var beforeColor = twenty.Measure(emojiText);
+            var meshMethod = typeof(VectorFont).GetMethod("Triangles", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var mesh = meshMethod.Invoke(twenty, new object[] { emojiText, false })!;
+            var vertexField = mesh.GetType().GetField("Vertices", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var apply = mesh.GetType().GetMethod("Apply", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var vertices = (Microsoft.Xna.Framework.Graphics.VertexPositionColor[])vertexField.GetValue(mesh)!;
+            bool Yellow(Color c) => c.R > 140 && c.G > 70 && c.B < 90;
+            Require(vertices.Any(v => Yellow(v.Color)), "shaped emoji include their COLR/CPAL yellow layers");
+            Require(vertices.Any(v => v.Color.R > 180 && v.Color.G < 100 && v.Color.B < 120), "heart emoji retain their red palette layers");
+            var palette = vertices.Where(v => Yellow(v.Color)).Select(v => v.Color).ToArray();
+            apply.Invoke(mesh, new object[] { Color.Cyan });
+            Require(vertices.Any(v => v.Color == Color.Cyan) && vertices.Count(v => Yellow(v.Color)) == palette.Length,
+                "foreground color changes ordinary letters without tinting emoji");
+            apply.Invoke(mesh, new object[] { Color.White * .5f });
+            Require(vertices.All(v => v.Color.A <= 128 && v.Color.R <= v.Color.A && v.Color.G <= v.Color.A && v.Color.B <= v.Color.A),
+                "text opacity applies premultiplied alpha to every color layer");
+            Require(twenty.Measure(emojiText) == beforeColor, "color rendering preserves existing layout and caret metrics");
+            var rtl = "مرحبا 😂 ❤️";
+            var rtlMesh = meshMethod.Invoke(twenty, new object[] { rtl, false })!;
+            var rtlVertices = (Microsoft.Xna.Framework.Graphics.VertexPositionColor[])vertexField.GetValue(rtlMesh)!;
+            Require(rtlVertices.Any(v => Yellow(v.Color)) && rtlVertices.Min(v => v.Position.X) >= -2 && rtlVertices.Max(v => v.Position.X) <= twenty.Measure(rtl).X + 3,
+                "mixed-direction text keeps the shaped color glyph positions");
+
             foreach (string name in new[] { "SegoeUI_0", "SegoeUI_-20", "SegoeUI_NaN", "SegoeUI_Infinity", "SegoeUI_513", "UnknownFont_20" })
                 Require(!resources.TryGetVectorFont(name, out invalid) && invalid is null,
                     "invalid or unregistered font name rejects: " + name);
