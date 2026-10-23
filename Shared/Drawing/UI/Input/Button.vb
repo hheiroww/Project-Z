@@ -26,10 +26,7 @@ Namespace [Shared].Drawing.UI.Input
             Set(value As ButtonAutoSize)
                 _AutoSize = value
                 If _AutoSize <> ButtonAutoSize.None Then
-                    _OriginalSize = Size
                     DoAutoSize()
-                Else
-                    Size = _OriginalSize
                 End If
             End Set
         End Property
@@ -52,7 +49,6 @@ Namespace [Shared].Drawing.UI.Input
             End Set
         End Property
         Private _AutoSizeWidthOnTextOverflow As Boolean
-        Private _OriginalSize As Vector2
 
         Public Property isAnimated As Boolean = False
 

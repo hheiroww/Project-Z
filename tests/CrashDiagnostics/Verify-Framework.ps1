@@ -18,6 +18,10 @@ function Run-Consumer([string]$argument) {
 try {
     $normal = Run-Consumer ('"'+$result+'"')
     if($normal.Process.ExitCode -ne 0 -or (Get-Content -LiteralPath $result -Raw) -notmatch '^PASS:') { throw 'Automatic framework startup failed.' }
+    $churn = Run-Consumer '--handle-churn'
+    $churnText = Get-Content -LiteralPath $churn.Observer.FullName -Raw
+    if($churn.Process.ExitCode -ne 0 -or $churnText -notmatch 'Observed process exit.*code=0x00000000' -or $churnText -match 'Native observer failed|FATAL') { throw 'Debugger handle churn corrupted a process or event handle.' }
+    Write-Output 'PASS: debugger survives thread and handle churn without closing Windows-owned debug handles.'
     $managed = Run-Consumer '--managed'
     $text = (Get-Content -LiteralPath $managed.Session.FullName -Raw) + (Get-Content -LiteralPath $managed.Observer.FullName -Raw)
     if($managed.Process.ExitCode -eq 0 -or $text -notmatch 'Unhandled; terminating=True|FATAL native exception; code=0xE0434352' -or $text -notmatch 'Project-Z inner diagnostic test' -or $text -notmatch 'Program.Main') { throw 'Framework unhandled exception details are missing.' }

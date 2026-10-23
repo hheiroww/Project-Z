@@ -288,7 +288,7 @@ Namespace [Shared].Drawing.Designer
             _elementFactories("PasswordBox") = Function(e) CreatePasswordBox(e)
             _elementFactories("RichTextBox") = Function(e) CreateRichTextBox(e)
             _elementFactories("ToggleButton") = Function(e) CreateToggleButton(e)
-            _elementFactories("ToggleSwitch") = Function(e) CreateToggleButton(e)
+            _elementFactories("ToggleSwitch") = Function(e) CreateToggleSwitch(e)
             _elementFactories("Slider") = Function(e) CreateSlider(e)
             _elementFactories("Trackbar") = Function(e) CreateSlider(e)
             _elementFactories("ProgressBar") = Function(e) CreateProgressBar(e)
@@ -1116,7 +1116,7 @@ End Function
             Dim selectable = TextSelectionEnabled
             Dim ancestor = xmlElement.ParentNode
             While ancestor IsNot Nothing
-                If {"Button", "MenuItem", "TextBox", "PasswordBox", "ComboBox", "CheckBox", "RadioButton", "ToggleButton"}.Contains(ancestor.LocalName) Then selectable = False
+                If {"Button", "MenuItem", "TextBox", "PasswordBox", "ComboBox", "CheckBox", "RadioButton", "ToggleButton", "ToggleSwitch"}.Contains(ancestor.LocalName) Then selectable = False
                 ancestor = ancestor.ParentNode
             End While
             text.IsTextSelectionEnabled = GetAttributeBoolean(xmlElement, "IsTextSelectionEnabled", selectable)
@@ -1301,6 +1301,18 @@ End Function
             toggle.BackgroundColor = GetAttributeColor(xmlElement, "Background", toggle.BackgroundColor)
             toggle.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", toggle.ForegroundColor)
             Return toggle
+        End Function
+
+        Private Function CreateToggleSwitch(xmlElement As XmlElement) As SceneElement
+            Return New ToggleSwitch(_scene) With {
+                .Content = GetAttributeString(xmlElement, "Content", GetAttributeString(xmlElement, "Text", xmlElement.InnerText.Trim())),
+                .IsChecked = GetAttributeBoolean(xmlElement, "IsChecked", False),
+                .ForegroundColor = GetAttributeColor(xmlElement, "Foreground", Color.White),
+                .OnTrackColor = GetAttributeColor(xmlElement, "OnTrackColor", New Color(31, 163, 136)),
+                .OffTrackColor = GetAttributeColor(xmlElement, "OffTrackColor", New Color(49, 68, 72)),
+                .ThumbColor = GetAttributeColor(xmlElement, "ThumbColor", New Color(235, 248, 245)),
+                .FocusColor = GetAttributeColor(xmlElement, "FocusColor", New Color(108, 222, 203))
+            }
         End Function
 
         Private Function CreateSlider(xmlElement As XmlElement) As SceneElement

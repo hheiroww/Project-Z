@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.20.2</Version>
+	<Version>2026.10.22.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.20.2 fixes queued descendant registration and preserves short arranged XAML text during font-mode refresh. Includes automatic offline textbox spellchecking, red squiggles, right-click suggestions, persistent custom dictionaries, native studio controls and vector text improvements. Uses public SocketJack 2026.10.17.3 and retains the bundled model importer, diagnostics observer and native runtime.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.22.1 fixes native crash-observer handle lifetime, adds shared native window appearance and passive backdrops, and includes current scene layout and text fixes.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -185,7 +185,7 @@
 
   <!-- Include all VB code files by default (SDK-style) -->
   <Target Name="IncludeProjectZDiagnosticsRuntime" BeforeTargets="AssignTargetPaths;_GetPackageFiles" Condition="'$(ProjectZDiagnosticsPrepared)' != 'true'">
-    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Build" Condition="'$(NoBuild)' != 'true'" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;Platform;ArtifactsPath;GeneratePackageOnBuild" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Restore;Build" Condition="'$(NoBuild)' != 'true'" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;Platform;ArtifactsPath;GeneratePackageOnBuild" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Restore;Publish" Condition="'$(NoBuild)' != 'true'"
              Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true"
              RemoveProperties="TargetFramework;Platform;ArtifactsPath;GeneratePackageOnBuild;PublishDir" />

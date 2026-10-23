@@ -158,6 +158,8 @@ Namespace [Shared].Drawing.Designer
                     Return "Button"
                 Case "CheckBox"
                     Return "CheckBox"
+                Case "ToggleSwitch"
+                    Return "ToggleSwitch"
                 Case "RadioButton"
                     Return "RadioButton"
                 Case "TextBox"

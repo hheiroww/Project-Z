@@ -21,9 +21,13 @@ Namespace [Shared].Drawing.UI.Input
             End Set
         End Property
         Public Sub New(scene As Scene)
-            MyBase.New(scene) : Size = New Vector2(8, 200) : BackgroundColor = New Color(41, 44, 48)
+            MyBase.New(scene) : Size = New Vector2(12, 200) : BackgroundColor = New Color(41, 44, 48)
             AddHandler MouseWheel, Sub(delta, p) Scroll(delta)
-            AddHandler MouseLeftDown, Sub(p) SetPosition(Position.Y + p.Y)
+            AddHandler MouseLeftDown, Sub(p)
+                scene.CapturePointer(Me)
+                SetPosition(Position.Y + p.Y)
+            End Sub
+            AddHandler MouseLeftUp, Sub(p) scene.ReleasePointerCapture(Me)
             AddHandler scene.OnMouseMove, AddressOf Drag
         End Sub
         Public Sub Scroll(delta As Integer)

@@ -890,20 +890,20 @@ Namespace [Shared].Drawing.UI.Input
             MyBase.New(scene)
             BackgroundColor = New Color(30, 30, 30)
             Clip = True
-            _verticalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
-            _horizontalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(22, 28, 26), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            _verticalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(38, 55, 57), .zIndex = Integer.MaxValue - 1, .isVisible = False}
+            _horizontalTrack = New RectangleElement(scene) With {.BackgroundColor = New Color(38, 55, 57), .zIndex = Integer.MaxValue - 1, .isVisible = False}
             Children.Add(_verticalTrack)
             Children.Add(_horizontalTrack)
 
             _verticalScrollbar = New RectangleElement(scene) With {
-                .BackgroundColor = New Color(60, 60, 60),
+                .BackgroundColor = New Color(126, 167, 172),
                 .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
             Children.Add(_verticalScrollbar)
 
             _horizontalScrollbar = New RectangleElement(scene) With {
-                .BackgroundColor = New Color(60, 60, 60),
+                .BackgroundColor = New Color(126, 167, 172),
                 .zIndex = Integer.MaxValue,
                 .isVisible = False
             }
@@ -911,11 +911,15 @@ Namespace [Shared].Drawing.UI.Input
             AddHandler _verticalScrollbar.MouseLeftDown, Sub(p)
                                                             StopScrolling()
                                                             _verticalDragOffset = _scrollOffset.Y
+                                                            scene.CapturePointer(_verticalScrollbar)
                                                         End Sub
             AddHandler _horizontalScrollbar.MouseLeftDown, Sub(p)
                                                               StopScrolling()
                                                               _horizontalDragOffset = _scrollOffset.X
+                                                              scene.CapturePointer(_horizontalScrollbar)
                                                           End Sub
+            AddHandler _verticalScrollbar.MouseLeftUp, Sub(p) scene.ReleasePointerCapture(_verticalScrollbar)
+            AddHandler _horizontalScrollbar.MouseLeftUp, Sub(p) scene.ReleasePointerCapture(_horizontalScrollbar)
             AddHandler _verticalScrollbar.MouseDrag, Sub(current, start)
                                                         Dim travel = _verticalTrack.Size.Y - _verticalScrollbar.Size.Y
                                                         If travel > 0 Then ScrollTo(New Vector2(_scrollOffset.X, _verticalDragOffset + (current.Y - start.Y) * Math.Max(0, _content.Size.Y - _verticalTrack.Size.Y) / travel))
@@ -985,16 +989,20 @@ Namespace [Shared].Drawing.UI.Input
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
             Dim elapsed = CSng(gameTime.ElapsedGameTime.TotalSeconds)
-            If elapsed <= 0 OrElse elapsed > 0.25F OrElse _scrollVelocity = Vector2.Zero Then Return
+            If elapsed <= 0 OrElse _scrollVelocity = Vector2.Zero Then Return
 
             Dim before = _scrollOffset
-            ScrollBy(_scrollVelocity * elapsed)
-            If _scrollOffset.X = before.X AndAlso _scrollVelocity.X <> 0 Then _scrollVelocity.X = 0
-            If _scrollOffset.Y = before.Y AndAlso _scrollVelocity.Y <> 0 Then _scrollVelocity.Y = 0
-
-            Dim deceleration = Math.Max(0.0F, ScrollDeceleration) * elapsed
-            _scrollVelocity.X = ApproachZero(_scrollVelocity.X, deceleration)
-            _scrollVelocity.Y = ApproachZero(_scrollVelocity.Y, deceleration)
+            Dim rate = Math.Max(0.0F, ScrollDeceleration)
+            Dim nextVelocity As New Vector2(ApproachZero(_scrollVelocity.X, rate * elapsed), ApproachZero(_scrollVelocity.Y, rate * elapsed))
+            ' Integrate deceleration over real frame time, including a slow image
+            ' frame. Dropping long frames or using initial velocity for the whole
+            ' interval makes wheel travel depend on rendering speed.
+            Dim timeX = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.X) / rate), elapsed)
+            Dim timeY = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.Y) / rate), elapsed)
+            ScrollBy(New Vector2((_scrollVelocity.X + nextVelocity.X) * 0.5F * timeX, (_scrollVelocity.Y + nextVelocity.Y) * 0.5F * timeY))
+            If _scrollOffset.X = before.X Then nextVelocity.X = 0
+            If _scrollOffset.Y = before.Y Then nextVelocity.Y = 0
+            _scrollVelocity = nextVelocity
         End Sub
 
         Private Shared Function ApproachZero(value As Single, amount As Single) As Single

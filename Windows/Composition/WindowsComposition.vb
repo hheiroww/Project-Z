@@ -117,25 +117,26 @@ Namespace Windows.Composition
                         DwmSetWindowAttribute(result.Handle, DwmwaBorderColor, noBorder, Marshal.SizeOf(Of Integer)())
                     End If
 
-                    If options.ExtendFrameIntoClientArea Then
-                        Dim margins As New Margins With {.Left = -1, .Right = -1, .Top = -1, .Bottom = -1}
-                        result.FrameExtended = DwmExtendFrameIntoClientArea(result.Handle, margins) = 0
-                    End If
+                    Dim frameMargin = If(options.ExtendFrameIntoClientArea, -1, 0)
+                    Dim margins As New Margins With {.Left = frameMargin, .Right = frameMargin, .Top = frameMargin, .Bottom = frameMargin}
+                    result.FrameExtended = DwmExtendFrameIntoClientArea(result.Handle, margins) = 0 AndAlso options.ExtendFrameIntoClientArea
 
-                    Dim blur As New DwmBlurBehind With {.Flags = 1UI, .Enable = True}
-                    result.BlurBehindEnabled = DwmEnableBlurBehindWindow(result.Handle, blur) = 0
+                    Dim wantsBlur = options.Backdrop <> WindowBackdrop.None
+                    Dim blur As New DwmBlurBehind With {.Flags = 1UI, .Enable = wantsBlur}
+                    result.BlurBehindEnabled = DwmEnableBlurBehindWindow(result.Handle, blur) = 0 AndAlso wantsBlur
 
                     Dim backdrop = CInt(options.Backdrop)
-                    result.BackdropEnabled = options.Backdrop <> WindowBackdrop.None AndAlso
-                                             DwmSetWindowAttribute(result.Handle, DwmwaSystemBackdropType, backdrop,
-                                                                   Marshal.SizeOf(Of Integer)()) = 0
+                    Dim backdropApplied = DwmSetWindowAttribute(result.Handle, DwmwaSystemBackdropType, backdrop, Marshal.SizeOf(Of Integer)()) = 0
+                    result.BackdropEnabled = wantsBlur AndAlso backdropApplied
 
                     ' DWM can accept DWMWA_SYSTEMBACKDROP_TYPE for a borderless
                     ' flip-model window without actually painting a blurred client
                     ' backdrop. Apply the accent policy as the visual fallback even
                     ' when that attribute returned S_OK.
-                    If options.FallbackAccentBlur Then
+                    If options.FallbackAccentBlur AndAlso wantsBlur Then
                         result.AccentBlurEnabled = ApplyAccentBlur(result.Handle, options.Tint)
+                    Else
+                        ApplyAccentBlur(result.Handle, options.Tint, False)
                     End If
                 End If
 
@@ -192,13 +193,13 @@ Namespace Windows.Composition
             Return resolved
         End Function
 
-        Private Shared Function ApplyAccentBlur(hwnd As IntPtr, tint As Color) As Boolean
+        Private Shared Function ApplyAccentBlur(hwnd As IntPtr, tint As Color, Optional enabled As Boolean = True) As Boolean
             Dim gradientBits = CUInt(tint.A) << 24 Or CUInt(tint.B) << 16 Or CUInt(tint.G) << 8 Or tint.R
             ' Preserve the high alpha bit as its signed two's-complement value.
             ' CInt(UInt32) is checked in VB and overflows for alpha >= 128.
             Dim gradient = BitConverter.ToInt32(BitConverter.GetBytes(gradientBits), 0)
             Dim accent As New AccentPolicy With {
-                .AccentState = 4, ' ACCENT_ENABLE_ACRYLICBLURBEHIND
+                .AccentState = If(enabled, 4, 0), ' ACCENT_ENABLE_ACRYLICBLURBEHIND / DISABLED
                 .AccentFlags = 2,
                 .GradientColor = gradient
             }
