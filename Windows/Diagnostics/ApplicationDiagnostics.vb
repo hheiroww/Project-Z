@@ -193,10 +193,10 @@ Public NotInheritable Class ApplicationDiagnostics
                         End If
                     ElseIf kind = 3 Then
                         CloseDebugHandle(events, 16) ' CREATE_PROCESS file
-                        CloseDebugHandle(events, 24) ' process
-                        CloseDebugHandle(events, 32) ' thread
-                    ElseIf kind = 2 Then
-                        CloseDebugHandle(events, 16) ' CREATE_THREAD
+                        ' Windows owns debug-event process/thread handles and closes
+                        ' them when their exit events are continued. Closing them
+                        ' here lets that later close invalidate an unrelated reused
+                        ' handle, including Process.HasExited's wait handle.
                     ElseIf kind = 6 Then
                         CloseDebugHandle(events, 16) ' LOAD_DLL file
                     ElseIf kind = 8 Then

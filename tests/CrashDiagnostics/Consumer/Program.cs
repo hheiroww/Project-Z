@@ -13,6 +13,26 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--handle-churn"))
+        {
+            ApplicationDiagnostics.Initialize(new DiagnosticOptions { ShowErrorDialogs = false });
+            // Short-lived native threads force debugger handle reuse. Keep
+            // independent process/event handles alive across their exit events.
+            for (int round = 0; round < 120; round++)
+            {
+                using var ownProcess = System.Diagnostics.Process.GetCurrentProcess();
+                _ = ownProcess.Handle;
+                using var signal = new ManualResetEvent(false);
+                var thread = new Thread(() => signal.Set());
+                thread.Start();
+                if (!signal.WaitOne(5000)) throw new Exception("Thread signal was lost");
+                thread.Join();
+                Thread.Sleep(15);
+                if (ownProcess.HasExited || !signal.WaitOne(0)) throw new Exception("Independent handle was invalidated");
+            }
+            Thread.Sleep(1300); // Exercise the observer's timeout/HasExited path.
+            return;
+        }
         if (args.Contains("--native-graphics-origin"))
         {
             ApplicationDiagnostics.Initialize(new DiagnosticOptions { ShowErrorDialogs = false });
