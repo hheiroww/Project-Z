@@ -6,6 +6,18 @@ Namespace [Shared].Drawing
         Private qualityTarget As RenderTarget2D
         Private qualityBatch As SpriteBatch
         Private qualityResolve As Effect
+        Private presentationScaleValue As Vector2 = Vector2.One
+
+        ''' <summary>Maps logical UI units to native client pixels before rasterization.</summary>
+        Public Property PresentationScale As Vector2
+            Get
+                Return presentationScaleValue
+            End Get
+            Set(value As Vector2)
+                If Not Single.IsFinite(value.X) OrElse Not Single.IsFinite(value.Y) OrElse value.X <= 0 OrElse value.Y <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                presentationScaleValue = value
+            End Set
+        End Property
 
         Public ReadOnly Property Quality As GraphicsQuality
             Get
@@ -15,7 +27,7 @@ Namespace [Shared].Drawing
 
         Private Sub DrawWithQuality(time As GameTime, Optional bypassRenderTarget As Boolean = False)
             Dim samples = Quality.SupportedSamples(graphicsDevice, Quality.AntiAliasingSamples)
-            If samples = 0 OrElse (UseRenderTarget AndAlso Not bypassRenderTarget) Then
+            If (samples = 0 AndAlso PresentationScale = Vector2.One) OrElse (UseRenderTarget AndAlso Not bypassRenderTarget) Then
                 DrawCore(time)
                 Return
             End If
@@ -23,7 +35,7 @@ Namespace [Shared].Drawing
             Dim scale = Vector2.One
             Dim hardwareSamples = samples
             If Quality.AntiAliasingTechnique = "SSAA" Then
-                scale = New Vector2(If(samples >= 8, 4, 2), If(samples = 16, 4, If(samples >= 4, 2, 1)))
+                scale = If(samples = 0, Vector2.One, New Vector2(If(samples >= 8, 4, 2), If(samples = 16, 4, If(samples >= 4, 2, 1))))
                 hardwareSamples = 0
             End If
             Dim width = CInt(viewport.Width * scale.X), height = CInt(viewport.Height * scale.Y)
@@ -39,7 +51,7 @@ Namespace [Shared].Drawing
             Dim previousScale = Quality.RenderScale
             Try
                 graphicsDevice.SetRenderTarget(qualityTarget)
-                Quality.RenderScale = scale
+                Quality.RenderScale = scale * PresentationScale
                 DrawCore(time, True)
             Finally
                 Quality.RenderScale = previousScale
