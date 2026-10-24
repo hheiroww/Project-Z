@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -88,7 +88,7 @@
     <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
     <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
     <PackageReference Include="SocketJack" Version="1.6.7" />
-    <PackageReference Include="Speckle.Triangle" Version="1.0.0" />
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
   </ItemGroup>
 
   <ItemGroup>

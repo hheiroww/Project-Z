@@ -1,11 +1,11 @@
 using Microsoft.Xna.Framework;
-using TriangleNet.Topology;
+using ProjectZ.Shared.Drawing.UI.Advanced;
 
 namespace ProjectZ.Shared.Extensions {
 
     public static class TriangleExtension {
 
-        public static bool Contains(this Triangle t, Point p) {
+        public static bool Contains(this PolygonTriangle t, Point p) {
             var p0 = t.GetVertex(0).ToXNAVector2();
             var p1 = t.GetVertex(1).ToXNAVector2();
             var p2 = t.GetVertex(2).ToXNAVector2();
