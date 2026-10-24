@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Project Z - Native desktop UI</title>
+  <desc id="desc">The green Project Z mark beside the words Native desktop UI, XAML, DirectX 12.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0d3229"/><stop offset="1" stop-color="#061b16"/></linearGradient>
+    <linearGradient id="mark" x1="140" y1="128" x2="350" y2="384" gradientUnits="userSpaceOnUse"><stop stop-color="#a3ff4b"/><stop offset="0.5" stop-color="#41f68a"/><stop offset="1" stop-color="#20d9bd"/></linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="#061b16"/>
+  <rect x="40" y="40" width="1200" height="560" rx="32" fill="url(#bg)" stroke="#27604c" stroke-width="2"/>
+  <g transform="translate(72 104) scale(.84)">
+    <rect x="24" y="24" width="464" height="464" rx="108" fill="#061b16" stroke="#27604c" stroke-width="2"/>
+    <path d="M140 128H402L384 190L226 322H368L350 384H90L108 322L266 190H122Z" fill="url(#mark)"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="552" y="286" fill="#f0fff6" font-size="92" font-weight="700" letter-spacing="-3">Project Z</text>
+    <text x="556" y="353" fill="#b1cbbb" font-size="36">Native desktop UI.</text>
+    <text x="556" y="422" fill="#69ef9c" font-size="25" font-weight="600" letter-spacing="2">XAML  /  DIRECTX 12  /  .NET</text>
+  </g>
+</svg>

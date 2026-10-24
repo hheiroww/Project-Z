@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Project Z</title>
+  <desc id="desc">An angular green Z on a rounded forest green tile.</desc>
+  <defs>
+    <linearGradient id="tile" x1="40" y1="24" x2="472" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0d3229"/>
+      <stop offset="1" stop-color="#061b16"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="140" y1="128" x2="350" y2="384" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a3ff4b"/>
+      <stop offset="0.5" stop-color="#41f68a"/>
+      <stop offset="1" stop-color="#20d9bd"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#tile)"/>
+  <rect x="25" y="25" width="462" height="462" rx="107" fill="none" stroke="#27604c" stroke-width="2"/>
+  <path d="M140 128H402L384 190L226 322H368L350 384H90L108 322L266 190H122Z" fill="url(#mark)"/>
+</svg>

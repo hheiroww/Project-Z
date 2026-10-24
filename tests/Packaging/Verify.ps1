@@ -9,6 +9,18 @@ try {
     if ($manifest.Count -ne 1) { throw 'Expected one package manifest.' }
     $reader = [IO.StreamReader]::new($manifest[0].Open())
     try { [xml]$spec = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    $iconName = [string]$spec.package.metadata.icon
+    $icon = if ($iconName) { $archive.GetEntry($iconName.Replace('\', '/')) } else { $null }
+    if (!$icon -or $icon.Length -gt 1MB) { throw 'The package must embed its declared icon, at most 1 MB.' }
+    $iconStream = $icon.Open()
+    try {
+        $header = [byte[]]::new(24)
+        if ($iconStream.Read($header, 0, 24) -ne 24 -or
+            [Convert]::ToHexString($header[0..7]) -ne '89504E470D0A1A0A' -or
+            [Convert]::ToHexString($header[16..23]) -ne '0000008000000080') {
+            throw 'The package icon must be a 128 by 128 PNG.'
+        }
+    } finally { $iconStream.Dispose() }
     if (@($spec.GetElementsByTagName('dependency') | Where-Object id -EQ 'ProjectZ.ModelImport').Count) {
         throw 'The internal model-import bridge must not require an unpublished NuGet package.'
     }
