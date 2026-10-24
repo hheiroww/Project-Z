@@ -1,6 +1,6 @@
-# ⚡ Project Z 2026.10.23.2
+# ⚡ Project Z 2026.10.24.1
 
-Version 2026.10.23.2 masks the slider track beneath its thumb so translucent
+Version 2026.10.24.1 masks the slider track beneath its thumb so translucent
 controls retain a single alpha layer. `Trackbar.TrackColor` and `ThumbColor`
 allow independent theme colors. `RectangleElement.BackgroundCutouts` adds dynamic
 rectangular holes while retaining rounded gradients and parent clipping.
@@ -60,6 +60,8 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Creative tooling** | Native DX12 VST3 editor with DX11 fallback, granular synthesis, MIDI, XAML design surface, and plugin deployment tooling. |
 
 > **📦 Release 2026.10.20.1:** the framework package includes the DX12 scene library and internal model importer. The VST plugin, heirowSnap application, and sample projects are separate source projects.
+
+ProjectZ 2026.10.24.1 adds compiled free vector fonts without font files or bitmap atlases, and replaces the remaining Triangle.NET dependency. Existing color emoji, masks and clipping remain supported.
 
 ## 📦 Install 2026.10.20.1
 
@@ -187,15 +189,15 @@ Text editing and selection use the same measurements as the text you see. Layout
 
 ![Vector font outlines with multiline text selection rendered by Project-Z](https://raw.githubusercontent.com/hheiroww/Project-Z/master/Images/showcase/vector-text-selection.png)
 
-Windows text now uses **font outlines drawn by the GPU**. This keeps letters sharp when resized and helps the cursor, selection and mouse clicks line up with the text. Standard TTF and OTF font files work with both the DX12 renderer and the DX11 fallback. See the linked technical guide for how the outlines are converted into triangles.
+Default text uses **free vector outlines compiled into the framework**, without a TTF/OTF/WOFF file or bitmap atlas. ProjectZ Sans is derived from Inter 4.1 under SIL OFL 1.1. GPU triangles keep letters sharp at different sizes; layout and editing share their metrics.
 
 ### Font outlines, editing and antialiasing
 
-- **Outline rendering:** the default Segoe UI font is loaded from Windows and drawn as shapes rather than a sheet of letter images.
+- **Outline rendering:** ProjectZ Sans has regular, semibold and bold curves in the framework. Windows and Linux share the compiled data. Keep its included OFL notice when distributing it.
 - **Custom fonts:** register a TTF or OTF with `LoadVectorFont`, then assign its key to a text control. Point sizes use 96/72 logical pixels per point.
 - **Consistent editing:** drag and keyboard selection, multiline highlights, clipboard shortcuts, word navigation and replacement use the rendered font metrics.
 - **Quality controls:** antialiasing smooths the edges of letters and shapes. DX12 and DX11 use different methods; texture filtering affects images separately.
-- **Compatibility:** existing SpriteFont assets remain the fallback when no matching vector font is loaded or the default font file is absent. Vector shaping currently targets Windows.
+- **Compatibility:** legacy SegoeUI names resolve to ProjectZ Sans. Explicit custom SpriteFont assets remain supported. Complex/uncovered Windows scripts retain host shaping; no host font is redistributed.
 
 ```vb
 content.LoadVectorFont("EditorFont", "C:\Fonts\MyFont.ttf", 12)

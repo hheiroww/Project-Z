@@ -7,13 +7,15 @@
   <Import Project="$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets"
           Condition="'$(ProjectZNativeXamlIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets')" />
   <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)..\tools\content\Fonts\**\*.xnb">
-      <Link>Content\Fonts\%(RecursiveDir)%(Filename)%(Extension)</Link>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Source references receive these files from the framework project itself.
+         Only package consumers need an explicit copy from the package root. -->
+    <Content Include="$(MSBuildThisFileDirectory)..\ThirdParty\ProjectZSans\*" Pack="false" Condition="!Exists('$(MSBuildThisFileDirectory)..\Project Z Windows.vbproj')">
+      <Link>ThirdParty\ProjectZSans\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
     <_ProjectZDiagnosticPackPayload Include="$(ProjectZDiagnosticsToolsPath)ProjectZ.Diagnostics.*" Exclude="$(ProjectZDiagnosticsToolsPath)*.pdb" />
     <Content Include="@(_ProjectZDiagnosticPackPayload)">
       <Link>%(Filename)%(Extension)</Link>

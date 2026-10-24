@@ -13,6 +13,6 @@
   <ProjectReference Include="../../../artifacts/wpf-import/grid-import/*/*.csproj" />
   <ProjectReference Include="../../../artifacts/wpf-import/text-layout/*/*.csproj" />
   <ProjectReference Include="../../../artifacts/wpf-import/stack-layout/*/*.csproj" />
-    <Content Include="../../../Project Z Application/Content/Fonts/Segoe UI/*.xnb" Link="Content/Fonts/Segoe UI/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
   </ItemGroup>
 </Project>

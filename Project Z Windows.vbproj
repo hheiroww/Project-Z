@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.23.2</Version>
+	<Version>2026.10.24.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.23.2 adds rectangular background cutout masks and prevents slider tracks from blending through translucent thumbs. Independent track and thumb colors preserve theme opacity, rounded gradients, parent clipping and antialiasing.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.24.1 replaces default Segoe UI atlases with free ProjectZ Sans vector curves compiled into the framework. Includes regular, semibold and bold outlines, kerning, scalable GPU text, retained Windows color-emoji fallback, and removes the remaining Speckle.Triangle dependency.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -106,12 +106,14 @@
 	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
 	<ProjectReference Include="Project Z XAML Codegen\ProjectZ.XamlCodegen.csproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
+	<ProjectReference Include="Project Z Vector Text\ProjectZ.VectorText.csproj" PrivateAssets="all" />
 </ItemGroup>
 
   <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
   <Target Name="IncludeProjectZModelImport">
     <ItemGroup>
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ModelImport.dll" />
+      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
     </ItemGroup>
   </Target>
 
@@ -177,6 +179,7 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <None Include="ThirdParty\ProjectZSans\OFL.txt;ThirdParty\ProjectZSans\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="ThirdParty\ProjectZSans\" />
     <None Update="THIRD-PARTY-NOTICES.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
@@ -205,7 +208,6 @@
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
-    <None Include="Project Z Application\Content\Fonts\Segoe UI\*.xnb" Pack="true" PackagePath="tools\content\Fonts\Segoe UI\" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
     <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
     <None Include="ThirdParty\DotNetRuntime\*" Pack="true" PackagePath="licenses\DotNetRuntime\" />

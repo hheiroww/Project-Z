@@ -382,6 +382,7 @@ namespace ProjectZ.Shared.Drawing {
         protected internal Texture2D WhitePlain;
 
         public Vector2 MeasureText(string Font, string Text) {
+            if (contentCollection.TryGetVectorFont(Font, out var vector)) return vector.Measure(Text);
             return contentCollection.Fonts[Font].MeasureString(Text);
         }
 

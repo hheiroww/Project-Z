@@ -1,5 +1,14 @@
 # Third-party notices
 
+## ProjectZ Sans / Inter 4.1
+
+ProjectZ Sans contains converted vector outlines and metrics derived from Inter
+4.1. Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter).
+These outlines use the SIL Open Font License 1.1 included in
+ThirdParty/ProjectZSans/OFL.txt. The compiled representation uses the family name
+ProjectZ Sans. No font container or Microsoft font atlas is redistributed.
+Reproducible generation is documented in ThirdParty/ProjectZSans/README.md.
+
 The self-contained diagnostics observer includes the .NET 8 runtime. Its MIT
 license and third-party notices are included under `licenses/DotNetRuntime`.
 

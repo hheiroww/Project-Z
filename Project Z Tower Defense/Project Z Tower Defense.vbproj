@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -21,31 +21,6 @@
     <Content Include="Icon.ico" />
     <None Include="app.config" />
     <None Include="packages.config" />
-
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_10.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_12.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_14.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_18.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_24.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_36.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_48.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\Fonts\Segoe UI\SegoeUI_72.xnb">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
 
   </ItemGroup>
 

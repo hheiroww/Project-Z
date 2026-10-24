@@ -56,7 +56,7 @@ sealed class SelectionProbe : Game
         manager.ActiveScene = scene;
         box = new Textbox(scene) { Position = new Vector2(30, 90), Size = new Vector2(420, 150), TextPadding = new Vector2(8, 8), Font = "SegoeUI_12", BackgroundColor = new Color(7, 43, 31) };
         scene.AddElement(box);
-        scene.AddElement(new TextElement(scene) { Text = "Font-file vector text — selection and clipboard", Font = "SegoeUI_18", Position = new Vector2(30, 25) });
+        scene.AddElement(new TextElement(scene) { Text = "Compiled vector text — selection and clipboard", Font = "ProjectZSans_18", Position = new Vector2(30, 25) });
         GraphicsQuality.ForDevice(GraphicsDevice).AntiAliasingSamples = 4;
     }
 
@@ -187,7 +187,7 @@ sealed class SelectionProbe : Game
             Require(submitted==1&&box.Text==original,"Enter submits a single-line input exactly once without adding text");
             box.AcceptsReturn=true;Tap(Keys.Enter);Require(submitted==1,"multiline Enter does not submit its form");
             actionButton.isVisible=false;
-            Require(resources.VectorFonts.Count == 8, "default sizes load real Segoe UI font outlines");
+            Require(resources.VectorFonts.Count >= 8 && resources.VectorFonts.Values.All(f => f.FilePath is null && f.FamilyName == "ProjectZ Sans"), "default and legacy sizes use compiled free vector outlines");
             resources.LoadVectorFont("CustomFileFont", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "consola.ttf"), 16);
             Require(scene.MeasureText("CustomFileFont", "Font file").X > 0, "custom TTF works without a SpriteFont atlas");
             Set("alpha beta gamma");
@@ -327,7 +327,7 @@ sealed class SelectionProbe : Game
             label.Text="short"; Require(label.SelectionLength==0,"changed display text clears stale selection safely");
             label.Dispose(); box.IsReadOnly=false; manager.Tick(time);
             box.Size = new Vector2(620, 160);
-            Set("Select text by dragging or holding Shift.\r\nCtrl+A selects all; Ctrl+C / X / V copy, cut and paste.\r\nText is drawn from font-file outlines.");
+            Set("Select text by dragging or holding Shift.\r\nCtrl+A selects all; Ctrl+C / X / V copy, cut and paste.\r\nText is drawn from compiled free vector outlines.");
             box.Select(12, 75);
             using var target = new RenderTarget2D(GraphicsDevice, 720, 360);
             GraphicsDevice.SetRenderTarget(target);

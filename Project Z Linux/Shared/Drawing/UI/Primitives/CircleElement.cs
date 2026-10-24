@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-using TriangleNet;
 
 namespace ProjectZ.Shared.Drawing.UI.Primitives {
 
@@ -108,7 +107,7 @@ namespace ProjectZ.Shared.Drawing.UI.Primitives {
             }
         }
 
-        private void CircleElement_Trangulated(Mesh newMesh) {
+        private void CircleElement_Trangulated(Advanced.PolygonMesh newMesh) {
 
         }
     }

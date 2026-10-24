@@ -369,6 +369,12 @@ namespace ProjectZ.Shared.Drawing.UI.Primitives {
         protected internal override void Draw(GameTime gameTime) {
             string textToDraw = _TextWrapping == TextWrapping.NoWrap ? Text : WrappedText;
             if (!string.IsNullOrEmpty(textToDraw)) {
+                if (Scene.contentCollection.TryGetVectorFont(Font, out var vector)) {
+                    spriteBatch.End();
+                    try { vector.Draw(spriteBatch.GraphicsDevice, textToDraw, Position, ForegroundColor); }
+                    finally { spriteBatch.Begin(); }
+                    return;
+                }
                 spriteBatch.DrawString(Scene.contentCollection.Fonts[Font], textToDraw, Position, ForegroundColor);
             }
         }

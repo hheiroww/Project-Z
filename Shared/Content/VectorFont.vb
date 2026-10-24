@@ -3,13 +3,15 @@ Imports LibTessDotNet
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 Imports Media = System.Windows.Media
+Imports ProjectZ.VectorText
 
 Namespace [Shared].Content
-    ''' <summary>Shaped font-file outlines tessellated to GPU triangles, without a bitmap atlas.</summary>
+    ''' <summary>Compiled free vector outlines tessellated to GPU triangles, with optional host-font shaping.</summary>
     Public NotInheritable Class VectorFont
         Implements IDisposable
         Private ReadOnly face As Media.Typeface
         Private ReadOnly emSize As Double
+        Private ReadOnly compiled As CompiledFont
         Private ReadOnly meshes As New TextCache(Of TextMesh)(256)
         Private ReadOnly measurements As New TextCache(Of Vector2)(1024)
         ' Evict a single cold entry, preserving the visible labels when changing
@@ -46,6 +48,7 @@ Namespace [Shared].Content
         Private ownerDevice As GraphicsDevice
         Private deviceDisposing As EventHandler(Of EventArgs)
         Public ReadOnly Property FilePath As String
+        Public ReadOnly Property FamilyName As String
         Public ReadOnly Property LineSpacing As Integer
         Public Property PpiPerfectText As Boolean
 
@@ -69,6 +72,10 @@ Namespace [Shared].Content
             End Sub
         End Class
 
+        Public Sub New(pointSize As Single, Optional weight As Integer = 400)
+            Me.New(CompiledFont.FamilyName, weight, pointSize)
+        End Sub
+
         Public Shared Function AlignToPixelGrid(position As Vector2, Optional pixelsPerUnit As Single = 1) As Vector2
             If Not Single.IsFinite(pixelsPerUnit) OrElse pixelsPerUnit <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pixelsPerUnit))
             Return New Vector2(CSng(Math.Round(position.X * pixelsPerUnit, MidpointRounding.AwayFromZero)) / pixelsPerUnit,
@@ -78,6 +85,19 @@ Namespace [Shared].Content
         Public Sub New(familyName As String, weight As Integer, pointSize As Single)
             If String.IsNullOrWhiteSpace(familyName) Then Throw New ArgumentException("Font family is required.", NameOf(familyName))
             If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
+            If weight < 1 OrElse weight > 999 Then Throw New ArgumentOutOfRangeException(NameOf(weight))
+            emSize = pointSize * 96.0 / 72.0
+            If String.Equals(familyName, CompiledFont.FamilyName, StringComparison.OrdinalIgnoreCase) OrElse
+               String.Equals(familyName, "Segoe UI", StringComparison.OrdinalIgnoreCase) Then
+                compiled = CompiledFont.ForWeight(weight)
+                Me.FamilyName = CompiledFont.FamilyName
+                LineSpacing = CInt(Math.Ceiling(compiled.LineHeight * emSize))
+                ' Only unsupported/complex scripts use installed host fallback; no host font is redistributed.
+                face = New Media.Typeface(New Media.FontFamily("Arial"), System.Windows.FontStyles.Normal,
+                    System.Windows.FontWeight.FromOpenTypeWeight(weight), System.Windows.FontStretches.Normal)
+                Return
+            End If
+            Me.FamilyName = familyName
             face = New Media.Typeface(New Media.FontFamily(familyName), System.Windows.FontStyles.Normal,
                 System.Windows.FontWeight.FromOpenTypeWeight(weight), System.Windows.FontStretches.Normal)
             Dim glyphFace As Media.GlyphTypeface = Nothing
@@ -93,6 +113,7 @@ Namespace [Shared].Content
             If Not IO.File.Exists(FilePath) Then Throw New IO.FileNotFoundException("Font file not found.", FilePath)
             Dim glyphFace As New Media.GlyphTypeface(New Uri(FilePath))
             Dim familyName = glyphFace.FamilyNames.Values.First()
+            Me.FamilyName = familyName
             Dim family As New Media.FontFamily(New Uri(IO.Path.GetDirectoryName(FilePath) & IO.Path.DirectorySeparatorChar), "./#" & familyName)
             face = New Media.Typeface(family, glyphFace.Style, glyphFace.Weight, glyphFace.Stretch)
             Dim resolved As Media.GlyphTypeface = Nothing
@@ -114,8 +135,13 @@ Namespace [Shared].Content
             Dim key = If(aligned, "P:", "I:") & text
             Dim size As Vector2
             If Not measurements.TryGetValue(key, size) Then
-                Dim formatted = Format(text, aligned)
-                size = New Vector2(CSng(formatted.WidthIncludingTrailingWhitespace), CSng(formatted.Height))
+                If compiled IsNot Nothing AndAlso compiled.SupportsText(text) Then
+                    Dim measured = compiled.Measure(text, CSng(emSize), aligned)
+                    size = New Vector2(measured.X, measured.Y)
+                Else
+                    Dim formatted = Format(text, aligned)
+                    size = New Vector2(CSng(formatted.WidthIncludingTrailingWhitespace), CSng(formatted.Height))
+                End If
                 measurements.Add(key, size)
             End If
             Return size
@@ -125,6 +151,18 @@ Namespace [Shared].Content
             Dim key = If(pixelPerfect, "P:", "I:") & text
             Dim result As TextMesh = Nothing
             If meshes.TryGetValue(key, result) Then Return result
+            If compiled IsNot Nothing AndAlso compiled.SupportsText(text) Then
+                Dim coordinates = compiled.GetTriangles(text, CSng(emSize), pixelPerfect)
+                Dim compiledVertices As New List(Of VertexPositionColor)(coordinates.Length \ 2)
+                Dim compiledForeground As New List(Of Boolean)(coordinates.Length \ 2)
+                For index = 0 To coordinates.Length - 1 Step 2
+                    compiledVertices.Add(New VertexPositionColor(New Vector3(coordinates(index), coordinates(index + 1), 0), Color.White))
+                    compiledForeground.Add(True)
+                Next
+                result = New TextMesh(compiledVertices, compiledForeground)
+                meshes.Add(key, result)
+                Return result
+            End If
             Dim formatted = Format(text, pixelPerfect)
             Dim visual As New Media.DrawingVisual
             Using context = visual.RenderOpen()

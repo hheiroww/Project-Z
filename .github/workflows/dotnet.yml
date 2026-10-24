@@ -38,6 +38,13 @@ jobs:
       - name: Verify opt-in compile-time XAML on NET8 and NET10
         shell: pwsh
         run: ./tests/WpfImport/BuildTime/Verify.ps1 -SkipRuntime
+      - name: Verify compiled vector curves and default font resolution
+        shell: pwsh
+        run: |
+          dotnet run --project tests/CompiledVectorText/CompiledVectorText.csproj -c Release -p:GeneratePackageOnBuild=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/VectorFontsOnly/VectorFontsOnly.csproj -c Release -p:GeneratePackageOnBuild=false -p:UseLocalSocketJack=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Release package
         run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Verify standalone NuGet consumer

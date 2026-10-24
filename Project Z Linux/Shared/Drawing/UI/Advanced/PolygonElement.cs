@@ -4,6 +4,7 @@ using ProjectZ.Shared.Drawing.UI.Primitives;
 using SocketJack;
 using System;
 using System.Collections.Generic;
+using LibTessDotNet;
 
 namespace ProjectZ.Shared.Drawing.UI.Advanced {
 
@@ -31,13 +32,13 @@ namespace ProjectZ.Shared.Drawing.UI.Advanced {
             }
         }
 
-        public TriangleNet.Mesh MeshData {
+        public PolygonMesh MeshData {
             get {
                 return _MeshData;
             }
         }
-        private TriangleNet.Mesh _MeshData;
-        private TriangleNet.Mesh _FallbackMeshData;
+        private PolygonMesh _MeshData;
+        private PolygonMesh _FallbackMeshData;
 
         internal Texture2D Texture {
             get {
@@ -73,7 +74,7 @@ namespace ProjectZ.Shared.Drawing.UI.Advanced {
 
         public event TrangulatedEventHandler Trangulated;
 
-        public delegate void TrangulatedEventHandler(TriangleNet.Mesh newMesh);
+        public delegate void TrangulatedEventHandler(PolygonMesh newMesh);
 
         class _failedMemberConversionMarker1 {
         }
@@ -267,21 +268,30 @@ namespace ProjectZ.Shared.Drawing.UI.Advanced {
 
                 segments.Add(Tuple.Create(a, b));
             }
-            // Triangulate using TriangleNet
-            var polygon = new TriangleNet.Geometry.Polygon();
-            var vertices = new List<TriangleNet.Geometry.Vertex>(points.Count);
-
-            for (int i = 0, loopTo = points.Count - 1; i <= loopTo; i++) {
-                var vtx = new TriangleNet.Geometry.Vertex(points[i].X, points[i].Y);
-                vertices.Add(vtx);
-                polygon.Add(vtx);
+            // Match the Windows implementation: tessellate the boundary contour.
+            var contour = new ContourVertex[points.Count];
+            for (int i = 0; i < points.Count; i++)
+                contour[i].Position = new Vec3(points[i].X, points[i].Y, 0);
+            var tessellator = new Tess();
+            tessellator.AddContour(contour, ContourOrientation.Original);
+            tessellator.Tessellate(WindingRule.EvenOdd, ElementType.Polygons, 3);
+            var triangles = new List<PolygonTriangle>(tessellator.ElementCount);
+            for (int i = 0; i < tessellator.ElementCount; i++) {
+                int a = tessellator.Elements[i * 3], b = tessellator.Elements[i * 3 + 1], c = tessellator.Elements[i * 3 + 2];
+                if (a < 0 || b < 0 || c < 0) continue;
+                var p0 = tessellator.Vertices[a].Position;
+                var p1 = tessellator.Vertices[b].Position;
+                var p2 = tessellator.Vertices[c].Position;
+                double area = (p1.X - p0.X) * (p2.Y - p0.Y) - (p1.Y - p0.Y) * (p2.X - p0.X);
+                if (Math.Abs(area) <= .000001) continue;
+                triangles.Add(new PolygonTriangle(new PolygonVertex(p0.X,p0.Y),new PolygonVertex(p1.X,p1.Y),new PolygonVertex(p2.X,p2.Y)));
             }
-
-            foreach (var s in segments)
-                polygon.Add(new TriangleNet.Geometry.Segment(vertices[s.Item1], vertices[s.Item2]));
-
-            var mesher = new TriangleNet.Meshing.GenericMesher();
-            TriangleNet.Mesh mesh = (TriangleNet.Mesh)mesher.Triangulate(polygon);
+            if (triangles.Count == 0) {
+                _MeshData = _FallbackMeshData;
+                Triangulated = _MeshData != null;
+                return;
+            }
+            var mesh = new PolygonMesh(triangles);
             _MeshData = mesh;
             _FallbackMeshData = mesh;
 

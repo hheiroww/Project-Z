@@ -1,13 +1,8 @@
-# UI font assets
+# Compiled free vector font
 
-Run `pwsh -File Resources/Fonts/Rebuild.ps1` from Windows with Segoe UI installed.
-The pinned MonoGame content tool rebuilds all eight sizes and updates the four
-shipped content roots. heirowSnap and VST hosts link the Application content root.
+Default text uses ProjectZ Sans outlines compiled into ProjectZ.VectorText.dll.
+The old Microsoft font atlases and SpriteFont generation inputs are removed.
 
-Use `TextureFormat=Color` and `PremultiplyAlpha=True`: UI glyph coverage needs
-full 8-bit alpha and premultiplied RGB for SpriteBatch's AlphaBlend. DXT3 reduces
-coverage to 4 bits and compresses the premultiplied RGB separately, damaging small
-letter edges. Do not recompress these atlases. Font spacing is zero so the font's
-own metrics determine character advances. Bilinear, trilinear, and anisotropic
-UI samplers retain linear glyph interpolation; anisotropic filtering and scene
-MSAA cannot restore coverage lost in a compressed atlas.
+See [provenance, license and regeneration](../../ThirdParty/ProjectZSans/README.md).
+The Rebuild.ps1 compatibility entry point requires a temporary cache directory
+outside the repository and invokes the pinned Python outline generator.

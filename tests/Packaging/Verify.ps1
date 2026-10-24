@@ -15,19 +15,24 @@ try {
     if (!@($archive.Entries | Where-Object FullName -Match '^lib/[^/]+/ProjectZ\.ModelImport\.dll$').Count) {
         throw 'The package must include ProjectZ.ModelImport.dll.'
     }
+    if (!@($archive.Entries | Where-Object FullName -Match '^lib/[^/]+/ProjectZ\.VectorText\.dll$').Count) {
+        throw 'The package must include its compiled vector outlines.'
+    }
+    if (@($spec.GetElementsByTagName('dependency') | Where-Object id -EQ 'ProjectZ.VectorText').Count) {
+        throw 'The internal vector renderer must not require an unpublished NuGet package.'
+    }
     foreach ($required in @('tools/diagnostics/ProjectZ.Diagnostics.exe', 'tools/diagnostics/ProjectZ.Diagnostics.dll',
         'tools/diagnostics/ProjectZ.Diagnostics.deps.json', 'tools/diagnostics/ProjectZ.Diagnostics.runtimeconfig.json',
         'tools/native/win-x64/mgruntime.dll', 'buildTransitive/ProjectZ.targets',
         'tools/xaml-codegen/ProjectZ.XamlCodegen.dll', 'tools/xaml-codegen/ProjectZ.XamlCodegen.deps.json',
         'tools/xaml-codegen/ProjectZ.XamlCodegen.runtimeconfig.json',
         'tools/xaml-codegen/BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll',
-        'THIRD-PARTY-NOTICES.md', 'licenses/WPFPixelShaderLibrary/LICENSE')) {
+        'THIRD-PARTY-NOTICES.md', 'licenses/WPFPixelShaderLibrary/LICENSE',
+        'ThirdParty/ProjectZSans/OFL.txt', 'ThirdParty/ProjectZSans/README.md')) {
         if (!@($archive.Entries | Where-Object FullName -EQ $required).Count) { throw "Missing package runtime asset: $required" }
     }
-    foreach ($size in @(10,12,14,18,24,36,48,72)) {
-        if (!@($archive.Entries | Where-Object FullName -EQ "tools/content/Fonts/Segoe UI/SegoeUI_$size.xnb").Count) {
-            throw "Missing compiled font: SegoeUI_$size.xnb"
-        }
+    if (@($archive.Entries | Where-Object FullName -Match '\.(ttf|otf|woff2?|spritefont)$|(^|/)SegoeUI_[^/]*\.xnb$').Count) {
+        throw 'Default text must use compiled free vectors without font containers or Segoe UI atlases.'
     }
     $version = [string]$spec.package.metadata.version
     if (@($archive.Entries | Where-Object FullName -Match '(^|/)(artifacts|obj|bin|\.codex)/|\.pdb$').Count) {
@@ -46,11 +51,11 @@ $feed = [Security.SecurityElement]::Escape((Split-Path -Parent $packageFile))
 "@ | Set-Content -LiteralPath (Join-Path $consumerRoot 'NuGet.Config') -Encoding utf8
 @"
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net8.0-windows7.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows7.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms></PropertyGroup>
   <ItemGroup><PackageReference Include="ProjectZ" Version="[$version]" /><ProjectZSceneXaml Include="View.xaml" /></ItemGroup>
 </Project>
 "@ | Set-Content -LiteralPath (Join-Path $consumerRoot 'Consumer.csproj') -Encoding utf8
-'public partial class PackageSmoke { public static System.Type FrameworkType => typeof(global::ProjectZ.Shared.Drawing.SceneManager); public static System.Type SpellingType => typeof(global::ProjectZ.Shared.Drawing.UI.Input.OfflineSpellChecker); public static bool SpellingEnabled(global::ProjectZ.Shared.Drawing.UI.Input.Textbox input) => input.IsSpellCheckEnabled; public static string GeneratedCaption => CreateCaption().ToString(); }' |
+'public partial class PackageSmoke { [System.STAThread] public static void Main() { using var font = new global::ProjectZ.Shared.Content.VectorFont(12); if (font.FilePath != null || font.FamilyName != "ProjectZ Sans" || font.Measure("AVATAR").X <= 0 || GeneratedCaption != "package-native-xaml") throw new System.InvalidOperationException("Packaged vector font or native XAML runtime failed."); System.Console.WriteLine("COMPILED_FONT_OK asset-free vector outlines and native XAML."); } public static System.Type FrameworkType => typeof(global::ProjectZ.Shared.Drawing.SceneManager); public static System.Type SpellingType => typeof(global::ProjectZ.Shared.Drawing.UI.Input.OfflineSpellChecker); public static bool SpellingEnabled(global::ProjectZ.Shared.Drawing.UI.Input.Textbox input) => input.IsSpellCheckEnabled; public static string GeneratedCaption => CreateCaption().ToString(); }' |
     Set-Content -LiteralPath (Join-Path $consumerRoot 'PackageSmoke.cs') -Encoding utf8
 '<SceneTemplates xmlns="urn:projectz:native-scene" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Class="PackageSmoke"><ObjectFactory x:Name="CreateCaption" Type="System.Text.StringBuilder" Static="true"><Argument Type="string" Value="package-native-xaml" /></ObjectFactory></SceneTemplates>' |
     Set-Content -LiteralPath (Join-Path $consumerRoot 'View.xaml') -Encoding utf8
@@ -60,9 +65,11 @@ if ($LASTEXITCODE -ne 0) { throw "Standalone package restore failed. Consumer: $
 dotnet build (Join-Path $consumerRoot 'Consumer.csproj') -c Release --no-restore --nologo
 if ($LASTEXITCODE -ne 0) { throw "Standalone package build failed. Consumer: $consumerRoot" }
 $consumerOutput = Join-Path $consumerRoot 'bin/Release/net8.0-windows7.0'
-foreach ($asset in @('Content/Fonts/Segoe UI/SegoeUI_12.xnb', 'ProjectZ.Native/mgruntime.dll', 'ProjectZ.Diagnostics.dll')) {
+foreach ($asset in @('ProjectZ.VectorText.dll', 'ThirdParty/ProjectZSans/OFL.txt', 'ProjectZ.Native/mgruntime.dll', 'ProjectZ.Diagnostics.dll')) {
     if (!(Test-Path -LiteralPath (Join-Path $consumerOutput $asset))) { throw "Consumer is missing deployed asset: $asset" }
 }
+dotnet (Join-Path $consumerOutput 'Consumer.dll')
+if ($LASTEXITCODE -ne 0) { throw 'Packaged vector font runtime check failed.' }
 # Exercise only the packaged EXE in an isolated folder, without a host CLR/config beside it.
 $observerRoot = Join-Path $consumerRoot 'observer-isolation'
 New-Item -ItemType Directory -Path $observerRoot | Out-Null

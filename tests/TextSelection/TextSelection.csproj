@@ -8,6 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../Project Z Windows.vbproj" />
-    <Content Include="../../Project Z Application/Content/Fonts/Segoe UI/*.xnb" Link="Content/Fonts/Segoe UI/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
   </ItemGroup>
 </Project>

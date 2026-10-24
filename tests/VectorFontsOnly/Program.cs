@@ -34,10 +34,15 @@ internal static class Program
             Require(!Directory.Exists(missingRoot) && resources.VectorFonts.Count == 8,
                 "default outline fonts load without creating a content directory");
             Require(resources.TryGetVectorFont("SegoeUI_20", out var twenty),
-                "the formerly missing 20-point registration heading resolves from the system font file");
+                "legacy 20-point names resolve to the compiled free font");
+            Require(twenty.FilePath is null && twenty.FamilyName == "ProjectZ Sans",
+                "default text uses compiled vector data with no font file");
+            Require(resources.TryGetVectorFont(Fonts.ProjectZSans.get_GetResourceName(20), out var free)
+                && free.FilePath is null && free.Measure("AVATAR").Equals(twenty.Measure("AVATAR")),
+                "new and compatibility names have identical free outline metrics");
             var size = twenty.Measure("Create your SocketJack account");
             Require(size.X > 0 && size.Y > 0 && twenty.LineSpacing > 0,
-                "20-point font supplies nonzero native layout and caret metrics");
+                "20-point font supplies nonzero outline layout and caret metrics");
             Require(resources.TryGetVectorFont("SegoeUI_20", out var repeated) && ReferenceEquals(twenty, repeated),
                 "measurement and rendering resolve the same cached font instance");
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
@@ -75,7 +80,7 @@ internal static class Program
                     "invalid or unregistered font name rejects: " + name);
             var unicode = twenty.Measure("heirow — Δ音楽 😀");
             Require(unicode.X > 0 && unicode.Y > 0,
-                "native shaping accepts Unicode without compiled-font glyph sanitization");
+                "Unicode outside the compiled coverage retains host shaping fallback");
             string customFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "consola.ttf");
             resources.LoadVectorFont("CustomOutline", customFile, 16);
             Require(resources.TryGetVectorFont("CustomOutline", out var custom)
