@@ -2,6 +2,7 @@ Imports Microsoft.Xna.Framework
 Imports ProjectZ.Shared.Content
 Imports Microsoft.Xna.Framework.Graphics
 Imports System.Text
+Imports System.Globalization
 
 Namespace [Shared].Drawing.UI.Primitives
 
@@ -313,27 +314,29 @@ Namespace [Shared].Drawing.UI.Primitives
         End Function
 
         ''' <summary>
-        ''' Wraps a single line by character boundaries.
+        ''' Wraps a single line at Unicode grapheme boundaries.
         ''' </summary>
         Private Function WrapLineByCharacters(line As String, maxWidth As Single) As String
             Dim result As New StringBuilder()
             Dim currentLine As New StringBuilder()
 
-            For Each c As Char In line
-                Dim testLine As String = currentLine.ToString() & c
+            Dim elements = StringInfo.GetTextElementEnumerator(line)
+            While elements.MoveNext()
+                Dim element = elements.GetTextElement()
+                Dim testLine As String = currentLine.ToString() & element
                 Dim testWidth As Single = MeasureContent(testLine).X
 
                 If testWidth <= maxWidth Then
-                    currentLine.Append(c)
+                    currentLine.Append(element)
                 Else
                     ' Character doesn't fit - start new line
                     If currentLine.Length > 0 Then
                         result.AppendLine(currentLine.ToString())
                         currentLine.Clear()
                     End If
-                    currentLine.Append(c)
+                    currentLine.Append(element)
                 End If
-            Next
+            End While
 
             If currentLine.Length > 0 Then
                 result.Append(currentLine.ToString())
@@ -443,7 +446,8 @@ Namespace [Shared].Drawing.UI.Primitives
                 If overflow AndAlso TextTrimming <> TextTrimming.None Then
                     Const ellipsis As String = "…"
                     While line.Length > 0 AndAlso MeasureContent(line & ellipsis).X > width
-                        line = line.Substring(0, line.Length - 1)
+                        Dim boundaries = StringInfo.ParseCombiningCharacters(line)
+                        line = line.Substring(0, boundaries(boundaries.Length - 1))
                     End While
                     If TextTrimming = TextTrimming.WordEllipsis AndAlso line.LastIndexOf(" "c) > 0 Then line = line.Substring(0, line.LastIndexOf(" "c))
                     line = If(MeasureContent(ellipsis).X <= width, line.TrimEnd() & ellipsis, String.Empty)

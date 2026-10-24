@@ -20,7 +20,7 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.24.4
+dotnet add package ProjectZ --version 2026.10.24.5
 ```
 
 For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.3/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
@@ -74,7 +74,7 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 
 ## Current release
 
-**2026.10.24.4** adds the green Project Z package icon and this refreshed showcase. It retains native dropdown keyboard previews, translucent slider masks, compiled free vector fonts, color emoji and the caret fixes from the preceding releases. [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
+**2026.10.24.5** preserves whole emoji, flags, skin tones and joined Unicode sequences when wrapping or adding ellipses. Modern emoji use the installed color face. Native window lookups are cached and handled exception snapshots write in the background, keeping periodic work out of the UI loop. [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 
 ## Support
 

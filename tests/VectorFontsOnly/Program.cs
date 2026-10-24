@@ -78,6 +78,13 @@ internal static class Program
             Require(vertices.All(v => v.Color.A <= 128 && v.Color.R <= v.Color.A && v.Color.G <= v.Color.A && v.Color.B <= v.Color.A),
                 "text opacity applies premultiplied alpha to every color layer");
             Require(twenty.Measure(emojiText) == beforeColor, "color rendering preserves existing layout and caret metrics");
+            foreach (var modern in new[] { "🫱", "🫲", "🫳", "🫴", "🫷", "🫸", "🫱🏻", "🫲🏼", "🫳🏽", "🫴🏾", "🫷🏿", "🫨" })
+            {
+                var modernMesh = meshMethod.Invoke(twenty, new object[] { modern, false })!;
+                var modernVertices = (Microsoft.Xna.Framework.Graphics.VertexPositionColor[])vertexField.GetValue(modernMesh)!;
+                Require(modernVertices.Any(v => Math.Max(v.Color.R, Math.Max(v.Color.G, v.Color.B)) - Math.Min(v.Color.R, Math.Min(v.Color.G, v.Color.B)) > 8),
+                    "modern emoji use the installed color face instead of composite-map missing glyphs: " + modern);
+            }
             var rtl = "مرحبا 😂 ❤️";
             var rtlMesh = meshMethod.Invoke(twenty, new object[] { rtl, false })!;
             var rtlVertices = (Microsoft.Xna.Framework.Graphics.VertexPositionColor[])vertexField.GetValue(rtlMesh)!;

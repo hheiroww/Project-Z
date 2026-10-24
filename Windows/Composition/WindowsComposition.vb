@@ -54,6 +54,11 @@ Namespace Windows.Composition
     ''' this class also resolves the real HWND by its unique window title.
     ''' </summary>
     Public NotInheritable Class WindowsComposition
+        Private NotInheritable Class ResolvedWindow
+            Friend Source As IntPtr
+            Friend Handle As IntPtr
+        End Class
+        Private Shared ReadOnly resolvedWindows As New Runtime.CompilerServices.ConditionalWeakTable(Of Game, ResolvedWindow)
         Private Const GwlStyle = -16
         Private Const GwlExStyle = -20
         Private Const WsCaption As Long = &HC00000L
@@ -170,6 +175,18 @@ Namespace Windows.Composition
             Dim candidate = game.Window.Handle
             If candidate <> IntPtr.Zero AndAlso IsWindow(candidate) Then Return candidate
 
+            ' The native backend may expose a framework pointer rather than an
+            ' HWND. Resolve once, instead of enumerating windows for every input
+            ' and draw update. Recheck lifetime and process ownership on reuse.
+            Dim cached = resolvedWindows.GetValue(game, Function(key) New ResolvedWindow())
+            SyncLock cached
+                Dim owner As UInteger
+                If cached.Source = candidate AndAlso cached.Handle <> IntPtr.Zero AndAlso IsWindow(cached.Handle) Then
+                    GetWindowThreadProcessId(cached.Handle, owner)
+                    If owner = CUInt(Environment.ProcessId) Then Return cached.Handle
+                End If
+            End SyncLock
+
             Dim title = game.Window.Title
             Dim resolved = IntPtr.Zero
             Dim currentPid = CUInt(Environment.ProcessId)
@@ -190,6 +207,10 @@ Namespace Windows.Composition
                 End Function
             EnumThreadWindows(GetCurrentThreadId(), callback, IntPtr.Zero)
             If resolved = IntPtr.Zero Then EnumWindows(callback, IntPtr.Zero)
+            SyncLock cached
+                cached.Source = candidate
+                cached.Handle = resolved
+            End SyncLock
             Return resolved
         End Function
 

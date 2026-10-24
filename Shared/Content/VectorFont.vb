@@ -125,8 +125,21 @@ Namespace [Shared].Content
         End Sub
 
         Private Function Format(text As String, Optional pixelPerfect As Boolean = False) As Media.FormattedText
-            Return New Media.FormattedText(text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
+            Dim formatted = New Media.FormattedText(text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
                 face, emSize, Media.Brushes.White, Nothing, If(pixelPerfect, Media.TextFormattingMode.Display, Media.TextFormattingMode.Ideal), 1.0) With {.LineHeight = LineSpacing}
+            ' WPF's composite fallback map can predate newer Unicode emoji even
+            ' when the installed emoji face contains their glyphs. Shape each
+            ' complete sequence with that face, including modifiers and joiners.
+            Dim elements = StringInfo.GetTextElementEnumerator(text)
+            While elements.MoveNext()
+                Dim element = elements.GetTextElement()
+                Dim emoji = element.Contains(ChrW(&HFE0F)) OrElse element.Contains(ChrW(&H20E3))
+                For Each scalar In element.EnumerateRunes()
+                    If scalar.Value >= &H1F000 AndAlso scalar.Value <= &H1FAFF Then emoji = True
+                Next
+                If emoji Then formatted.SetFontFamily(New Media.FontFamily("Segoe UI Emoji"), elements.ElementIndex, element.Length)
+            End While
+            Return formatted
         End Function
 
         Public Function Measure(text As String, Optional pixelPerfect As Boolean? = Nothing) As Vector2

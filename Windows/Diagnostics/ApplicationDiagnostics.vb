@@ -1,5 +1,6 @@
 Imports System.Diagnostics
 Imports System.IO
+Imports System.IO.MemoryMappedFiles
 Imports System.Runtime.InteropServices
 Imports System.Text
 
@@ -19,6 +20,14 @@ Public NotInheritable Class ApplicationDiagnostics
     Private Shared displayName As String
     Private Shared initialized As Integer
     Private Shared ReadOnly recentManaged As New Dictionary(Of UInteger, String)()
+    Private Shared managedMap As MemoryMappedFile
+    Private Shared managedView As MemoryMappedViewAccessor
+    Private Const ManagedMapCapacity As Integer = 262144
+    Private Const ManagedSlotCapacity As Integer = (ManagedMapCapacity - 16) \ 2
+    Private Shared managedRevision As Long
+    Private Shared writtenManagedRevision As Long
+    Private Shared managedWriterBusy As Integer
+    Private Shared managedFlushTimer As Threading.Timer
     <ThreadStatic> Private Shared capturingManaged As Boolean
     Public Shared ReadOnly Property Folder As String
         Get
@@ -37,6 +46,12 @@ Public NotInheritable Class ApplicationDiagnostics
         Try
             Directory.CreateDirectory(folder)
             SessionPath = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") & "-" & Environment.ProcessId & ".log")
+            Try
+                managedMap = MemoryMappedFile.CreateOrOpen(ManagedMapName(SessionPath), ManagedMapCapacity, MemoryMappedFileAccess.ReadWrite)
+                managedView = managedMap.CreateViewAccessor()
+            Catch ex As Exception
+                Log("Managed context shared memory unavailable: " & ex.GetType().Name)
+            End Try
             Log("Start; executable=" & Environment.ProcessPath & "; version=" & If(entry?.GetName().Version?.ToString(), "unknown") &
                 "; runtime=" & RuntimeInformation.FrameworkDescription & "; OS=" & RuntimeInformation.OSDescription)
             Dim marker = Path.Combine(AppContext.BaseDirectory, "ProjectZ.Release.json")
@@ -74,10 +89,11 @@ Public NotInheritable Class ApplicationDiagnostics
             Log("Diagnostic initialization failed: " & ex.ToString())
         End Try
         AddHandler AppDomain.CurrentDomain.UnhandledException, Sub(sender, args) Report("Unhandled; terminating=" & args.IsTerminating, TryCast(args.ExceptionObject, Exception))
-        ' A native debugger can see the CLR's fatal event before the runtime
-        ' calls UnhandledException. Keep bounded, durable exception context so
-        ' that the external observer still has a managed stack in that case.
+        ' A native debugger can see a fatal CLR event before UnhandledException.
+        ' Publish bounded context to shared memory; only the background writer
+        ' and external observer touch disk for ordinary first-chance snapshots.
         AddHandler AppDomain.CurrentDomain.FirstChanceException, Sub(sender, args) CaptureManagedContext(args.Exception)
+        managedFlushTimer = New Threading.Timer(Sub(state) FlushManagedContext(), Nothing, 250, 250)
         AddHandler TaskScheduler.UnobservedTaskException, Sub(sender, args) Report("Unobserved task", args.Exception)
 #If Not PROJECTZ_DIAGNOSTICS_OBSERVER Then
         AddHandler System.Windows.Forms.Application.ThreadException, Sub(sender, args)
@@ -89,6 +105,7 @@ Public NotInheritable Class ApplicationDiagnostics
     End Sub
 
     Public Shared Sub Report(context As String, failure As Exception)
+        FlushManagedContext()
         Log(context & Environment.NewLine & If(failure?.ToString(), "No managed exception details available"))
     End Sub
 
@@ -104,15 +121,69 @@ Public NotInheritable Class ApplicationDiagnostics
                 While recentManaged.Count > 8
                     recentManaged.Remove(recentManaged.Keys.First())
                 End While
-                Dim path = SessionPath & ".managed.txt"
-                File.WriteAllText(path & ".new", "Recent managed exception context; these exceptions may have been handled." & Environment.NewLine & String.Join(Environment.NewLine & Environment.NewLine, recentManaged.Values))
-                File.Move(path & ".new", path, True)
+                managedRevision += 1
+                If managedView IsNot Nothing Then
+                    Dim snapshot = detail & Environment.NewLine & Environment.NewLine & String.Join(Environment.NewLine & Environment.NewLine, recentManaged.Where(Function(entry) entry.Key <> threadId).Select(Function(entry) entry.Value))
+                    Dim bytes = Encoding.UTF8.GetBytes(snapshot.Substring(0, Math.Min(snapshot.Length, 32000)))
+                    Dim slot = 1 - managedView.ReadInt32(0)
+                    Dim at = 16L + slot * ManagedSlotCapacity
+                    managedView.WriteArray(at + 4, bytes, 0, bytes.Length)
+                    managedView.Write(at, bytes.Length)
+                    Threading.Thread.MemoryBarrier()
+                    managedView.Write(0, slot)
+                End If
             End SyncLock
         Catch
         Finally
             capturingManaged = False
         End Try
     End Sub
+
+    ' Disk snapshots run in the background without holding the producer lock.
+    ' The double-buffered shared-memory copy remains readable even if a native
+    ' fatal event suspends every application thread before this timer runs.
+    Private Shared Sub FlushManagedContext()
+        If capturingManaged OrElse String.IsNullOrEmpty(SessionPath) OrElse Threading.Interlocked.CompareExchange(managedWriterBusy, 1, 0) <> 0 Then Return
+        capturingManaged = True
+        Try
+            Dim snapshot As String()
+            Dim revision As Long
+            SyncLock recentManaged
+                revision = managedRevision
+                If revision = writtenManagedRevision Then Return
+                snapshot = recentManaged.Values.ToArray()
+            End SyncLock
+            Dim path = SessionPath & ".managed.txt"
+            File.WriteAllText(path & ".new", "Recent managed exception context; these exceptions may have been handled." & Environment.NewLine & String.Join(Environment.NewLine & Environment.NewLine, snapshot))
+            File.Move(path & ".new", path, True)
+            writtenManagedRevision = revision
+        Catch
+        Finally
+            capturingManaged = False
+            Threading.Interlocked.Exchange(managedWriterBusy, 0)
+        End Try
+    End Sub
+
+    Private Shared Function ManagedMapName(session As String) As String
+        Return "Local\ProjectZ.Managed." & Path.GetFileNameWithoutExtension(session)
+    End Function
+
+    Private Shared Function ReadManagedMap(session As String) As String
+        Try
+            Using map = MemoryMappedFile.OpenExisting(ManagedMapName(session), MemoryMappedFileRights.Read), view = map.CreateViewAccessor(0, ManagedMapCapacity, MemoryMappedFileAccess.Read)
+                Dim slot = view.ReadInt32(0)
+                If slot < 0 OrElse slot > 1 Then Return String.Empty
+                Dim at = 16L + slot * ManagedSlotCapacity
+                Dim length = view.ReadInt32(at)
+                If length <= 0 OrElse length > ManagedSlotCapacity - 4 Then Return String.Empty
+                Dim bytes(length - 1) As Byte
+                view.ReadArray(at + 4, bytes, 0, bytes.Length)
+                Return Encoding.UTF8.GetString(bytes)
+            End Using
+        Catch
+            Return String.Empty
+        End Try
+    End Function
 
 
     Public Shared Sub Log(message As String)
@@ -186,7 +257,9 @@ Public NotInheritable Class ApplicationDiagnostics
                             If code = &HC0000409 AndAlso Marshal.ReadInt32(events, 40) > 0 Then Log("Fast-fail reason=" & Marshal.ReadInt64(events, 48))
                             If code = &HE0434352 OrElse graphicsOriginCaptured Then
                                 Dim snapshot = session & ".managed.txt"
-                                If File.Exists(snapshot) Then Log("Managed exception context before fatal CLR event:" & Environment.NewLine & File.ReadAllText(snapshot))
+                                Dim context = ReadManagedMap(session)
+                                If String.IsNullOrEmpty(context) AndAlso File.Exists(snapshot) Then context = File.ReadAllText(snapshot)
+                                If Not String.IsNullOrEmpty(context) Then Log("Managed exception context before fatal CLR event:" & Environment.NewLine & context)
                             End If
                             Dim address = Marshal.ReadInt64(events, 32)
                             For Each loaded As ProcessModule In target.Modules

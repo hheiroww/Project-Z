@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.24.4</Version>
+	<Version>2026.10.24.5</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.24.4 adds the green Project Z package icon and a clearer README with the current native heirowSnap showcase. Retains the keyboard dropdown, compiled vector font, emoji caret and translucent slider fixes from 2026.10.24.3.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.24.5 preserves complete Unicode graphemes during wrapping and trimming, shapes modern emoji with the installed color font, caches native HWND lookup, and moves handled exception snapshot writes off the UI thread.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
