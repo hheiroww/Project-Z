@@ -1,8 +1,8 @@
-# ⚡ Project Z 2026.10.20.1
+# ⚡ Project Z 2026.10.24.2
 
-Version 2026.10.20.1 adds automatic offline textbox spellchecking with red squiggles, right-click suggestions and persistent custom dictionaries. It also includes native studio controls, placeholder inputs and vector text improvements, and uses public SocketJack 2026.10.17.3. [Configure spelling and custom dictionaries](docs/Spellchecking.md).
+Version 2026.10.24.2 uses free ProjectZ Sans vector curves compiled into the framework, with regular, semibold and bold outlines, kerning and color-emoji fallback. It fixes emoji caret/wrapping measurements that end between a UTF-16 pair. The free OFL notice is included, and the remaining Speckle.Triangle dependency is removed. Offline textbox spelling and native studio controls remain available. [Configure spelling and custom dictionaries](docs/Spellchecking.md).
 
-NuGet consumers receive the compiled sample fonts, diagnostics/native runtime, license notices and complete XAML code-generation tool. Native `ProjectZSceneXaml` build items work without a local framework checkout.
+NuGet consumers receive the compiled vector outlines, diagnostics/native runtime, license notices and complete XAML code-generation tool. No default TTF, OTF, WOFF or Segoe bitmap atlases are distributed. Native `ProjectZSceneXaml` build items work without a local framework checkout.
 
 ### Familiar XAML. Native DirectX 12. Your UI, accelerated.
 

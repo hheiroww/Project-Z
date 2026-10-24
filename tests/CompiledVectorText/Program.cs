@@ -8,6 +8,9 @@ foreach (int weight in new[] { 400, 600, 700 })
     Require(font.GlyphCount > 2800 && font.SupportsText("Café — Ελληνικά Русский 0123456789"), $"weight {weight}: Unicode outline coverage");
     Require(font.Measure("AV", 20).X < font.Measure("A", 20).X + font.Measure("V", 20).X, $"weight {weight}: kerning applied");
     Require(font.Measure("Cafe\u0301", 20) == font.Measure("Café", 20), $"weight {weight}: composed accents share layout");
+    foreach (var (input, expected) in new[] { ("\uD83D", "\uFFFD"), ("\uDE00", "\uFFFD"), ("a\uD83Db", "a\uFFFDb"), ("a\uDE00b", "a\uFFFDb") })
+        Require(font.SupportsText(input) == font.SupportsText(expected) && font.Measure(input, 20) == font.Measure(expected, 20)
+            && font.GetTriangles(input, 20).SequenceEqual(font.GetTriangles(expected, 20)), $"weight {weight}: unpaired UTF-16 measures and tessellates as a replacement glyph");
     Require(font.Measure("a\r\nb", 20) == font.Measure("a\nb", 20), $"weight {weight}: CRLF and LF have identical layout");
     Require(font.Measure("ab\ncd", 20).Y == 2 * font.Measure("ab", 20).Y, $"weight {weight}: multiline height");
     var small = font.GetTriangles("AVOé", 20);

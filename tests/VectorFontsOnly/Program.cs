@@ -54,6 +54,15 @@ internal static class Program
             const string emojiText = "Hello 😂 ❤️ 👍🏽 👨‍👩‍👧‍👦";
             var beforeColor = twenty.Measure(emojiText);
             var meshMethod = typeof(VectorFont).GetMethod("Triangles", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Require(Enumerable.Range(0, emojiText.Length + 1).All(length =>
+            {
+                var prefix = twenty.Measure(emojiText[..length]);
+                return float.IsFinite(prefix.X) && float.IsFinite(prefix.Y) && prefix.X >= 0 && prefix.Y >= 0;
+            }), "every UTF-16 emoji prefix provides finite caret and wrapping metrics");
+            Require(twenty.Measure("\uD83D") == twenty.Measure("\uFFFD") && twenty.Measure("\uDE00") == twenty.Measure("\uFFFD"),
+                "unpaired surrogate layout matches the replacement glyph");
+            Require(meshMethod.Invoke(twenty, new object[] { "A\uD83D", false }) is not null,
+                "transient unpaired text also tessellates without a Unicode exception");
             var mesh = meshMethod.Invoke(twenty, new object[] { emojiText, false })!;
             var vertexField = mesh.GetType().GetField("Vertices", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             var apply = mesh.GetType().GetMethod("Apply", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;

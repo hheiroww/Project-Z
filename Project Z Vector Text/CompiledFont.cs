@@ -111,7 +111,7 @@ public sealed class CompiledFont
 
     public bool SupportsText(string text)
     {
-        foreach (var cp in Codepoints(text.Normalize(NormalizationForm.FormC)))
+        foreach (var cp in Codepoints(NormalizeText(text)))
         {
             if (cp is 9 or 10 or 13) continue;
             // Complex scripts retain the host's shaping and fallback instead of drawing isolated glyphs.
@@ -141,7 +141,7 @@ public sealed class CompiledFont
     {
         if (float.IsNaN(size) || float.IsInfinity(size) || size <= 0) throw new ArgumentOutOfRangeException(nameof(size));
         if (string.IsNullOrEmpty(text)) return Vector2.Zero;
-        text = text.Replace("\r\n", "\n").Replace('\r', '\n').Normalize(NormalizationForm.FormC);
+        text = NormalizeText(text.Replace("\r\n", "\n").Replace('\r', '\n'));
         float x = 0, y = 0, width = 0, line = (float)Math.Ceiling(LineHeight * size);
         ushort previous = 0;
         foreach (int cp in Codepoints(text))
@@ -162,6 +162,21 @@ public sealed class CompiledFont
             previous = id;
         }
         return new Vector2(Math.Max(width, x), y + line);
+    }
+
+    /// <summary>Canonical text with unpaired UTF-16 code units replaced, including transient caret prefixes.</summary>
+    public static string NormalizeText(string text)
+    {
+        // Caret/wrapping measurements can end between an emoji's UTF-16 pair.
+        // Replace only unpaired code units before NFC, preserving valid pairs.
+        char[]? repaired = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (!char.IsSurrogate(text[i])) continue;
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) { i++; continue; }
+            (repaired ??= text.ToCharArray())[i] = '\uFFFD';
+        }
+        return (repaired is null ? text : new string(repaired)).Normalize(NormalizationForm.FormC);
     }
 
     private static IEnumerable<int> Codepoints(string text)

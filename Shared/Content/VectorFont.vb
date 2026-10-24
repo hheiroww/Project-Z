@@ -131,6 +131,7 @@ Namespace [Shared].Content
 
         Public Function Measure(text As String, Optional pixelPerfect As Boolean? = Nothing) As Vector2
             If String.IsNullOrEmpty(text) Then Return Vector2.Zero
+            text = CompiledFont.NormalizeText(text)
             Dim aligned = If(pixelPerfect, PpiPerfectText)
             Dim key = If(aligned, "P:", "I:") & text
             Dim size As Vector2
@@ -148,6 +149,7 @@ Namespace [Shared].Content
         End Function
 
         Private Function Triangles(text As String, pixelPerfect As Boolean) As TextMesh
+            text = CompiledFont.NormalizeText(text)
             Dim key = If(pixelPerfect, "P:", "I:") & text
             Dim result As TextMesh = Nothing
             If meshes.TryGetValue(key, result) Then Return result
