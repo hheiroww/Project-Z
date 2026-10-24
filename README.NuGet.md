@@ -1,6 +1,14 @@
-# ⚡ Project Z 2026.10.24.1
+# ⚡ Project Z 2026.10.24.3
 
-Version 2026.10.24.1 masks the slider track beneath its thumb so translucent
+Native dropdowns support arrows, Home/End and Page Up/Down to preview enabled
+items, Enter/Space to select, Escape to cancel, and Tab to move focus. A soft
+fill and slim border mark the preview separately from the committed value.
+Popup rows preserve the dropdown's keyboard focus across separate mouse-down
+and mouse-up frames, including inside scrolling panels. Theme consumers can
+set `DropDownBackgroundColor`, `DropDownHighlightColor` and `DropDownIndicatorColor`.
+See [native input and GPU checks](https://github.com/hheiroww/Project-Z/tree/master/tests/ComboBoxInput).
+
+Version 2026.10.23.2 masks the slider track beneath its thumb so translucent
 controls retain a single alpha layer. `Trackbar.TrackColor` and `ThumbColor`
 allow independent theme colors. `RectangleElement.BackgroundCutouts` adds dynamic
 rectangular holes while retaining rounded gradients and parent clipping.
@@ -17,7 +25,7 @@ Version 2026.10.20.1 adds automatic offline spellchecking to native textboxes: r
 
 This release also includes native studio controls, placeholder inputs and vector text improvements. It uses public SocketJack **2026.10.17.3**. The internal `ProjectZ.ModelImport.dll`, diagnostics observer and native DX12 runtime remain bundled; no unpublished importer package is required.
 
-Package consumers also receive the compiled Segoe UI sample fonts, third-party notices and the complete runnable XAML code-generation tool. Native `ProjectZSceneXaml` items compile through the packaged tool automatically. `ProjectZXamlGeneratorDll` points to `tools/xaml-codegen/ProjectZ.XamlCodegen.dll` for applications that invoke the importer explicitly.
+Package consumers receive the compiled ProjectZ Sans vector outlines, their OFL notice, other third-party notices and the complete runnable XAML code-generation tool. Font containers and retired Segoe UI atlases are excluded. Native `ProjectZSceneXaml` items compile through the packaged tool automatically. `ProjectZXamlGeneratorDll` points to `tools/xaml-codegen/ProjectZ.XamlCodegen.dll` for applications that invoke the importer explicitly.
 
 The Windows x64 diagnostics observer is a self-contained single-file executable with its own CLR. It requires no installed .NET Desktop 8 runtime, including when launched from a self-contained .NET 10 single-file host. Keep its executable intact; do not substitute the host's runtimeconfig or deps files.
 

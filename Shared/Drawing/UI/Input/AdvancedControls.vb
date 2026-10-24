@@ -4,6 +4,7 @@ Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports ProjectZ.Shared.Drawing.UI.Layout
 Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports System.Collections.Generic
+Imports Microsoft.Xna.Framework.Input
 
 Namespace [Shared].Drawing.UI.Input
 
@@ -21,6 +22,21 @@ Namespace [Shared].Drawing.UI.Input
         Private _dropDownButton As PolygonElement
         Private _itemHeight As Single = 28.0F
         Private Shadows ReadOnly ownerScene As Scene
+        Private _highlightedIndex As Integer = -1
+
+        Public ReadOnly Property HighlightedIndex As Integer
+            Get
+                Return _highlightedIndex
+            End Get
+        End Property
+        Public ReadOnly Property DropDownElements As IReadOnlyList(Of RectangleElement)
+            Get
+                Return _dropDownItems.AsReadOnly()
+            End Get
+        End Property
+        Public Property DropDownBackgroundColor As Color = New Color(16, 35, 30, 242)
+        Public Property DropDownHighlightColor As Color = New Color(36, 84, 68, 246)
+        Public Property DropDownIndicatorColor As Color = New Color(122, 210, 184)
 
         Public Property DismissDistance As Single = 28.0F
         Public Property ItemIsEnabled As Func(Of Integer, Boolean)
@@ -88,8 +104,20 @@ Namespace [Shared].Drawing.UI.Input
                 Return _isDropDownOpen
             End Get
             Set(value As Boolean)
+                If _isDropDownOpen = value Then Return
                 _isDropDownOpen = value
+                If value Then
+                    Dim ancestor = Parent
+                    While ancestor IsNot Nothing
+                        Dim scroll = TryCast(ancestor, ScrollViewer)
+                        If scroll IsNot Nothing Then scroll.StopScrolling()
+                        ancestor = ancestor.Parent
+                    End While
+                    _highlightedIndex = If(IsItemEnabled(_selectedIndex), _selectedIndex, FindEnabled(-1, 1))
+                    Scene?.FocusElement(Me)
+                End If
                 UpdateDropDown()
+                OnUserInvalidated()
             End Set
         End Property
 
@@ -106,6 +134,7 @@ Namespace [Shared].Drawing.UI.Input
         Public Sub New(scene As Scene)
             MyBase.New(scene)
             ownerScene = scene
+            CanSelect = True
             BackgroundColor = New Color(45, 45, 45)
             Size = New Vector2(180, 32)
 
@@ -125,6 +154,7 @@ Namespace [Shared].Drawing.UI.Input
             Children.Add(editor)
             AddHandler editor.OnTextChanged, Sub() RaiseEvent TextChanged()
             AddHandler MouseLeftClick, Sub(point) IsDropDownOpen = Not IsDropDownOpen
+            AddHandler Deselected, Sub() IsDropDownOpen = False
             If ownerScene IsNot Nothing Then
                 AddHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
                 AddHandler ownerScene.OnMouseLeftDown, AddressOf HandleSceneMouseLeftDown
@@ -133,12 +163,12 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Function ContainsDropDownWithMargin(point As Point, margin As Single) As Boolean
-            Dim bottom = Position.Y + Size.Y
-            If _isDropDownOpen Then bottom += _items.Count * _itemHeight
-            Return point.X >= Position.X - margin AndAlso
-                   point.Y >= Position.Y - margin AndAlso
-                   point.X <= Position.X + Size.X + margin AndAlso
-                   point.Y <= bottom + margin
+            Dim bounds = Rectangle
+            For Each item In _dropDownItems
+                bounds = Microsoft.Xna.Framework.Rectangle.Union(bounds, item.Rectangle)
+            Next
+            bounds.Inflate(CInt(margin), CInt(margin))
+            Return bounds.Contains(point)
         End Function
 
         Private Sub HandleSceneMouseMove(currentPoint As Point, lastPoint As Point)
@@ -179,7 +209,80 @@ Namespace [Shared].Drawing.UI.Input
 
         Protected Overrides Sub AlignChildren()
             AlignHeader()
+            For index = 0 To _dropDownItems.Count - 1
+                _dropDownItems(index).Position = New Vector2(Rectangle.Left, Rectangle.Bottom + index * _itemHeight)
+                _dropDownItems(index).Size = New Vector2(Rectangle.Width, _itemHeight)
+            Next
         End Sub
+
+        Private Function IsItemEnabled(index As Integer) As Boolean
+            Return index >= 0 AndAlso index < _items.Count AndAlso (ItemIsEnabled Is Nothing OrElse ItemIsEnabled(index))
+        End Function
+        Private Function FindEnabled(start As Integer, direction As Integer) As Integer
+            Dim index = start + direction
+            While index >= 0 AndAlso index < _items.Count
+                If IsItemEnabled(index) Then Return index
+                index += direction
+            End While
+            Return -1
+        End Function
+        Private Sub Highlight(index As Integer)
+            If Not IsItemEnabled(index) Then Return
+            Dim changed = _highlightedIndex <> index
+            _highlightedIndex = index
+            For row = 0 To _dropDownItems.Count - 1
+                Dim item = _dropDownItems(row)
+                Dim fill = If(row = index, DropDownHighlightColor, DropDownBackgroundColor)
+                Dim border = If(row = index, DropDownIndicatorColor, New Color(122, 180, 161, 40))
+                changed = changed OrElse item.BackgroundColor <> fill OrElse item.BorderColor <> border
+                item.BackgroundColor = fill
+                item.BorderColor = border
+                item.BorderThickness = 1
+            Next
+            If changed Then OnUserInvalidated()
+        End Sub
+        Public Sub RefreshDropDownAppearance()
+            Highlight(_highlightedIndex)
+        End Sub
+        Private Sub CommitHighlight()
+            If IsItemEnabled(_highlightedIndex) Then SelectedIndex = _highlightedIndex
+            IsDropDownOpen = False
+            Scene?.FocusElement(Me)
+        End Sub
+        Protected Friend Overrides Function HandleNavigationKey(key As Keys, state As KeyboardState, keyPress As Boolean) As Boolean
+            If key = Keys.Tab Then
+                If Not keyPress Then IsDropDownOpen = False
+                Return False
+            End If
+            Select Case key
+                Case Keys.Down, Keys.Up, Keys.Home, Keys.End, Keys.PageDown, Keys.PageUp
+                    If Not keyPress Then Return True
+                    Dim wasOpen = IsDropDownOpen
+                    IsDropDownOpen = True
+                    If key = Keys.Home OrElse key = Keys.End Then
+                        Highlight(If(key = Keys.Home, FindEnabled(-1, 1), FindEnabled(_items.Count, -1)))
+                    ElseIf wasOpen OrElse _selectedIndex >= 0 Then
+                        Dim direction = If(key = Keys.Up OrElse key = Keys.PageUp, -1, 1)
+                        Dim steps = If(key = Keys.PageUp OrElse key = Keys.PageDown, 5, 1)
+                        For stepIndex = 1 To steps
+                            Dim nextIndex = FindEnabled(_highlightedIndex, direction)
+                            If nextIndex < 0 Then Exit For
+                            Highlight(nextIndex)
+                        Next
+                    End If
+                    Return True
+                Case Keys.Enter, Keys.Space, Keys.F4
+                    If keyPress Then Return True
+                    If IsEditable AndAlso key = Keys.Space AndAlso Not IsDropDownOpen Then Return False
+                    If IsDropDownOpen Then CommitHighlight() Else IsDropDownOpen = True
+                    Return True
+                Case Keys.Escape
+                    If Not IsDropDownOpen Then Return False
+                    If Not keyPress Then IsDropDownOpen = False
+                    Return True
+            End Select
+            Return False
+        End Function
 
         Private Sub UpdateDropDown()
             AlignHeader()
@@ -188,18 +291,20 @@ Namespace [Shared].Drawing.UI.Input
                 If Scene IsNot Nothing Then
                     Scene.RemoveElement(item)
                 End If
+                item.Dispose()
             Next
             _dropDownItems.Clear()
 
             If _isDropDownOpen AndAlso Scene IsNot Nothing Then
-                Dim yOffset As Single = Position.Y + Size.Y
+                Dim yOffset As Single = Rectangle.Bottom
                 For i As Integer = 0 To _items.Count - 1
                     Dim index As Integer = i
                     Dim itemBg As New RectangleElement(Scene) With {
-                        .Position = New Vector2(Position.X, yOffset),
-                        .Size = New Vector2(Size.X, _itemHeight),
-                        .BackgroundColor = If(i = _selectedIndex, New Color(36, 84, 68, 246), New Color(16, 35, 30, 242)),
+                        .Position = New Vector2(Rectangle.Left, yOffset),
+                        .Size = New Vector2(Rectangle.Width, _itemHeight),
+                        .BackgroundColor = If(i = _highlightedIndex, DropDownHighlightColor, DropDownBackgroundColor),
                         .CornerRadius = 4, .BorderColor = New Color(122, 180, 161, 40), .BorderThickness = 1,
+                        .KeyboardFocusTarget = Me,
                         .IsOverlay = True
                     }
                     itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(i)
@@ -215,15 +320,17 @@ Namespace [Shared].Drawing.UI.Input
                     If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(i, itemBg, itemText)
                     _dropDownItems.Add(itemBg)
                     Scene.AddElement(itemBg)
+                    AddHandler itemBg.MouseEnter, Sub() Highlight(index)
 
                     AddHandler itemBg.MouseLeftClick, Sub(p)
                                                           If Not itemBg.isEnabled Then Return
-                                                          SelectedIndex = index
-                                                          IsDropDownOpen = False
+                                                          _highlightedIndex = index
+                                                          CommitHighlight()
                                                       End Sub
 
                     yOffset += _itemHeight
                 Next
+                Highlight(_highlightedIndex)
             End If
         End Sub
 

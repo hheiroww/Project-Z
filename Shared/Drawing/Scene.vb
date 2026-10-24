@@ -246,8 +246,9 @@ Namespace [Shared].Drawing
             If LastElement IsNot Nothing Then LastElement.ReleasePointerPress()
             LastElement = Nothing
             KeyboardButton = Nothing
-            If CanFocus(Element) Then
-                FocusElement(Element)
+            Dim focusTarget = If(Element?.KeyboardFocusTarget, Element)
+            If CanFocus(focusTarget) Then
+                FocusElement(focusTarget)
             Else
                 ClearFocus()
             End If
@@ -442,6 +443,7 @@ Namespace [Shared].Drawing
         Protected Friend Sub KeyPress(Key As Keys, KeyboardState As KeyboardState)
             CurrentKeyboardState = KeyboardState
             If Key = Keys.Tab Then Return
+            If CanFocus(LastSelected) AndAlso LastSelected.HandleNavigationKey(Key, KeyboardState, True) Then Return
             RaiseEvent OnKeyPress(Key, KeyboardState)
             If LastSelected IsNot Nothing AndAlso LastSelected.isEnabled Then
                 If LastSelected.CanSelect AndAlso LastSelected.isSelected Then
@@ -456,6 +458,7 @@ Namespace [Shared].Drawing
             RequestRender()
             CurrentKeyboardState = KeyboardState
             If LastSelected IsNot Nothing AndAlso LastSelected.FilterImportedInput("KeyDown", Key) Then Return
+            If CanFocus(LastSelected) AndAlso LastSelected.HandleNavigationKey(Key, KeyboardState, False) Then Return
             If Key = Keys.Tab Then
                 MoveFocus(KeyboardState.IsKeyDown(Keys.LeftShift) OrElse KeyboardState.IsKeyDown(Keys.RightShift))
                 Return

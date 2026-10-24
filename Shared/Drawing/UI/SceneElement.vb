@@ -273,6 +273,8 @@ Namespace [Shared].Drawing.UI
         Private _isSelected As Boolean = False
 
         Public Property CanSelect As Boolean = False
+        ''' <summary>Optional keyboard owner for a composite control's pointer-only parts.</summary>
+        Public Property KeyboardFocusTarget As SceneElement
         ''' <summary>Include this selectable control in keyboard navigation.</summary>
         Public Property TabStop As Boolean = True
         ''' <summary>Lower values come first; ties follow scene render order.</summary>
@@ -493,6 +495,13 @@ Namespace [Shared].Drawing.UI
 #End Region
 
 #Region "Keyboard Events"
+
+        ' Controls such as an open dropdown handle navigation before the scene's
+        ' default/cancel buttons. KeyPress is the repeat phase, including the
+        ' first press; KeyDown is reserved for one-shot open/commit actions.
+        Protected Friend Overridable Function HandleNavigationKey(key As Keys, state As KeyboardState, keyPress As Boolean) As Boolean
+            Return False
+        End Function
 
         Public Event OnKeyPress(Key As Keys, KeyboardState As KeyboardState)
         Public Event OnKeyDown(Key As Keys, KeyboardState As KeyboardState)
