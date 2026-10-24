@@ -159,3 +159,5 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
     $results.Add("PASS $language rejects an invalid renderer")
 }
 $results | Set-Content -LiteralPath "$verification/results.txt"
+# Both invalid-renderer builds must fail, but successful verification must return zero.
+$global:LASTEXITCODE = 0

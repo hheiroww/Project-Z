@@ -1,6 +1,6 @@
 # Project-Z templates for Visual Studio 2026
 
-**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.2/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.24.2)
+**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.3/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.24.3)
 
 The installer adds **Project-Z Desktop (C#)** and **Project-Z Desktop (Visual Basic)** to Visual Studio 2026, including 2026 Insiders, on Windows x64. Each creates a .NET 10 Windows application with a running Project-Z starter scene, compiled free vector fonts, and standalone crash diagnostics. Install the **.NET desktop development** workload and **.NET 10 SDK** first. Administrator access is not required for a per-user VSIX install.
 
