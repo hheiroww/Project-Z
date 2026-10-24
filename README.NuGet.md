@@ -1,4 +1,10 @@
-# ⚡ Project Z 2026.10.23.1
+# ⚡ Project Z 2026.10.23.2
+
+Version 2026.10.23.2 masks the slider track beneath its thumb so translucent
+controls retain a single alpha layer. `Trackbar.TrackColor` and `ThumbColor`
+allow independent theme colors. `RectangleElement.BackgroundCutouts` adds dynamic
+rectangular holes while retaining rounded gradients and parent clipping.
+See [mask API and rendering checks](https://github.com/hheiroww/Project-Z/tree/master/tests/TransparencyMasks).
 
 Version 2026.10.23.1 preserves the installed font's COLR/CPAL color layers when
 rendering shaped native text. Emoji keep their colors in textboxes, labels and

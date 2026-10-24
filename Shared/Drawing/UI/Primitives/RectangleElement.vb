@@ -24,6 +24,8 @@ Namespace [Shared].Drawing.UI.Primitives
             End Set
         End Property
         Public Property BackgroundBrush As XamlGradientBrush
+        ''' <summary>Dynamic rectangular holes in this background, in the same layout coordinates as Rectangle. Children and hit testing are unchanged.</summary>
+        Public Property BackgroundCutouts As Func(Of IEnumerable(Of Rectangle))
         Public Property CornerRadii As CornerRadii
         ''' <summary>Uniform-radius shorthand. Use CornerRadii for independent XAML corners.</summary>
         Public Property CornerRadius As Single
@@ -109,13 +111,37 @@ Namespace [Shared].Drawing.UI.Primitives
                 End If
                 ' Generate in layout units, then transform the entire surface,
                 ' including its corners and stroke, just as WPF does.
-                spriteBatch.Draw(brush.GetTexture(Scene.graphicsDevice, CInt(Size.X), CInt(Size.Y), CornerRadii, BorderThickness, BorderColor), Rectangle, ApplyOpacity(Color.White))
+                DrawBackgroundSurface(brush.GetTexture(Scene.graphicsDevice, CInt(Size.X), CInt(Size.Y), CornerRadii, BorderThickness, BorderColor), ApplyOpacity(Color.White))
                 DrawFocusIndicator()
                 Return
             End If
             If Texture Is Nothing Then Texture = Content.Textures.GetSharedWhiteTexture(Scene.graphicsDevice)
-            spriteBatch.Draw(Texture, Rectangle, ApplyOpacity(fill))
+            DrawBackgroundSurface(Texture, ApplyOpacity(fill))
             DrawFocusIndicator()
+        End Sub
+
+        Private Sub DrawBackgroundSurface(surface As Texture2D, tint As Color)
+            Dim bounds = Rectangle
+            If bounds.Width <= 0 OrElse bounds.Height <= 0 Then Return
+            Dim cutouts = BackgroundCutouts?.Invoke()
+            If cutouts Is Nothing Then
+                spriteBatch.Draw(surface, bounds, tint)
+                Return
+            End If
+            For Each region In RectangleMask.Exclude(bounds, cutouts)
+                If surface.Width = 1 AndAlso surface.Height = 1 Then
+                    spriteBatch.Draw(surface, region, tint)
+                Else
+                    ' Keep the original brush coordinates instead of stretching
+                    ' a fresh gradient or rounded surface into each fragment.
+                    Dim left = CInt(Math.Round(CDbl(region.Left - bounds.Left) * surface.Width / bounds.Width))
+                    Dim top = CInt(Math.Round(CDbl(region.Top - bounds.Top) * surface.Height / bounds.Height))
+                    Dim right = CInt(Math.Round(CDbl(region.Right - bounds.Left) * surface.Width / bounds.Width))
+                    Dim bottom = CInt(Math.Round(CDbl(region.Bottom - bounds.Top) * surface.Height / bounds.Height))
+                    Dim source As New Rectangle(left, top, Math.Max(1, right - left), Math.Max(1, bottom - top))
+                    spriteBatch.Draw(surface, region, source, tint)
+                End If
+            Next
         End Sub
 
         Private Sub DrawFocusIndicator()

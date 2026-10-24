@@ -12,6 +12,30 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Property ShowTooltip As Boolean = True
 
+        Public Property TrackColor As Color
+            Get
+                Return SliderBar.BackgroundColor
+            End Get
+            Set(value As Color)
+                SliderBar.BackgroundColor = value
+            End Set
+        End Property
+
+        Public Property ThumbColor As Color
+            Get
+                Return Slider.BackgroundColor
+            End Get
+            Set(value As Color)
+                Slider.BackgroundColor = value
+            End Set
+        End Property
+
+        Public ReadOnly Property IsDragging As Boolean
+            Get
+                Return MouseDownCheck()
+            End Get
+        End Property
+
         Public Property Value As Double
             Get
                 Return _Value
@@ -103,9 +127,9 @@ Namespace [Shared].Drawing.UI.Input
             SliderBar.Size = New Vector2(Size.Y / 4)
 
             ' Slider
-            Dim TranslatedX As Double = Animations.DoubleAnimation.Interpolate(Value, MinimumValue, MaximumValue, 0, Size.X - (Slider.Size.X + Padding.Left + Padding.Right))
-            If Double.IsNaN(TranslatedX) Then TranslatedX = 8
             Slider.Size = New Vector2(16, Math.Max(16, Size.Y))
+            Dim TranslatedX As Double = Animations.DoubleAnimation.Interpolate(Value, MinimumValue, MaximumValue, 0, Size.X - (Slider.Size.X + Padding.Left + Padding.Right))
+            If Double.IsNaN(TranslatedX) Then TranslatedX = 0
             Slider.Margin = New Thickness(CInt(TranslatedX), CInt(Slider.Size.Y / 2 - Size.Y / 2), 0, 0)
 
             ' Display Text
@@ -163,6 +187,9 @@ Namespace [Shared].Drawing.UI.Input
         Private Sub Init()
             BackgroundColor = Color.Transparent
             Padding = New Thickness(4)
+            ' Do not blend the track through a translucent thumb. The cutout
+            ' follows layout, scrolling and dragging without changing hit tests.
+            SliderBar.BackgroundCutouts = Function() {Slider.Rectangle}
 
             ' Keep internal parts ordered relative to the Trackbar itself
             SliderBar.zIndex = Me.zIndex - 10
