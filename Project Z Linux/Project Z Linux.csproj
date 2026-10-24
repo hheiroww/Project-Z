@@ -93,6 +93,8 @@
 
   <ItemGroup>
     <Folder Include="Shared\Drawing\Designer\DesignTime\" />
+    <ProjectReference Include="..\Project Z Vector Text\ProjectZ.VectorText.csproj" />
+    <Content Include="..\ThirdParty\ProjectZSans\OFL.txt;..\ThirdParty\ProjectZSans\README.md" Link="ThirdParty\ProjectZSans\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
   </ItemGroup>
 
 </Project>

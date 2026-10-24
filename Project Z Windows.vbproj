@@ -102,12 +102,14 @@
 <ItemGroup>
 	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
+	<ProjectReference Include="Project Z Vector Text\ProjectZ.VectorText.csproj" PrivateAssets="all" />
 </ItemGroup>
 
   <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
   <Target Name="IncludeProjectZModelImport">
     <ItemGroup>
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ModelImport.dll" />
+      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
     </ItemGroup>
   </Target>
 
@@ -166,6 +168,7 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <None Include="ThirdParty\ProjectZSans\OFL.txt;ThirdParty\ProjectZSans\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="ThirdParty\ProjectZSans\" />
     <None Update="THIRD-PARTY-NOTICES.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

@@ -3,6 +3,11 @@
     <ProjectZDiagnosticsToolsPath Condition="'$(ProjectZDiagnosticsToolsPath)' == ''">$(MSBuildThisFileDirectory)..\tools\diagnostics\</ProjectZDiagnosticsToolsPath>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\ThirdParty\ProjectZSans\*" Pack="false" Condition="'$(MSBuildProjectName)' != 'Project Z Windows'">
+      <Link>ThirdParty\ProjectZSans\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <_ProjectZDiagnosticPackPayload Include="$(ProjectZDiagnosticsToolsPath)ProjectZ.Diagnostics.*" Exclude="$(ProjectZDiagnosticsToolsPath)*.pdb" />
     <Content Include="@(_ProjectZDiagnosticPackPayload)">
       <Link>%(_ProjectZDiagnosticPackPayload.Filename)%(_ProjectZDiagnosticPackPayload.Extension)</Link>

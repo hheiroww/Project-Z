@@ -19,8 +19,8 @@ Unsupported selections display their effective value. On the tested GPU,
 DirectX sampler anisotropy is limited to 16; there is no 32x AF setting.
 Bilinear uses linear minification/magnification and point mip selection;
 trilinear also blends mip levels. Their difference is visible on mipmapped
-textures. Font atlases have a single mip level and lossless premultiplied
-8-bit coverage. See [font generation](../Resources/Fonts/README.md).
+textures. Default text uses compiled free vector outlines and samples no atlas.
+See [font generation](../ThirdParty/ProjectZSans/README.md).
 
 Applications can configure their graphics device without the settings UI:
 
@@ -38,5 +38,5 @@ dotnet run --project tests/GraphicsQuality -c Release -p:ProjectZGraphicsBackend
 ```
 
 It checks actual fractional triangle coverage, caller render-target restoration,
-direct and offscreen scenes, every filter, font alpha precision, and blur/clipping
+direct and offscreen scenes, every filter, compiled vector text, and blur/clipping
 at each AA level. Each run writes PNG captures and `result.txt`.

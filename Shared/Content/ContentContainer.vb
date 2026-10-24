@@ -28,9 +28,6 @@ Namespace [Shared].Content
             Return "SystemFont:" & Uri.EscapeDataString(family) & ":" & weight.ToString(CultureInfo.InvariantCulture) & ":" & pointSize.ToString(CultureInfo.InvariantCulture)
         End Function
 
-        Private Shared ReadOnly DefaultVectorFontPath As String =
-            IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeui.ttf")
-
         Public Sub LoadVectorFont(name As String, fontFile As String, pointSize As Single)
             Dim font As New VectorFont(fontFile, pointSize)
             Dim previous As VectorFont = Nothing
@@ -38,18 +35,15 @@ Namespace [Shared].Content
             VectorFonts(name) = font
         End Sub
 
-        ''' <summary>Loads the native font-file outlines without requiring Content/Fonts or compiled font assets.</summary>
+        ''' <summary>Loads compiled ProjectZ Sans outlines, with no font files or bitmap assets.</summary>
         Public Sub LoadVectorFontsOnly()
-            If Not IO.File.Exists(DefaultVectorFontPath) Then
-                Throw New IO.FileNotFoundException("The system Segoe UI font is unavailable. Register a font file with LoadVectorFont instead.", DefaultVectorFontPath)
-            End If
             For Each size In {10, 12, 14, 18, 24, 36, 48, 72}
                 Dim font As VectorFont = Nothing
-                TryGetVectorFont("SegoeUI_" & size, font)
+                TryGetVectorFont("ProjectZSans_" & size, font)
             Next
         End Sub
 
-        ''' <summary>Resolves registered outlines and system Segoe UI sizes on demand, without a SpriteFont lookup.</summary>
+        ''' <summary>Resolves compiled outlines, legacy default names, and explicitly requested host fonts.</summary>
         Public Function TryGetVectorFont(name As String, <System.Runtime.InteropServices.Out> ByRef font As VectorFont) As Boolean
             font = Nothing
             If String.IsNullOrEmpty(name) Then Return False
@@ -71,15 +65,14 @@ Namespace [Shared].Content
                 systemFontOrder.Enqueue(name)
                 Return True
             End If
-            Const prefix As String = "SegoeUI_"
+            Dim prefix = If(name.StartsWith("ProjectZSans_", StringComparison.Ordinal), "ProjectZSans_", "SegoeUI_")
             If Not name.StartsWith(prefix, StringComparison.Ordinal) Then Return False
             Dim size As Single
             If Not Single.TryParse(name.Substring(prefix.Length), NumberStyles.AllowDecimalPoint,
                                    CultureInfo.InvariantCulture, size) OrElse
-               Not Single.IsFinite(size) OrElse size <= 0 OrElse size > 512 OrElse
-               Not IO.File.Exists(DefaultVectorFontPath) Then Return False
-            LoadVectorFont(name, DefaultVectorFontPath, size)
-            font = VectorFonts(name)
+               Not Single.IsFinite(size) OrElse size <= 0 OrElse size > 512 Then Return False
+            font = New VectorFont(size)
+            VectorFonts.Add(name, font)
             Return True
         End Function
 
@@ -91,7 +84,7 @@ Namespace [Shared].Content
 #Region "Content Methods"
 
         Public Sub LoadAllContent()
-            If IO.File.Exists(DefaultVectorFontPath) Then LoadVectorFontsOnly()
+            LoadVectorFontsOnly()
             '#If WINDOWS Then
             ' Content roots must follow the host that owns this ContentManager.
             ' VST hosts run from the DAW directory, so AppDomain.BaseDirectory
@@ -114,6 +107,9 @@ Namespace [Shared].Content
 
             For Each FontDirectory As String In IO.Directory.GetDirectories(FontsDirectory)
                 For Each FontPath As String In IO.Directory.GetFiles(FontDirectory)
+                    ' Retired default atlases must not override the compiled free font in older app folders.
+                    If IO.Path.GetFileName(FontPath).StartsWith("SegoeUI_", StringComparison.OrdinalIgnoreCase) OrElse
+                       Not String.Equals(IO.Path.GetExtension(FontPath), ".xnb", StringComparison.OrdinalIgnoreCase) Then Continue For
                     Dim RelativeFontPath As String = FontPath.Remove(0, ContentDirectory.Length + 1)
                     Dim Extension As String = IO.Path.GetExtension(RelativeFontPath)
                     Dim Font As SpriteFont = Content.Load(Of SpriteFont)(RelativeFontPath.Replace(Extension, Nothing))

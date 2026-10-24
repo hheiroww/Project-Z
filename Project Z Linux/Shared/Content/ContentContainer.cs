@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -16,6 +18,22 @@ namespace ProjectZ.Shared.Content {
         public ContentManager Content { get; set; }
 
         public Dictionary<string, SpriteFont> Fonts { get; set; } = new Dictionary<string, SpriteFont>();
+        public Dictionary<string, VectorFont> VectorFonts { get; } = new Dictionary<string, VectorFont>();
+
+        public void LoadVectorFontsOnly() {
+            foreach (int size in new[] { 10, 12, 14, 18, 24, 36, 48, 72 }) TryGetVectorFont("ProjectZSans_" + size, out _);
+        }
+
+        public bool TryGetVectorFont(string name, out VectorFont font) {
+            font = null!;
+            if (string.IsNullOrEmpty(name)) return false;
+            if (VectorFonts.TryGetValue(name, out font)) return true;
+            string prefix = name.StartsWith("ProjectZSans_", StringComparison.Ordinal) ? "ProjectZSans_" : "SegoeUI_";
+            if (!name.StartsWith(prefix, StringComparison.Ordinal) || !float.TryParse(name.Substring(prefix.Length), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out float size)
+                || float.IsNaN(size) || float.IsInfinity(size) || size <= 0 || size > 512) return false;
+            VectorFonts.Add(name, font = new VectorFont(size));
+            return true;
+        }
 
         public Dictionary<string, Texture2D> Textures { get; set; } = new Dictionary<string, Texture2D>();
 
@@ -25,11 +43,15 @@ namespace ProjectZ.Shared.Content {
         #region Content Methods
 
         public void LoadAllContent() {
+            LoadVectorFontsOnly();
             // #If WINDOWS Then
             string ContentDirectory = AppDomain.CurrentDomain.BaseDirectory + "Content";
 
-            foreach (string FontDirectory in System.IO.Directory.GetDirectories(ContentDirectory + @"\Fonts")) {
+            string fontsDirectory = Path.Combine(ContentDirectory, "Fonts");
+            if (!Directory.Exists(fontsDirectory)) return;
+            foreach (string FontDirectory in System.IO.Directory.GetDirectories(fontsDirectory)) {
                 foreach (string FontPath in System.IO.Directory.GetFiles(FontDirectory)) {
+                    if (Path.GetFileName(FontPath).StartsWith("SegoeUI_", StringComparison.OrdinalIgnoreCase) || !string.Equals(Path.GetExtension(FontPath), ".xnb", StringComparison.OrdinalIgnoreCase)) continue;
                     string RelativeFontPath = FontPath.Remove(0, ContentDirectory.Length + 1);
                     string Extension = System.IO.Path.GetExtension(RelativeFontPath);
                     var Font = Content.Load<SpriteFont>(RelativeFontPath.Replace(Extension, null));

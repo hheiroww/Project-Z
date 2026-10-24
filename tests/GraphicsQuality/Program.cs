@@ -101,13 +101,19 @@ sealed class QualityProbe : Game
                 Require(pixels.Skip(35 * 640).Take(25 * 640).Where((c, i) => i % 640 >= 240).Any(c => c.R > 0), "filtered text remains visible");
                 results.Add($"PASS {filtering}: {quality.Sampler.Filter}, AF={quality.Sampler.MaxAnisotropy}");
             }
-            foreach (var font in resources.Fonts.Values)
+            Require(resources.Fonts.Count == 0 && resources.VectorFonts.Values.All(f => f.FilePath is null && f.FamilyName == "ProjectZ Sans"), "default text uses compiled free outlines without font files or atlases");
+            using (var fontScene = new ProbeScene(manager) { BackgroundColor = new Color(16, 22, 30), EnableDesignTimeControls = false })
             {
-                Require(font.Texture.Format == SurfaceFormat.Color, "lossless font atlas");
-                var pixels = new Color[font.Texture.Width * font.Texture.Height];
-                font.Texture.GetData(pixels);
-                Require(pixels.Select(c => c.A).Distinct().Count() > 16, "font coverage exceeds DXT3 precision");
-                Require(pixels.All(c => c.R == c.A && c.G == c.A && c.B == c.A), "premultiplied grayscale font coverage");
+                fontScene.Initialize(time);
+                fontScene.AddElement(new TextElement(fontScene) { Text = "ProjectZ Sans — vector outlines", Font = "ProjectZSans_24", Position = new Vector2(18, 12), MaxWidth = 600 });
+                fontScene.AddElement(new TextElement(fontScene) { Text = "10 pt: Settings  Account  Aa Bb 0123456789", Font = "ProjectZSans_10", Position = new Vector2(20, 72), MaxWidth = 600 });
+                fontScene.AddElement(new TextElement(fontScene) { Text = "14 pt: Café — Ελληνικά Русский", Font = "ProjectZSans_14", Position = new Vector2(20, 108), MaxWidth = 600 });
+                fontScene.AddElement(new TextElement(fontScene) { Text = "AVATAR  OQ  @&  0123456789", Font = ContentContainer.SystemFontName("ProjectZ Sans", 700, 22.5f), Position = new Vector2(20, 158), MaxWidth = 600 });
+                fontScene.AddElement(new TextElement(fontScene) { Text = "Aa 012", Font = "ProjectZSans_48", Position = new Vector2(20, 208), MaxWidth = 600 });
+                fontScene.Tick(time);
+                quality.AntiAliasingSamples = 16; quality.Filtering = TextureFiltering.Anisotropic16x;
+                GraphicsDevice.SetRenderTarget(target); fontScene.Draw(time); GraphicsDevice.SetRenderTarget(null);
+                using var png = File.Create(Path.Combine(output, "compiled-vector-font-16x.png")); target.SaveAsPng(png, 640, 300);
             }
             using var fxScene = new ProbeScene(manager) { BackgroundColor = Color.Black, EnableDesignTimeControls = false };
             fxScene.Initialize(time);
@@ -139,7 +145,7 @@ sealed class QualityProbe : Game
                 results.Add($"PASS {samples}x AA: effect placement, blur halo, parent clipping");
             }
             Require(SceneElement.RenderExceptionCount == 0, "no swallowed rendering errors");
-            results.Add("PASS all eight font atlases: full alpha precision, premultiplied coverage; zero render errors");
+            results.Add("PASS compiled free vector font at 10–48pt, fractional bold, AA 16x / AF 16x; zero font atlases or render errors");
             File.WriteAllLines(Path.Combine(output, "result.txt"), results);
         }
         catch (Exception ex)
