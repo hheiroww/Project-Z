@@ -8,9 +8,9 @@
     <DebugSymbols Condition="$(Configuration.StartsWith('Debug'))">true</DebugSymbols>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
-    <ProjectZFrameworkVersion>2026.10.20.1</ProjectZFrameworkVersion>
+    <ProjectZFrameworkVersion>2026.10.24.2</ProjectZFrameworkVersion>
   </PropertyGroup>
-  <!-- Keep the public package's fonts, diagnostics, code generator and dependencies.
+  <!-- Keep the public package's free vector outlines, diagnostics, code generator and dependencies.
        Alternate renderers use the matching framework binary shipped in this template. -->
   <ItemGroup>
     <PackageReference Include="ProjectZ" Version="[$(ProjectZFrameworkVersion)]" GeneratePathProperty="true">
@@ -32,6 +32,10 @@
     </Reference>
     <Reference Include="ProjectZ.ModelImport">
       <HintPath>$(PkgProjectZ)\lib\net8.0-windows7.0\ProjectZ.ModelImport.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="ProjectZ.VectorText">
+      <HintPath>$(PkgProjectZ)\lib\net8.0-windows7.0\ProjectZ.VectorText.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

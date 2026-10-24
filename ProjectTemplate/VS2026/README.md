@@ -1,8 +1,8 @@
 # Project-Z templates for Visual Studio 2026
 
-**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.20.1/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.20.1)
+**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.2/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.24.2)
 
-The installer adds **Project-Z Desktop (C#)** and **Project-Z Desktop (Visual Basic)** to Visual Studio 2026, including 2026 Insiders, on Windows x64. Each creates a .NET 10 Windows application with a running Project-Z starter scene, compiled fonts, and standalone crash diagnostics. Install the **.NET desktop development** workload and **.NET 10 SDK** first. Administrator access is not required for a per-user VSIX install.
+The installer adds **Project-Z Desktop (C#)** and **Project-Z Desktop (Visual Basic)** to Visual Studio 2026, including 2026 Insiders, on Windows x64. Each creates a .NET 10 Windows application with a running Project-Z starter scene, compiled free vector fonts, and standalone crash diagnostics. Install the **.NET desktop development** workload and **.NET 10 SDK** first. Administrator access is not required for a per-user VSIX install.
 
 Open the `.vsix`, choose the Visual Studio 2026 instance, and complete installation. Restart Visual Studio, then choose **File → New → Project** and search **Project-Z**. Select either language. Keep the default **All project types** filter if an existing filter hides the templates. Press **F5** to run. Remove the templates through **Extensions → Manage Extensions**.
 
@@ -10,7 +10,7 @@ Open the `.vsix`, choose the Visual Studio 2026 instance, and complete installat
 
 | Visual Studio configuration | Framework and MonoGame renderer |
 | --- | --- |
-| Debug / Release | DirectX 12, the public ProjectZ 2026.10.20.1 runtime |
+| Debug / Release | DirectX 12, the public ProjectZ 2026.10.24.2 runtime |
 | Debug-DX11 / Release-DX11 | DirectX 11, MonoGame WindowsDX 3.8.5.1 |
 | Debug-OpenGL / Release-OpenGL | OpenGL, MonoGame DesktopGL 3.8.5.1 |
 
@@ -24,7 +24,7 @@ dotnet build MyApp.csproj -c Release
 
 `-p:ProjectZGraphicsBackend=OpenGL` also works; use a separate output directory or clean before switching a command-line override. Supported values are `DirectX12`, `DirectX11` and `OpenGL`. Unsupported values fail the build. This template targets **Windows x64**; OpenGL selects the graphics API and does not make the Windows desktop integration cross-platform.
 
-The public ProjectZ package is pinned to **2026.10.20.1** and supplies common dependencies, content, the native XAML generator and diagnostics. DX11/OpenGL select the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` shipped in the template and exclude the package's DX12 managed graphics assets. These backend assemblies are built from this repository with the matching shaders. Keep that directory, its notices and licenses in your application's source control. A consuming machine only needs Visual Studio/.NET and access to NuGet.org; it does not need this source repository.
+The public ProjectZ package is pinned to **2026.10.24.2** and supplies common dependencies, content, the native XAML generator and diagnostics. DX11/OpenGL select the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` shipped in the template and exclude the package's DX12 managed graphics assets. These backend assemblies are built from this repository with the matching shaders. Keep that directory, its notices and licenses in your application's source control. A consuming machine only needs Visual Studio/.NET and access to NuGet.org; it does not need this source repository.
 
 ## Build the installer from source
 

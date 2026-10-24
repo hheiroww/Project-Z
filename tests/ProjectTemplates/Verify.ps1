@@ -32,9 +32,36 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
     $programFile = Join-Path $folder $(if ($language -eq 'CSharp') { 'Program.cs' } else { 'Program.vb' })
     $program = [IO.File]::ReadAllText($programFile)
     if ($language -eq 'CSharp') {
-        $program = $program.Replace('        using var game', '        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(new ProjectZ.RuntimeDiagnostics.DiagnosticOptions { ShowErrorDialogs = false });' + "`n        using var game")
+        $fontProbe = @'
+        var fontReport = Environment.GetEnvironmentVariable("PROJECTZ_TEMPLATE_FONT_VERIFICATION");
+        if (fontReport != null)
+        {
+            using var font = new ProjectZ.Shared.Content.VectorFont(16);
+            if (font.FilePath != null || font.FamilyName != "ProjectZ Sans" || font.Measure("AVATAR").X <= 0 || !float.IsFinite(font.Measure("\uD83D").X))
+                throw new InvalidOperationException("Compiled free vector font resolution failed.");
+            System.IO.File.WriteAllText(fontReport, "PASS compiled free vectors and emoji caret metrics; no font files or graphics device.");
+            return;
+        }
+        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(new ProjectZ.RuntimeDiagnostics.DiagnosticOptions { ShowErrorDialogs = false });
+        using var game
+'@
+        $program = $program.Replace('        using var game', $fontProbe)
     } else {
-        $program = $program.Replace('        Using game', '        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(New ProjectZ.RuntimeDiagnostics.DiagnosticOptions With {.ShowErrorDialogs = False})' + "`n        Using game")
+        $fontProbe = @'
+        Dim fontReport = Environment.GetEnvironmentVariable("PROJECTZ_TEMPLATE_FONT_VERIFICATION")
+        If fontReport IsNot Nothing Then
+            Using font As New ProjectZ.Shared.Content.VectorFont(16)
+                If font.FilePath IsNot Nothing OrElse font.FamilyName <> "ProjectZ Sans" OrElse font.Measure("AVATAR").X <= 0 OrElse Not Single.IsFinite(font.Measure(ChrW(&HD83D)).X) Then
+                    Throw New InvalidOperationException("Compiled free vector font resolution failed.")
+                End If
+            End Using
+            System.IO.File.WriteAllText(fontReport, "PASS compiled free vectors and emoji caret metrics; no font files or graphics device.")
+            Return
+        End If
+        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(New ProjectZ.RuntimeDiagnostics.DiagnosticOptions With {.ShowErrorDialogs = False})
+        Using game
+'@
+        $program = $program.Replace('        Using game', $fontProbe)
     }
     [IO.File]::WriteAllText($programFile, $program)
     if ($language -eq 'CSharp') {
@@ -94,8 +121,19 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
         $output = Join-Path $folder "bin/$configuration/net10.0-windows"
         $assets = Get-Content -LiteralPath "$folder/obj/project.assets.json" -Raw
         if ($assets.Contains('ProjectReference')) { throw 'A standalone template acquired a source dependency.' }
-        if (!(Test-Path -LiteralPath "$output/Content/Fonts/Segoe UI/SegoeUI_24.xnb")) { throw 'Compiled font payload missing.' }
+        if (!(Test-Path -LiteralPath "$output/ProjectZ.VectorText.dll") -or !(Test-Path -LiteralPath "$output/ThirdParty/ProjectZSans/OFL.txt")) { throw 'Compiled free vector font or OFL notice missing.' }
+        if (@(Get-ChildItem -LiteralPath $output -File -Recurse | Where-Object { $_.Extension -in @('.ttf','.otf','.woff','.woff2','.spritefont') -or $_.Name -match '^SegoeUI_.*\.xnb$' }).Count) { throw 'Retired font containers or Segoe atlases were bundled.' }
         if (!(Test-Path -LiteralPath "$output/ProjectZ.Diagnostics.exe")) { throw 'Diagnostics observer missing.' }
+        $fontReport = Join-Path $verification "$language-$backend.font.txt"
+        $fontStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $output "Template$language.exe"))
+        $fontStart.WorkingDirectory = $output
+        $fontStart.UseShellExecute = $false
+        $fontStart.CreateNoWindow = $true
+        $fontStart.WindowStyle = 'Hidden'
+        $fontStart.Environment['PROJECTZ_TEMPLATE_FONT_VERIFICATION'] = $fontReport
+        $fontProcess = [Diagnostics.Process]::Start($fontStart)
+        if (!$fontProcess.WaitForExit(20000)) { $fontProcess.Kill(); throw "$language $backend font contract timed out." }
+        if ($fontProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $fontReport)) { throw "$language $backend compiled font contract failed." }
         if (!$SkipRuntime) {
             $report = Join-Path $verification "$language-$backend.runtime.txt"
             $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $output "Template$language.exe"))

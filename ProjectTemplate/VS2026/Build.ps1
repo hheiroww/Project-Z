@@ -40,6 +40,9 @@ try {
         $license = Join-Path $folder 'ProjectZ/Runtime/licenses/WPFPixelShaderLibrary'
         New-Item -ItemType Directory -Force -Path $license | Out-Null
         Copy-Item -LiteralPath "$repo/ThirdParty/WPFPixelShaderLibrary/LICENSE" -Destination "$license/LICENSE" -Force
+        $fontLicense = Join-Path $folder 'ProjectZ/Runtime/licenses/ProjectZSans'
+        New-Item -ItemType Directory -Force -Path $fontLicense | Out-Null
+        Copy-Item -LiteralPath "$repo/ThirdParty/ProjectZSans/OFL.txt" -Destination "$fontLicense/OFL.txt" -Force
 
         $template = [xml]@"
 <VSTemplate Version="3.0.0" Type="Project" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">

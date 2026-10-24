@@ -20,7 +20,7 @@ Build expressive desktop tools, creative applications, and game interfaces with 
 
 > **NEW: Create a Project-Z application directly in Visual Studio 2026.** Install the **C# and Visual Basic** templates, press **F5**, and choose **DirectX 12, DirectX 11 or OpenGL** from the build configuration selector.
 
-**[⬇ Download the Visual Studio 2026 installer (.vsix)](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.20.1/ProjectZ.VisualStudio2026.vsix)** · [Release and checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.20.1) · [Setup and renderer guide](./ProjectTemplate/VS2026/README.md)
+**[⬇ Download the Visual Studio 2026 installer (.vsix)](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.2/ProjectZ.VisualStudio2026.vsix)** · [Release and checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.24.2) · [Setup and renderer guide](./ProjectTemplate/VS2026/README.md)
 
 1. Install Visual Studio 2026's **.NET desktop development** workload and the **.NET 10 SDK**.
 2. Open the downloaded `.vsix`, select your Visual Studio 2026 installation, and finish installation. Restart Visual Studio.
