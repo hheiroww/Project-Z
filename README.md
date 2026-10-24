@@ -14,6 +14,8 @@ Build expressive desktop tools, creative applications, and game interfaces with 
 
 **[Visual Studio 2026 installer](#visual-studio-2026-project-templates) · [Showcase](#heirowsnap-built-with-project-z) · [Port your UI](#bring-your-xaml) · [Get started](#run-it-from-source) · [Technical reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)**
 
+[Support Project Z](SPONSORING.md) · Optional GitHub sponsorship, with planned monthly tiers from $1 to $100.
+
 ## Visual Studio 2026 project templates
 
 > **NEW: Create a Project-Z application directly in Visual Studio 2026.** Install the **C# and Visual Basic** templates, press **F5**, and choose **DirectX 12, DirectX 11 or OpenGL** from the build configuration selector.
