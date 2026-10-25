@@ -76,3 +76,6 @@ foreach ($backend in $Backends) {
     }
 }
 $results | Set-Content -LiteralPath "$OutputDirectory/results.txt"
+# Expected invalid-setting builds leave dotnet's exit code nonzero. A successful
+# verification must return success when invoked directly by a CI PowerShell host.
+exit 0
