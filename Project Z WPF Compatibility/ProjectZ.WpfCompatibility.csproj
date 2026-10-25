@@ -8,6 +8,7 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Project Z Windows.vbproj" />
+    <ProjectReference Include="../Project Z Windows.vbproj" Condition="'$(ProjectZFrameworkPackageVersion)' == ''" />
+    <PackageReference Include="ProjectZ" Version="[$(ProjectZFrameworkPackageVersion)]" Condition="'$(ProjectZFrameworkPackageVersion)' != ''" />
   </ItemGroup>
 </Project>

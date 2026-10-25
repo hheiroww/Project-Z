@@ -8,6 +8,8 @@
     <StartupObject>$safeprojectname$.Program</StartupObject>
     <OptionStrict>On</OptionStrict>
   </PropertyGroup>
+  <Import Project="ProjectZ\ProjectZ.Tooling.props" />
   <Import Project="ProjectZ\ProjectZ.Graphics.props" />
   <Import Project="ProjectZ\ProjectZ.Graphics.targets" />
+  <Import Project="ProjectZ\ProjectZ.Xaml.targets" />
 </Project>

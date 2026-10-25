@@ -4,6 +4,8 @@ Build-time conversion is **opt-in and off by default**. It supports C# and VB Wi
 
 ## Enable it in Visual Studio
 
+The [Visual Studio 2026 templates](../ProjectTemplate/VS2026/README.md) include the compiler, settings page and project converter. **Project-Z XAML Desktop** creates a native App plus a WPF Designer project and enables `DesignerAndCodeBehind` automatically. Edit the shared view in Designer, set App as startup, and build. Code-first desktop templates include the tooling with conversion initially disabled.
+
 Repository consumer projects get a **Project-Z** page under **Project Properties**. Choose **XAML conversion mode**. Each project chooses independently:
 
 | Mode | Behavior |
@@ -22,7 +24,7 @@ For projects outside this repository, import the source tooling once:
 <Import Project="C:\Source\Project-Z\Project Z XAML Codegen\ProjectZ.Xaml.targets" />
 ```
 
-This integration currently comes from the source repository. Installing the main ProjectZ NuGet package alone does not install the converter or register this property page. Use a current .NET SDK and Visual Studio version supporting your target; the .NET 10 test solution is opened with VS 2026.
+For existing projects, the source import above remains available. Installing the main ProjectZ NuGet package alone does not register this property page. Projects created by the Visual Studio templates import their local `ProjectZ/ProjectZ.Tooling.props` and `ProjectZ/ProjectZ.Xaml.targets`, so they need no source checkout. Use a current .NET SDK and Visual Studio version supporting your target; the .NET 10 test solution is opened with VS 2026.
 
 ## Choose the XAML to build
 

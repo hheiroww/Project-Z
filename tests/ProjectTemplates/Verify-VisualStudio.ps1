@@ -30,7 +30,7 @@ try {
     Invoke-VisualStudio { $dte.Solution.Create($OutputDirectory, 'ProjectZTemplateAcceptance') }
     foreach ($language in @('CSharp', 'VisualBasic')) {
         $templates = @(Get-ChildItem -LiteralPath $TemplateDirectory -Recurse -Filter ProjectZ.vstemplate | Where-Object {
-            ([xml](Get-Content -LiteralPath $_.FullName -Raw)).VSTemplate.TemplateData.ProjectType -eq $language
+            ([xml](Get-Content -LiteralPath $_.FullName -Raw)).VSTemplate.TemplateData.TemplateID -eq "ProjectZ.Desktop.$language"
         })
         if ($templates.Count -ne 1) { throw "Expected one $language template under $TemplateDirectory." }
         $template = $templates[0].FullName
@@ -51,6 +51,39 @@ try {
             if (!(Test-Path -LiteralPath (Join-Path $folder $file))) { throw "Visual Studio did not create $file." }
         }
         $results.Add("PASS Visual Studio $($dte.Version) creates $language source, project properties and both alternate renderer assemblies")
+        Write-Host $results[$results.Count - 1]
+    }
+    foreach ($language in @('CSharp', 'VisualBasic')) {
+        $templates = @(Get-ChildItem -LiteralPath $TemplateDirectory -Recurse -Filter ProjectZ.Xaml.vstemplate | Where-Object {
+            ([xml](Get-Content -LiteralPath $_.FullName -Raw)).VSTemplate.TemplateData.TemplateID -eq "ProjectZ.Xaml.$language"
+        })
+        if ($templates.Count -ne 1) { throw "Expected one $language XAML solution template." }
+        $template = $templates[0].FullName
+        $folder = Join-Path $OutputDirectory "Xaml$language"
+        $name = "VsXaml$language"
+        Invoke-VisualStudio { [void]$dte.Solution.AddFromTemplate($template, $folder, $name, $false) }
+        $deadline = [DateTime]::UtcNow.AddSeconds(60)
+        do {
+            Start-Sleep -Milliseconds 250
+            $projects = @(Get-ChildItem -LiteralPath $folder -Recurse -Filter '*.*proj' -ErrorAction SilentlyContinue)
+        } while ($projects.Count -lt 2 -and [DateTime]::UtcNow -lt $deadline)
+        if ($projects.Count -ne 2) { throw 'Visual Studio did not create both App and Designer.' }
+        $app = $projects | Where-Object { $_.BaseName -eq "$name.App" }
+        $designer = $projects | Where-Object { $_.BaseName -eq "$name.Designer" }
+        if (!$app -or !$designer) { throw 'The XAML solution project names were not substituted.' }
+        foreach ($project in @($app, $designer)) {
+            if ((Get-Content -LiteralPath $project.FullName -Raw) -match '\$(ext_)?safeprojectname\$') { throw 'A solution template retained an unexpanded project parameter.' }
+            $log = Join-Path $OutputDirectory ($project.BaseName + '.build.txt')
+            & dotnet build $project.FullName --nologo *> $log
+            if ($LASTEXITCODE -ne 0) { Get-Content -LiteralPath $log -Tail 25; throw 'An IDE-created XAML project did not build.' }
+        }
+        $markup = Join-Path $designer.DirectoryName 'MainWindow.xaml'
+        $document = [IO.File]::ReadAllText($markup)
+        if (!$document.Contains('x:Class="' + $name + '.MainWindow"')) { throw 'The shared designer class name was not expanded.' }
+        foreach ($file in @('ProjectZ/ProjectZ.Tooling.props', 'ProjectZ/Convert-Project.ps1', 'ProjectZ/Tools/ProjectZ.XamlCodegen.dll', 'ProjectZ/Runtime/ProjectZ.WpfCompatibility.dll')) {
+            if (!(Test-Path -LiteralPath (Join-Path $app.DirectoryName $file))) { throw "The IDE did not copy $file." }
+        }
+        $results.Add("PASS Visual Studio $($dte.Version) creates and builds the $language App and XAML Designer with shared markup and portable tools")
         Write-Host $results[$results.Count - 1]
     }
 }

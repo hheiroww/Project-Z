@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <ProjectZApplicationIntegrationImported>true</ProjectZApplicationIntegrationImported>
+    <ProjectZXamlToolProject Condition="'$(ProjectZXamlToolProject)' == ''">$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
+    <ProjectZXamlTool Condition="'$(ProjectZXamlTool)' == ''">$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll</ProjectZXamlTool>
     <ProjectZGenerateApplication Condition="'$(ProjectZGenerateApplication)' == '' and '$(ProjectZImportedApplication)' == 'true'">true</ProjectZGenerateApplication>
     <ProjectZGenerateApplication Condition="'$(ProjectZGenerateApplication)' == ''">false</ProjectZGenerateApplication>
     <ProjectZMainWindow Condition="'$(ProjectZMainWindow)' == ''">Default</ProjectZMainWindow>
@@ -23,15 +25,16 @@
   <ItemGroup>
     <PropertyPageSchema Include="$(MSBuildThisFileDirectory)ProjectZ.Settings.xaml" Condition="'$(ProjectZApplicationSettingsSchema)' == ''"><Context>Project</Context></PropertyPageSchema>
     <PropertyPageSchema Include="$(ProjectZApplicationSettingsSchema)" Condition="'$(ProjectZApplicationSettingsSchema)' != ''"><Context>Project</Context></PropertyPageSchema>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" Condition="'$(ProjectZGenerateApplication)' == 'true' and '$(ProjectZImportedApplication)' != 'true'" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" Condition="'$(ProjectZGenerateApplication)' == 'true' and '$(ProjectZImportedApplication)' != 'true' and '$(ProjectZCompatibilityAssembly)' == ''" />
+    <Reference Include="ProjectZ.WpfCompatibility" Condition="'$(ProjectZGenerateApplication)' == 'true' and '$(ProjectZImportedApplication)' != 'true' and '$(ProjectZCompatibilityAssembly)' != ''"><HintPath>$(ProjectZCompatibilityAssembly)</HintPath></Reference>
   </ItemGroup>
   <Target Name="ProjectZGenerateApplicationStartup" BeforeTargets="CoreCompile" Condition="'$(ProjectZGenerateApplication)' == 'true'">
     <Error Condition="'$(ProjectZImportedApplication)' != 'true' and '$(ProjectZMainWindow)' == 'Default'" Text="Choose a main window in Project Properties > Project-Z > Application startup." />
     <PropertyGroup><_ProjectZApplicationDirectory>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZApplication'))</_ProjectZApplicationDirectory></PropertyGroup>
     <MakeDir Directories="$(_ProjectZApplicationDirectory)" />
     <WriteLinesToFile File="$(_ProjectZApplicationDirectory)/settings" Lines="Language=$(Language);MainWindow=$(ProjectZMainWindow);ApplicationType=$(ProjectZApplicationType);ShutdownMode=$(ProjectZShutdownMode);FramesPerSecond=$(ProjectZFramesPerSecond);AntiAliasingSamples=$(ProjectZAntiAliasingSamples);TextureFiltering=$(ProjectZTextureFiltering);Width=$(ProjectZInitialWidth);Height=$(ProjectZInitialHeight);MinimumWidth=$(ProjectZMinimumWidth);MinimumHeight=$(ProjectZMinimumHeight);AutoResizeViewport=$(ProjectZAutoResizeViewport);HardwareInput=$(ProjectZHardwareInput);DebugEnabled=$(ProjectZDebugEnabled);ConsoleEnabled=$(ProjectZConsoleEnabled);ContentRoot=$(ProjectZContentRoot);BackgroundColor=$(ProjectZBackgroundColor)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <MSBuild Projects="$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj" Targets="Restore;Build" Properties="Configuration=Release;GeneratePackageOnBuild=false;UseSharedCompilation=false" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;StartupObject" Condition="'$(ProjectZCodegenAlreadyRunning)' != 'true'" />
-    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll&quot; application &quot;$(_ProjectZApplicationDirectory)&quot;" />
+    <MSBuild Projects="$(ProjectZXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release;GeneratePackageOnBuild=false;UseSharedCompilation=false" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;StartupObject" Condition="'$(ProjectZCodegenAlreadyRunning)' != 'true' and Exists('$(ProjectZXamlToolProject)')" />
+    <Exec Command="dotnet &quot;$(ProjectZXamlTool)&quot; application &quot;$(_ProjectZApplicationDirectory)&quot;" />
     <ItemGroup><Compile Include="$(_ProjectZApplicationDirectory)/Application.cs" Condition="'$(Language)' == 'C#'" /><Compile Include="$(_ProjectZApplicationDirectory)/Application.vb" Condition="'$(Language)' == 'VB'" /></ItemGroup>
   </Target>
   <Target Name="ProjectZCheckImportedApplicationStartup" BeforeTargets="CoreCompile" Condition="'$(ProjectZImportedApplication)' == 'true'">

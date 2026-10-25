@@ -21,8 +21,13 @@ jobs:
       - name: Verify standalone CSharp and VB templates for every renderer
         shell: pwsh
         run: ./tests/ProjectTemplates/Verify.ps1 -SkipRuntime
+      - name: Verify XAML designers, build-time edits and portable project conversion
+        shell: pwsh
+        run: ./tests/ProjectTemplates/Verify-Xaml.ps1 -SkipRuntime
       - uses: actions/upload-artifact@v4
         with:
           name: ProjectZ-VisualStudio2026
-          path: artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
+          path: |
+            artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
+            artifacts/VS2026/SHA256SUMS.txt
           if-no-files-found: error

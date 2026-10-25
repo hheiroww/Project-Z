@@ -23,9 +23,9 @@ Add the framework to a Windows .NET 8 or .NET 10 project:
 dotnet add package ProjectZ --version 2026.10.24.5
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.3/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.6/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
 
-The templates offer **DirectX 12**, **DirectX 11** and **OpenGL** configurations. The framework defaults to native DX12. [Template setup and renderer selection](ProjectTemplate/VS2026/README.md).
+Choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
 
 ## heirowSnap built with Project Z
 

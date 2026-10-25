@@ -5,13 +5,14 @@
     <ProjectZEnableXaml Condition="'$(ProjectZEnableXaml)' == ''">false</ProjectZEnableXaml>
     <ProjectZXamlMode Condition="'$(ProjectZXamlMode)' == '' and '$(ProjectZEnableXaml)' == 'true'">DesignerAndCodeBehind</ProjectZXamlMode>
     <ProjectZXamlMode Condition="'$(ProjectZXamlMode)' == ''">Disabled</ProjectZXamlMode>
-    <ProjectZXamlToolProject>$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
-    <ProjectZXamlTool>$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll</ProjectZXamlTool>
+    <ProjectZXamlToolProject Condition="'$(ProjectZXamlToolProject)' == ''">$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
+    <ProjectZXamlTool Condition="'$(ProjectZXamlTool)' == ''">$(MSBuildThisFileDirectory)bin/Release/net8.0/ProjectZ.XamlCodegen.dll</ProjectZXamlTool>
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)ProjectZ.Application.targets" Condition="'$(ProjectZApplicationIntegrationImported)' != 'true'" />
   <ItemGroup Condition="'$(ProjectZXamlMode)' != 'Disabled'">
     <UpToDateCheckInput Include="@(ProjectZXaml);@(Page);@(ProjectZXamlSource)" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj" Condition="'$(ProjectZCompatibilityAssembly)' == ''" />
+    <Reference Include="ProjectZ.WpfCompatibility" Condition="'$(ProjectZCompatibilityAssembly)' != ''"><HintPath>$(ProjectZCompatibilityAssembly)</HintPath></Reference>
   </ItemGroup>
   <Target Name="ProjectZValidateXamlMode" BeforeTargets="PrepareForBuild;ResolveReferences">
     <Error Condition="'$(ProjectZXamlMode)' != 'Disabled' and '$(ProjectZXamlMode)' != 'DesignerOnly' and '$(ProjectZXamlMode)' != 'DesignerAndCodeBehind'" Text="ProjectZXamlMode must be Disabled, DesignerOnly, or DesignerAndCodeBehind. Code-behind conversion requires designer generation." />
@@ -53,7 +54,9 @@
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/namespace" Lines="$(RootNamespace)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/implicit-usings" Lines="$(ImplicitUsings)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/constants" Lines="$(DefineConstants)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <MSBuild Projects="$(ProjectZXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" />
+    <MSBuild Projects="$(ProjectZXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" Condition="Exists('$(ProjectZXamlToolProject)')" />
+    <Error Condition="!Exists('$(ProjectZXamlTool)')" Text="The XAML generator is missing. Keep the complete ProjectZ tooling directory with your project." />
+    <PropertyGroup><_ProjectZXamlToolProjectInput Condition="Exists('$(ProjectZXamlToolProject)')">$(ProjectZXamlToolProject)</_ProjectZXamlToolProjectInput></PropertyGroup>
     <!-- Record tool content after the nested build, even when MSBuild cached its old timestamp. -->
     <GetFileHash Files="$(ProjectZXamlTool)"><Output TaskParameter="Hash" PropertyName="_ProjectZXamlToolHash" /></GetFileHash>
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/tool-version" Lines="$(_ProjectZXamlToolHash)" Overwrite="true" WriteOnlyWhenDifferent="true" />
@@ -61,7 +64,7 @@
   </Target>
   <Target Name="ProjectZGenerateXaml" DependsOnTargets="ProjectZPrepareXaml"
           Condition="'$(ProjectZXamlMode)' != 'Disabled' and '@(ProjectZXaml)' != '' and '$(DesignTimeBuild)' != 'true'"
-          Inputs="@(Compile);@(ProjectZXaml);@(ProjectZXamlSource);@(ReferencePath);$(ProjectZXamlToolProject);$(MSBuildThisFileFullPath);$(_ProjectZXamlDirectory)/sources;$(_ProjectZXamlDirectory)/pages;$(_ProjectZXamlDirectory)/convert-sources;$(_ProjectZXamlDirectory)/references;$(_ProjectZXamlDirectory)/language;$(_ProjectZXamlDirectory)/framework;$(_ProjectZXamlDirectory)/namespace;$(_ProjectZXamlDirectory)/implicit-usings;$(_ProjectZXamlDirectory)/constants;$(_ProjectZXamlDirectory)/tool-version;$(_ProjectZXamlDirectory)/mode"
+          Inputs="@(Compile);@(ProjectZXaml);@(ProjectZXamlSource);@(ReferencePath);$(_ProjectZXamlToolProjectInput);$(MSBuildThisFileFullPath);$(_ProjectZXamlDirectory)/sources;$(_ProjectZXamlDirectory)/pages;$(_ProjectZXamlDirectory)/convert-sources;$(_ProjectZXamlDirectory)/references;$(_ProjectZXamlDirectory)/language;$(_ProjectZXamlDirectory)/framework;$(_ProjectZXamlDirectory)/namespace;$(_ProjectZXamlDirectory)/implicit-usings;$(_ProjectZXamlDirectory)/constants;$(_ProjectZXamlDirectory)/tool-version;$(_ProjectZXamlDirectory)/mode"
           Outputs="$(_ProjectZXamlDirectory)/compile-items;$(_ProjectZXamlDirectory)/original-items;$(_ProjectZXamlDirectory)/generated-items;@(_ProjectZPreviousGeneratedSources)">
     <Exec Command="dotnet &quot;$(ProjectZXamlTool)&quot; build-views &quot;$(_ProjectZXamlDirectory)&quot;" />
     <ReadLinesFromFile File="$(_ProjectZXamlDirectory)/generated-items"><Output TaskParameter="Lines" ItemName="_ProjectZWrittenFiles" /></ReadLinesFromFile>

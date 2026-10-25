@@ -47,7 +47,8 @@ internal sealed class ProjectImporter
     }
     bool AllowedSettingsEdit(string relative, byte[] contents) => previousFiles.TryGetValue(relative, out var file) && file.SettingsStructureHash != null && file.SettingsStructureHash == SettingsStructureHash(relative, contents);
     readonly Dictionary<ProjectId, string> projects = new();
-    string output = "", compatibility = "";
+    string output = "", compatibility = "", codegenDirectory = "";
+    string? portableTooling;
     string? rootDirectory;
     bool generateOnly;
     HashSet<string>? buildSources;
@@ -143,12 +144,34 @@ internal sealed class ProjectImporter
         if (Path.GetExtension(input) is not (".csproj" or ".vbproj")) throw new ArgumentException("A C# or VB project is required.");
         if (destination.Equals(Path.GetDirectoryName(input), StringComparison.OrdinalIgnoreCase) || destination.StartsWith(Path.GetDirectoryName(input)! + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Output must be outside the source project tree.");
         output = destination;
-        var repository = new DirectoryInfo(AppContext.BaseDirectory);
-        while (repository != null && !File.Exists(Path.Combine(repository.FullName, "Project Z Windows.vbproj"))) repository = repository.Parent;
-        compatibility = Path.Combine(repository?.FullName ?? throw new DirectoryNotFoundException("Cannot locate the Project-Z compatibility project."), "Project Z WPF Compatibility", "ProjectZ.WpfCompatibility.csproj");
+        var packaged = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, ".."));
+        if (File.Exists(Path.Combine(packaged, "ProjectZ.Tooling.props")))
+        {
+            portableTooling = packaged;
+            codegenDirectory = packaged;
+            compatibility = Path.Combine(packaged, "Runtime", "ProjectZ.WpfCompatibility.dll");
+            if (!File.Exists(compatibility)) throw new FileNotFoundException("The portable XAML compatibility assembly is missing.", compatibility);
+        }
+        else
+        {
+            var repository = new DirectoryInfo(AppContext.BaseDirectory);
+            while (repository != null && !File.Exists(Path.Combine(repository.FullName, "Project Z Windows.vbproj"))) repository = repository.Parent;
+            compatibility = Path.Combine(repository?.FullName ?? throw new DirectoryNotFoundException("Cannot locate the Project-Z compatibility project or portable tooling."), "Project Z WPF Compatibility", "ProjectZ.WpfCompatibility.csproj");
+            codegenDirectory = Path.Combine(repository.FullName, "Project Z XAML Codegen");
+        }
         Directory.CreateDirectory(output);
         var manifest = Path.Combine(output, "projectz-import.manifest.json");
         if (File.Exists(manifest)) foreach (var entry in JsonSerializer.Deserialize<List<OwnedFile>>(File.ReadAllText(manifest)) ?? []) { previous.Add(entry.Path, entry.Hash); previousFiles.Add(entry.Path, entry); }
+        // A whole-project export owns its portable build dependencies as well.
+        // Build-time view generation uses the calling project's existing payload.
+        if (portableTooling != null && !generateOnly)
+            foreach (var relative in File.ReadAllLines(Path.Combine(portableTooling, "ProjectZ.Tooling.files")).Append("ProjectZ.Tooling.files").Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var file = Path.GetFullPath(Path.Combine(portableTooling, relative));
+                if (Path.IsPathRooted(relative) || !file.StartsWith(portableTooling + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("A portable tooling manifest path escapes its directory.");
+                WriteBytes(Path.Combine("ProjectZ", relative), File.ReadAllBytes(file));
+            }
         using var workspace = MSBuildWorkspace.Create(new Dictionary<string, string> { ["Configuration"] = "Release" });
         using var workspaceDiagnostics = workspace.RegisterWorkspaceFailedHandler(e => { if (e.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure) issues.Add(new("PZI001", input, 1, 1, e.Diagnostic.Message)); });
         Project root;
@@ -300,7 +323,7 @@ internal sealed class ProjectImporter
                 var doc = XDocument.Load(path, LoadOptions.SetLineInfo); pages.Add((path, doc)); ValidateXaml(path, doc);
             }
         var compilation = await project.GetCompilationAsync() ?? throw new InvalidOperationException("Cannot compile source model.");
-        var compatibilityDll = Path.Combine(Path.GetDirectoryName(compatibility)!, "bin", "Release", "net8.0-windows7.0", "ProjectZ.WpfCompatibility.dll");
+        var compatibilityDll = portableTooling != null ? compatibility : Path.Combine(Path.GetDirectoryName(compatibility)!, "bin", "Release", "net8.0-windows7.0", "ProjectZ.WpfCompatibility.dll");
         Compilation? adapterModel = File.Exists(compatibilityDll) ? compilation.AddReferences(MetadataReference.CreateFromFile(compatibilityDll)) : null;
         if (adapterModel != null && adapterModel.GetTypeByMetadataName("System.Windows.Forms.IDataObject") == null)
         {
@@ -453,7 +476,7 @@ internal sealed class ProjectImporter
             props.Add(new XElement("ProjectZImportedApplication", "true"), new XElement("ProjectZApplicationType", appType));
             const string schema = "Generated/ProjectZ.Settings.xaml";
             var windows = pages.Where(page => page.Doc.Root?.Name.LocalName == "Window").Select(page => (string?)page.Doc.Root!.Attribute(X + "Class")).Where(name => name != null).Select(name => vb && Property("RootNamespace").Length > 0 ? Property("RootNamespace") + "." + name : name!).Where(name => compilation.GetTypeByMetadataName(name) is {} type && !type.IsAbstract && type.InstanceConstructors.Any(ctor => ctor.Parameters.All(parameter => parameter.IsOptional || parameter.IsParams) && ctor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal));
-            Write(Path.Combine(prefix, schema), ApplicationGenerator.SettingsSchema(Path.Combine(Path.GetDirectoryName(compatibility)!, "..", "Project Z XAML Codegen", "ProjectZ.Settings.xaml"), windows));
+            Write(Path.Combine(prefix, schema), ApplicationGenerator.SettingsSchema(Path.Combine(codegenDirectory, "ProjectZ.Settings.xaml"), windows));
             props.Add(new XElement("ProjectZApplicationSettingsSchema", schema));
         }
         foreach (var name in new[] { "RootNamespace", "AssemblyName", "DefineConstants", "OptionStrict", "OptionInfer", "OptionExplicit", "Nullable", "LangVersion", "AllowUnsafeBlocks", "UseWindowsForms", "ImplicitUsings", "PlatformTarget", "Prefer32Bit", "CheckForOverflowUnderflow", "Optimize", "DebugType", "TreatWarningsAsErrors", "NoWarn" }) if (name == "RootNamespace" || Property(name).Length > 0) props.Add(new XElement(name, Property(name)));
@@ -498,9 +521,17 @@ internal sealed class ProjectImporter
         foreach (var file in contentFiles) includes.Add(new XElement("Content", new XAttribute("Include", file), new XElement("TargetPath", Path.Combine(prefix, file)), new XElement("CopyToOutputDirectory", "PreserveNewest")));
         if (needsCompatibility)
         {
-            includes.Add(new XElement("ProjectReference", new XAttribute("Include", Path.GetRelativePath(target, compatibility))));
+            if (portableTooling == null)
+                includes.Add(new XElement("ProjectReference", new XAttribute("Include", Path.GetRelativePath(target, compatibility))));
+            else
+            {
+                var tooling = generateOnly ? portableTooling : Path.Combine(output, "ProjectZ");
+                props.Add(new XElement("UseWindowsForms", "true"));
+                projectXml.AddFirst(new XElement("Import", new XAttribute("Project", Path.GetRelativePath(target, Path.Combine(tooling, "ProjectZ.Graphics.props")))));
+                projectXml.AddFirst(new XElement("Import", new XAttribute("Project", Path.GetRelativePath(target, Path.Combine(tooling, "ProjectZ.Tooling.props")))));
+                includes.Add(new XElement("Reference", new XAttribute("Include", "ProjectZ.WpfCompatibility"), new XElement("HintPath", "$(ProjectZCompatibilityAssembly)")));
+            }
         }
-        if (pages.Any(p => p.Doc.Root?.Name.LocalName == "Application")) includes.Add(new XElement("Content", new XAttribute("Include", Path.GetRelativePath(target, Path.Combine(Path.GetDirectoryName(compatibility)!, "..", "Project Z Application", "Content", "Fonts", "Segoe UI", "*.xnb"))), new XElement("Link", "Content/Fonts/Segoe UI/%(Filename)%(Extension)"), new XElement("CopyToOutputDirectory", "PreserveNewest")));
         foreach (var reference in project.ProjectReferences) if (projects.TryGetValue(reference.ProjectId, out var path))
         {
             var element = new XElement("ProjectReference", new XAttribute("Include", Path.GetRelativePath(target, path)));
@@ -612,7 +643,12 @@ if (targetPath.Split('/').Any(segment => segment == ".."))
         }
         foreach (var property in projectXml.Elements("PropertyGroup").SelectMany(g => g.Elements())) property.Value = RelocateBuildValue(property.Value);
         projectXml.Add(new XElement("Import", new XAttribute("Project", "../ProjectZ.Import.targets")));
-        if (needsCompatibility) projectXml.Add(new XElement("Import", new XAttribute("Project", Path.GetRelativePath(target, Path.Combine(Path.GetDirectoryName(compatibility)!, "..", "Project Z XAML Codegen", "ProjectZ.Application.targets")))));
+        if (needsCompatibility)
+        {
+            var tooling = portableTooling != null && !generateOnly ? Path.Combine(output, "ProjectZ") : codegenDirectory;
+            projectXml.Add(new XElement("Import", new XAttribute("Project", Path.GetRelativePath(target, Path.Combine(tooling, "ProjectZ.Application.targets")))));
+            if (portableTooling != null) projectXml.Add(new XElement("Import", new XAttribute("Project", Path.GetRelativePath(target, Path.Combine(tooling, "ProjectZ.Graphics.targets")))));
+        }
         var projectRelative = Path.GetRelativePath(output, projects[project.Id]);
         if (previous.ContainsKey(projectRelative) && File.Exists(projects[project.Id]))
         {

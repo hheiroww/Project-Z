@@ -8,6 +8,8 @@
     <RootNamespace>$safeprojectname$</RootNamespace>
     <AssemblyName>$safeprojectname$</AssemblyName>
   </PropertyGroup>
+  <Import Project="ProjectZ\ProjectZ.Tooling.props" />
   <Import Project="ProjectZ\ProjectZ.Graphics.props" />
   <Import Project="ProjectZ\ProjectZ.Graphics.targets" />
+  <Import Project="ProjectZ\ProjectZ.Xaml.targets" />
 </Project>
