@@ -1,7 +1,5 @@
 using ProjectSettingsProbe;
 
 if (QualityProbe.CheckMetadata(args)) return;
-using var game = new EntryGame(args);
+using var game = new QualityProbe(args);
 game.Run();
-
-sealed class EntryGame(string[] args) : QualityProbe(args);

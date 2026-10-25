@@ -8,8 +8,8 @@ using Color = Microsoft.Xna.Framework.Color;
 
 namespace ProjectSettingsProbe;
 
-// Both entry projects derive their Game here, so the owning Game's assembly must
-// win over this helper library's default settings.
+// C# launches this reusable Game directly; VB derives its Game in the executable.
+// Executable project settings must win over this library's inherited defaults.
 public class QualityProbe : Game
 {
     const int Width = 320, Height = 240;
@@ -68,7 +68,7 @@ public class QualityProbe : Game
                 $"project AA reached native scene: expected {expectedSamples}, got {quality.AntiAliasingSamples}");
             Require(quality.Filtering == expectedFiltering,
                 $"project filtering reached native scene: expected {expectedFiltering}, got {quality.Filtering}");
-            var attributes = GetType().Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToDictionary(a => a.Key, a => a.Value);
+            var attributes = Assembly.GetEntryAssembly()!.GetCustomAttributes<AssemblyMetadataAttribute>().ToDictionary(a => a.Key, a => a.Value);
             Require(attributes["ProjectZ.AntiAliasingSamples"] == expectedSamples.ToString(CultureInfo.InvariantCulture), "AA metadata matches project");
             Require(attributes["ProjectZ.TextureFiltering"] == expectedFiltering.ToString(), "filtering metadata matches project");
 
@@ -122,7 +122,7 @@ public class QualityProbe : Game
             Require(nextScene.Quality.AntiAliasingSamples == 2 && nextScene.Quality.Filtering == TextureFiltering.NearestNeighbor,
                 "later runtime overrides are preserved");
             File.WriteAllText(report,
-                $"PASS {GetType().Assembly.GetName().Name}: {GraphicsBackendInfo.Current}, {quality.AntiAliasingTechnique}, project {expectedSamples}x / {expectedFiltering}, fractional pixels={fractional}; runtime override preserved");
+                $"PASS {Assembly.GetEntryAssembly()!.GetName().Name}: {GraphicsBackendInfo.Current}, {quality.AntiAliasingTechnique}, project {expectedSamples}x / {expectedFiltering}, fractional pixels={fractional}; runtime override preserved");
         }
         catch (Exception error)
         {

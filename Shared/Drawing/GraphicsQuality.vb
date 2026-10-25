@@ -55,8 +55,10 @@ Namespace [Shared].Drawing
                 ' Apply build settings once, before any scene renders. Subsequent
                 ' scenes/managers must preserve explicit runtime quality changes.
                 Dim entryAssembly = Assembly.GetEntryAssembly()
-                quality.ApplyProjectSettings(entryAssembly)
-                If applicationAssembly IsNot entryAssembly Then quality.ApplyProjectSettings(applicationAssembly)
+                quality.ApplyProjectSettings(applicationAssembly)
+                ' A reusable Game library can carry its own defaults. The running
+                ' application's project settings take precedence over those.
+                If entryAssembly IsNot applicationAssembly Then quality.ApplyProjectSettings(entryAssembly)
                 AddHandler key.Disposing, Sub(sender, args)
                     For Each cachedSampler As SamplerState In quality.samplers.Values
                         cachedSampler.Dispose()
