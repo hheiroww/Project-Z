@@ -16,4 +16,6 @@ pwsh -File ./ProjectZ/Convert-Project.ps1 -SourceProject C:/Original/App.csproj 
 
 Run from App, or adjust the script path. Conversion preserves the original source and refuses to overwrite edited generated files. Review `projectz-import.report.json` and `projectz-import.unsupported.txt`. Unsupported features fail conversion and block generated builds; arbitrary third-party WPF controls and complex templates are not fully supported. Converted projects carry their build tools and renderer assemblies and can be moved to another machine.
 
+The linked WPF code-behind is a `None` item in App and a `ProjectZXamlSource` conversion input. Only its generated native replacement compiles in App; this also prevents duplicate constructors and conflicting window types in IntelliSense. For an app created with an earlier template, change the linked `MainWindow.xaml.cs` or `.vb` item from `Compile` to `None`, replace `ProjectZ/ProjectZ.Xaml.targets` with this release's copy, and rebuild.
+
 Keep the complete `ProjectZ` directory, notices and licenses in source control. The converter requires the installed .NET SDK; it never modifies the source project. Framework and tooling source: https://github.com/hheiroww/Project-Z

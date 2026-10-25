@@ -45,7 +45,8 @@ class Probe : Game {
         scene = new(manager) { EnableDesignTimeControls = false };
         manager.AddScene("probe", scene);
         manager.ActiveScene = scene;
-        app = new(scene);
+        // This harness closes each fixture before opening the next one.
+        app = new(scene) { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         if (!smokeTest) {
             pointer = new PointerMessages(ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(this));
             scene.OnKeyDown += (key, state) => {

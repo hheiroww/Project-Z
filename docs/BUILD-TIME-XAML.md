@@ -38,13 +38,14 @@ Use `ProjectZXaml` items for linked or native-project views. Existing WPF `Page`
 </PropertyGroup>
 <ItemGroup>
   <ProjectZXaml Include="..\SharedViews\View.xaml" />
-  <Compile Include="..\SharedViews\View.xaml.cs" />
+  <None Include="..\SharedViews\View.xaml.cs" Link="Views\View.xaml.cs" />
+  <ProjectZXamlSource Include="..\SharedViews\View.xaml.cs" />
 </ItemGroup>
 ```
 
-Use `.vb` in a VB project. If source files are already included by the SDK's default file list, do not add duplicate `Compile` items. A linked file outside the project folder does need its `Compile` item.
+Use `.vb` in a VB project. In **Designer + code-behind** mode, keep WPF code-behind as `None` plus `ProjectZXamlSource` so Visual Studio's evaluated app source list contains only native code. For files inside the app directory, also remove the SDK's default `Compile` item with `<Compile Remove="Views\View.xaml.cs" />`. A linked file outside the project directory is not included by that default list.
 
-In **Designer + code-behind** mode, matching `.xaml.cs`/`.xaml.vb` and `.Designer.cs`/`.Designer.vb` files are selected automatically. For a differently named code-behind or a supporting source file that needs conversion, add `ProjectZXamlSource Include="path"` as well as its normal `Compile` item. Other source files continue compiling normally, including manually adapted Project-Z code.
+In **Designer + code-behind** mode, existing `Compile` items matching `.xaml.cs`/`.xaml.vb` and `.Designer.cs`/`.Designer.vb` are still selected automatically for compatibility with older projects. New projects should use explicit `ProjectZXamlSource` inputs without compiling the WPF original. Supporting source files that need translation can use the same input item. Other source files continue compiling normally, including manually adapted Project-Z code. **Designer only** mode continues to require the manually adapted code-behind as a `Compile` item.
 
 ## What an ordinary build does
 

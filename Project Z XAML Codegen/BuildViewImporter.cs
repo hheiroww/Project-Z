@@ -35,7 +35,7 @@ internal static class BuildViewImporter
             foreach (var page in convertCodeBehind ? Lines("pages") : Array.Empty<string>())
                 foreach (var candidate in new[] { page + (vb ? ".vb" : ".cs"), Path.ChangeExtension(page, vb ? ".Designer.vb" : ".Designer.cs"), page + (vb ? ".Designer.vb" : ".Designer.cs") })
                     if (sources.Contains(candidate, StringComparer.OrdinalIgnoreCase)) selected.Add(candidate);
-            if (selected.Any(s => !sources.Contains(s, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Every ProjectZXamlSource must also be a Compile item.");
+            if (selected.Any(s => !sources.Contains(s, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Every ProjectZXamlSource must be included in the conversion sources.");
             int result = ProjectImporter.GenerateForBuild(input, generated, selected);
             if (result != 0) return result;
             using var report = JsonDocument.Parse(File.ReadAllText(Path.Combine(generated, "projectz-import.report.json")));

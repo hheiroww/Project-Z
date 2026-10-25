@@ -11,7 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectZXaml Include="../$ext_safeprojectname$.Designer/MainWindow.xaml" Link="Views/MainWindow.xaml" />
-    <Compile Include="../$ext_safeprojectname$.Designer/MainWindow.xaml.vb" Link="Views/MainWindow.xaml.vb" />
+    <None Include="../$ext_safeprojectname$.Designer/MainWindow.xaml.vb" Link="Views/MainWindow.xaml.vb" />
     <ProjectZXamlSource Include="../$ext_safeprojectname$.Designer/MainWindow.xaml.vb" />
   </ItemGroup>
   <Import Project="ProjectZ/ProjectZ.Tooling.props" />

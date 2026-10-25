@@ -45,7 +45,10 @@
     </PropertyGroup>
     <MakeDir Directories="$(_ProjectZXamlDirectory)" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/convert-sources" Lines="@(ProjectZXamlSource->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <WriteLinesToFile File="$(_ProjectZXamlDirectory)/sources" Lines="@(Compile->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <!-- WPF code-behind is a conversion input, not native app code. Allow it to
+         stay out of Compile at evaluation so IntelliSense cannot see both the
+         WPF original and its generated native replacement. -->
+    <WriteLinesToFile File="$(_ProjectZXamlDirectory)/sources" Lines="@(Compile->'%(FullPath)');@(ProjectZXamlSource->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/pages" Lines="@(ProjectZXaml->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/references" Lines="@(ReferencePath->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(_ProjectZXamlDirectory)/mode" Lines="$(ProjectZXamlMode)" Overwrite="true" WriteOnlyWhenDifferent="true" />

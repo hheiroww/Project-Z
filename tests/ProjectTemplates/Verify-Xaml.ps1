@@ -62,6 +62,15 @@ foreach ($language in $Languages) {
     $app = Expand-Project "$folder/$name.App" "$name.App" $name
     $designer = Expand-Project "$folder/$name.Designer" "$name.Designer" $name
     $markup = Join-Path "$folder/$name.Designer" 'MainWindow.xaml'
+    # VS evaluates project items before a build. The shared WPF source must
+    # never enter the app's compiler as well as its native replacement.
+    Run-Dotnet @('msbuild', $app, '-nologo', '-getItem:Compile,ProjectZXamlSource') "$folder/evaluated-items.json"
+    $items = (Get-Content -LiteralPath "$folder/evaluated-items.json" -Raw | ConvertFrom-Json).Items
+    $originalCode = [IO.Path]::GetFullPath("$markup.$suffix")
+    if (@($items.Compile | Where-Object FullPath -EQ $originalCode).Count -or
+        @($items.ProjectZXamlSource | Where-Object FullPath -EQ $originalCode).Count -ne 1) {
+        throw 'WPF code-behind must be a conversion input without compiling in the native App.'
+    }
     $edited = [IO.File]::ReadAllText($markup).Replace('Welcome to Project-Z XAML', 'Edited XAML reaches the native app')
     [IO.File]::WriteAllText($markup, $edited)
     $game = Join-Path "$folder/$name.App" "GameWindow.$suffix"
@@ -132,6 +141,16 @@ foreach ($language in $Languages) {
     }
     [IO.File]::WriteAllText($game, $text)
     Run-Dotnet @('build', $designer, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/designer.build.txt"
+    Run-Dotnet @('restore', $app, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/design-time.restore.txt"
+    Run-Dotnet @('msbuild', $app, '-nologo', '-t:Compile', '-p:DesignTimeBuild=true', '-p:SkipCompilerExecution=true', '-p:ProvideCommandLineArgs=true', '-p:BuildProjectReferences=false', '-getItem:Compile') "$folder/design-time-items.json"
+    $designItems = (Get-Content -LiteralPath "$folder/design-time-items.json" -Raw | ConvertFrom-Json).Items.Compile
+    if (@($designItems | Where-Object FullPath -EQ $originalCode).Count -or
+        @($designItems | Where-Object { $_.FullPath -like "*/MainWindow.xaml.$suffix" -or $_.FullPath -like "*\MainWindow.xaml.$suffix" }).Count -ne 1 -or
+        @($designItems | Where-Object { $_.FullPath -like "*/MainWindow.design.$suffix" -or $_.FullPath -like "*\MainWindow.design.$suffix" }).Count -ne 1) {
+        throw 'Fresh IntelliSense must compile exactly one native code-behind and one native designer.'
+    }
+    $results.Add("PASS $language evaluation and fresh IntelliSense use only native window sources")
+    Write-Host $results[$results.Count - 1]
     foreach ($case in @(@('Debug', 'DirectX12'), @('Debug-DX11', 'DirectX11'), @('Debug-OpenGL', 'OpenGL'))) {
         $configuration, $backend = $case
         Run-Dotnet @('build', $app, '-c', $configuration, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/$backend.build.txt"
@@ -171,6 +190,14 @@ foreach ($language in $Languages) {
     Run-Dotnet @('build', $app, '-c', 'Debug', '--nologo') "$folder/invalid.build.txt" $true
     [IO.File]::WriteAllText($markup, $edited)
     $results.Add("PASS $language rebuilds saved XAML and rejects unsupported markup")
+
+    $originalSource = [IO.File]::ReadAllText($originalCode)
+    [IO.File]::WriteAllText($originalCode, $originalSource.Replace('Button clicked ', 'Edited handler '))
+    Run-Dotnet @('build', $app, '-c', 'Debug', '--nologo') "$folder/edited-code-behind.build.txt"
+    $nativeCode = Get-ChildItem -LiteralPath "$folder/$name.App/obj/Debug/net10.0-windows/ProjectZXaml/Generated" -Recurse -Filter "MainWindow.xaml.$suffix" | Select-Object -First 1
+    if (!$nativeCode -or !([IO.File]::ReadAllText($nativeCode.FullName).Contains('Edited handler '))) { throw 'A saved conversion-only code-behind edit did not reach the native app.' }
+    [IO.File]::WriteAllText($originalCode, $originalSource)
+    $results.Add("PASS $language rebuilds saved conversion-only code-behind")
 
     # Whole-project conversion must work outside the framework source tree and
     # carry its tools into a new output tree that survives relocation.

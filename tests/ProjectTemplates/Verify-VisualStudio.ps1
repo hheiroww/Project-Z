@@ -14,14 +14,17 @@ if (!$TemplateDirectory) {
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
 $results = [Collections.Generic.List[string]]::new()
 function Invoke-VisualStudio([scriptblock]$Action) {
-    for ($attempt = 0; $attempt -lt 75; $attempt++) {
-        try { return (& $Action) }
+    for ($attempt = 0; $attempt -lt 300; $attempt++) {
+        try {
+            if ($null -eq $dte.Solution) { throw 'Visual Studio shell is initializing.' }
+            return (& $Action)
+        }
         catch {
-            if ($_.Exception.ToString() -notmatch '80010001|8001010A') { throw }
+            if ($_.Exception.ToString() -notmatch '80010001|8001010A|Visual Studio shell is initializing') { throw }
             Start-Sleep -Milliseconds 200
         }
     }
-    throw 'Visual Studio remained busy for 15 seconds.'
+    throw 'Visual Studio remained unavailable for 60 seconds.'
 }
 $dte = New-Object -ComObject VisualStudio.DTE.18.0
 try {

@@ -16,12 +16,12 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.24.5</Version>
+	<Version>2026.10.25.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.24.5 preserves complete Unicode graphemes during wrapping and trimming, shapes modern emoji with the installed color font, caches native HWND lookup, and moves handled exception snapshot writes off the UI thread.</PackageReleaseNotes>
-	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
+    <PackageReleaseNotes>2026.10.25.1 removes the unused HTML5 scene engine, desktop wrapper and automatic HTML content payload. XAML templates keep WPF code-behind as conversion inputs so Visual Studio sees only generated native window types. Retains native DX12, DX11, OpenGL and imported WebView2 controls.</PackageReleaseNotes>
+	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
@@ -161,19 +161,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Shared\Drawing\Designer\DesignTime\" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Remove="Project Z HTML5\index.html" />
-    <None Remove="Project Z HTML5\styles.css" />
-    <None Remove="Project Z HTML5\src\**\*.js" />
-    <Content Include="Project Z HTML5\index.html;Project Z HTML5\styles.css">
-      <Pack>True</Pack>
-      <PackagePath>contentFiles\any\any\Project Z HTML5\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
-    </Content>
-    <Content Include="Project Z HTML5\src\**\*.js">
-      <Pack>True</Pack>
-      <PackagePath>contentFiles\any\any\Project Z HTML5\src\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Update="README.NuGet.md">

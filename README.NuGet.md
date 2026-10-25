@@ -20,10 +20,10 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.24.5
+dotnet add package ProjectZ --version 2026.10.25.1
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.24.3/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.1/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
 
 The templates offer **DirectX 12**, **DirectX 11** and **OpenGL** configurations. The framework defaults to native DX12. [Template setup and renderer selection](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md).
 
@@ -44,7 +44,7 @@ Captured from the installed **26.10.64** app with an offline profile, staged sam
 | **Windows glass** | DWM blur, background transparency, custom window chrome and shared tool windows. |
 | **Text and input** | Compiled free vector fonts, system color emoji, selection, editable text, offline spelling and keyboard navigation. |
 | **Effects and motion** | GPU blur, shadows, gradients, transforms, storyboards and input triggers. |
-| **Media and creative tools** | Inline audio/video, 3D surfaces, an HTML5 host and separate VST/sample projects. |
+| **Media and creative tools** | Inline audio/video, 3D surfaces, separate VST/sample projects. |
 
 The framework package includes native XAML code generation, the internal model importer and a self-contained diagnostics observer. The heirowSnap app, VST plugin and demos are separate projects.
 
@@ -74,7 +74,7 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 
 ## Current release
 
-**2026.10.24.5** preserves whole emoji, flags, skin tones and joined Unicode sequences when wrapping or adding ellipses. Modern emoji use the installed color face. Native window lookups are cached and handled exception snapshots write in the background, keeping periodic work out of the UI loop. [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
+**2026.10.25.1** removes the unused HTML5 scene engine and its automatically copied web assets. Updated C# and Visual Basic XAML templates keep original WPF code-behind out of the native app compiler, preventing duplicate constructors and ambiguous window types in Visual Studio. Native DX12, DX11, OpenGL and imported WebView2 controls remain supported. [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 
 ## Support
 
