@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory,
-    [switch]$SkipFrameworkBuild
+    [switch]$SkipFrameworkBuild,
+    [string]$PackagePath
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -11,6 +12,16 @@ $staging = Join-Path $OutputDirectory ('Staging/' + [Guid]::NewGuid().ToString('
 New-Item -ItemType Directory -Force -Path "$OutputDirectory/Templates" | Out-Null
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+[xml]$graphics = Get-Content -LiteralPath "$PSScriptRoot/Common/ProjectZ.Graphics.props" -Raw
+$frameworkVersion = [string]$graphics.Project.PropertyGroup.ProjectZFrameworkVersion
+$restoreArguments = @()
+if ($PackagePath) {
+    . "$PSScriptRoot/PackageFeed.ps1"
+    $restoreRoot = Join-Path $OutputDirectory ('Restore/' + [Guid]::NewGuid().ToString('N'))
+    $restoreConfiguration = New-ProjectZRestoreConfiguration -ConfigPath "$restoreRoot/NuGet.Config" -PackagesPath "$restoreRoot/Packages" -PackagePath $PackagePath -ExpectedVersion $frameworkVersion
+    $restoreArguments = @("-p:RestoreConfigFile=$($restoreConfiguration.ConfigPath)", "-p:RestorePackagesPath=$($restoreConfiguration.PackagesPath)", '-p:RestoreFallbackFolders=')
+    Write-Host "Building templates with exact local ProjectZ $frameworkVersion; public NuGet indexing is not required."
+}
 
 function Copy-XamlTooling([string]$Payload) {
     New-Item -ItemType Directory -Force -Path "$Payload/Tools" | Out-Null
@@ -49,23 +60,24 @@ function Write-ManifestItems([xml]$Template, [string]$Folder) {
 }
 
 Push-Location $repo
+$restoreEnvironment = $null
 try {
+    if ($PackagePath) { $restoreEnvironment = Enter-ProjectZRestoreEnvironment -RestoreConfiguration $restoreConfiguration }
     foreach ($backend in @('DirectX11', 'OpenGL')) {
         $buildRoot = Join-Path $OutputDirectory "Build/$backend"
         if (!$SkipFrameworkBuild) {
-            & dotnet build 'Project Z Windows.vbproj' -c Release "-p:ProjectZGraphicsBackend=$backend" -p:GeneratePackageOnBuild=false -p:ProjectZDiagnosticsPrepared=true -p:UseLocalSocketJack=false --artifacts-path $buildRoot --nologo
+            & dotnet build 'Project Z Windows.vbproj' -c Release "-p:ProjectZGraphicsBackend=$backend" -p:GeneratePackageOnBuild=false -p:ProjectZDiagnosticsPrepared=true -p:UseLocalSocketJack=false --artifacts-path $buildRoot --nologo @restoreArguments
             if ($LASTEXITCODE -ne 0) { throw "$backend framework build failed." }
         }
         $dll = Join-Path $buildRoot 'bin/Project Z Windows/release/ProjectZ.dll'
         if (!(Test-Path -LiteralPath $dll)) { throw "Missing backend assembly: $dll" }
     }
 
-    [xml]$graphics = Get-Content -LiteralPath "$PSScriptRoot/Common/ProjectZ.Graphics.props" -Raw
-    $frameworkVersion = $graphics.Project.PropertyGroup.ProjectZFrameworkVersion
-    & dotnet publish 'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj' -c Release -o "$OutputDirectory/Build/XamlTools" -p:DebugType=None -p:DebugSymbols=false -p:GeneratePackageOnBuild=false --nologo
+    & dotnet publish 'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj' -c Release -o "$OutputDirectory/Build/XamlTools" -p:DebugType=None -p:DebugSymbols=false -p:GeneratePackageOnBuild=false --nologo @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'XAML tooling publish failed.' }
-    & dotnet build 'Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj' -c Release "-p:ProjectZFrameworkPackageVersion=$frameworkVersion" -o "$OutputDirectory/Build/Compatibility" -p:GeneratePackageOnBuild=false --nologo
+    & dotnet build 'Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj' -c Release "-p:ProjectZFrameworkPackageVersion=$frameworkVersion" -o "$OutputDirectory/Build/Compatibility" -p:GeneratePackageOnBuild=false --nologo @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'Portable compatibility build failed.' }
+    if ($PackagePath) { Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration }
 
     foreach ($language in @('CSharp', 'VisualBasic')) {
         $extension = if ($language -eq 'CSharp') { 'csproj' } else { 'vbproj' }
@@ -166,7 +178,7 @@ try {
     # VSSDK's .NET Framework ZIP extractor still enforces MAX_PATH. Keep the
     # extraction root short enough for Roslyn's nested MSBuild host filenames.
     $packaging = Join-Path ([IO.Path]::GetTempPath()) ('pzv-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-    & $msbuild "$PSScriptRoot/ProjectZ.Templates.csproj" /restore /t:Build /p:Configuration=Release "/p:ProjectZTemplateStaging=$staging" "/p:BaseIntermediateOutputPath=$packaging/" /nologo /v:minimal
+    & $msbuild "$PSScriptRoot/ProjectZ.Templates.csproj" /restore /t:Build /p:Configuration=Release "/p:ProjectZTemplateStaging=$staging" "/p:BaseIntermediateOutputPath=$packaging/" /nologo /v:minimal @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'VSIX packaging failed.' }
     Copy-Item -LiteralPath "$PSScriptRoot/bin/Release/net472/ProjectZ.Templates.vsix" -Destination "$OutputDirectory/ProjectZ.VisualStudio2026.vsix" -Force
     Set-Content -LiteralPath "$OutputDirectory/LatestStaging.txt" -Value $staging
@@ -174,4 +186,7 @@ try {
     ($hash.Hash.ToLowerInvariant() + '  ProjectZ.VisualStudio2026.vsix') | Set-Content -LiteralPath "$OutputDirectory/SHA256SUMS.txt" -Encoding ascii
     $hash
 }
-finally { Pop-Location }
+finally {
+    if ($null -ne $restoreEnvironment) { Exit-ProjectZRestoreEnvironment -Previous $restoreEnvironment }
+    Pop-Location
+}

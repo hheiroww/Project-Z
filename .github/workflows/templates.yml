@@ -15,15 +15,34 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+      - name: Verify isolated package feed setup
+        shell: pwsh
+        run: ./tests/ProjectTemplates/Verify-PackageFeed.ps1
+      - name: Build exact framework package for template validation
+        shell: pwsh
+        run: |
+          [xml]$graphics = Get-Content 'ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props'
+          [xml]$framework = Get-Content 'Project Z Windows.vbproj'
+          $version = [string]$graphics.Project.PropertyGroup.ProjectZFrameworkVersion
+          if ($version -ne [string]$framework.Project.PropertyGroup.Version) {
+            throw 'The template package pin must match the framework source version.'
+          }
+          dotnet build 'Project Z Windows.vbproj' -c Release -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12 --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = (Resolve-Path "bin/Release/ProjectZ.$version.nupkg").Path
+          ./tests/Packaging/Verify.ps1 -PackagePath $package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "PROJECTZ_TEMPLATE_PACKAGE=$package" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Get-FileHash -LiteralPath $package -Algorithm SHA256
       - name: Build DX11 and OpenGL runtimes and VSIX
         shell: pwsh
-        run: ./ProjectTemplate/VS2026/Build.ps1
-      - name: Verify standalone CSharp and VB templates for every renderer
+        run: ./ProjectTemplate/VS2026/Build.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE
+      - name: Verify standalone CSharp and VB templates against exact package
         shell: pwsh
-        run: ./tests/ProjectTemplates/Verify.ps1 -SkipRuntime
+        run: ./tests/ProjectTemplates/Verify.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE -SkipRuntime
       - name: Verify XAML designers, build-time edits and portable project conversion
         shell: pwsh
-        run: ./tests/ProjectTemplates/Verify-Xaml.ps1 -SkipRuntime
+        run: ./tests/ProjectTemplates/Verify-Xaml.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE -SkipRuntime
       - uses: actions/upload-artifact@v4
         with:
           name: ProjectZ-VisualStudio2026

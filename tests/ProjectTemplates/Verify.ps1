@@ -1,15 +1,22 @@
 [CmdletBinding()]
-param([string]$BuildDirectory, [string]$VerificationDirectory, [switch]$SkipRuntime)
+param([string]$BuildDirectory, [string]$VerificationDirectory, [switch]$SkipRuntime, [string]$PackagePath)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if (!$BuildDirectory) { $BuildDirectory = Join-Path $repo 'artifacts/VS2026' }
 $BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
 $verification = if ($VerificationDirectory) { [IO.Path]::GetFullPath($VerificationDirectory) } else { Join-Path $BuildDirectory ('Verification-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
-New-Item -ItemType Directory -Force -Path $verification | Out-Null
+if (Test-Path -LiteralPath $verification) { throw 'Use a fresh verification directory.' }
+New-Item -ItemType Directory -Path $verification | Out-Null
+. "$repo/ProjectTemplate/VS2026/PackageFeed.ps1"
+[xml]$graphics = Get-Content -LiteralPath "$repo/ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props" -Raw
+$restoreConfiguration = New-ProjectZRestoreConfiguration -ConfigPath "$verification/NuGet.Config" -PackagesPath "$verification/packages" -PackagePath $PackagePath -ExpectedVersion $graphics.Project.PropertyGroup.ProjectZFrameworkVersion
+Write-Host "Desktop template verification uses $($restoreConfiguration.Mode), with a fresh isolated package cache."
 # Stop repository-only imports: these projects must work as standalone consumers.
 Set-Content -LiteralPath "$verification/Directory.Build.targets" -Value '<Project />'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $results = [Collections.Generic.List[string]]::new()
+$restoreEnvironment = Enter-ProjectZRestoreEnvironment -RestoreConfiguration $restoreConfiguration
+try {
 foreach ($language in @('CSharp', 'VisualBasic')) {
     $folder = Join-Path $verification $language
     if (Test-Path -LiteralPath $folder) { throw "Use a fresh verification directory: $folder" }
@@ -27,6 +34,8 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
         }
     }
     $projectPath = Join-Path $folder $project.File
+    [xml]$templateGraphics = Get-Content -LiteralPath "$folder/ProjectZ/ProjectZ.Graphics.props" -Raw
+    if ($templateGraphics.Project.PropertyGroup.ProjectZFrameworkVersion -cne $restoreConfiguration.PackageVersion) { throw 'The template framework pin differs from the package verification version.' }
     $text = [IO.File]::ReadAllText($projectPath).Replace('$safeprojectname$', "Template$language").Replace('$projectname$', "Template$language")
     [IO.File]::WriteAllText($projectPath, $text)
     $programFile = Join-Path $folder $(if ($language -eq 'CSharp') { 'Program.cs' } else { 'Program.vb' })
@@ -116,8 +125,9 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
     foreach ($case in @(@('Debug', 'DirectX12'), @('Debug-DX11', 'DirectX11'), @('Debug-OpenGL', 'OpenGL'))) {
         $configuration, $backend = $case
         $buildLog = Join-Path $verification "$language-$backend.build.txt"
-        & dotnet build $projectPath -c $configuration "-p:RestorePackagesPath=$BuildDirectory/PublicPackages" --source https://api.nuget.org/v3/index.json --nologo -v:minimal *> $buildLog
+        & dotnet build $projectPath -c $configuration --nologo -v:minimal *> $buildLog
         if ($LASTEXITCODE -ne 0) { Get-Content -LiteralPath $buildLog -Tail 25; throw "$language $backend build failed." }
+        Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration
         $output = Join-Path $folder "bin/$configuration/net10.0-windows"
         $assets = Get-Content -LiteralPath "$folder/obj/project.assets.json" -Raw
         if ($assets.Contains('ProjectReference')) { throw 'A standalone template acquired a source dependency.' }
@@ -151,7 +161,7 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
             $observed = (Get-Content -LiteralPath $report)[0]
             if ($observed -ne $backend) { throw "Selected $backend but runtime reports $observed." }
         }
-        $results.Add("PASS $language $backend standalone restore, build, fonts, diagnostics" + $(if (!$SkipRuntime) { ', native window and rendered pixels' }))
+        $results.Add("PASS $language $backend standalone restore from $($restoreConfiguration.Mode), build, fonts, diagnostics" + $(if (!$SkipRuntime) { ', native window and rendered pixels' }))
         Write-Host $results[$results.Count - 1]
     }
     & dotnet build $projectPath -p:ProjectZGraphicsBackend=Invalid --nologo -v:quiet *> "$verification/$language-invalid.txt"
@@ -161,3 +171,4 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
 $results | Set-Content -LiteralPath "$verification/results.txt"
 # Both invalid-renderer builds must fail, but successful verification must return zero.
 $global:LASTEXITCODE = 0
+} finally { Exit-ProjectZRestoreEnvironment -Previous $restoreEnvironment }

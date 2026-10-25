@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param([string]$BuildDirectory, [string]$VerificationDirectory, [switch]$SkipRuntime,
-      [ValidateSet('CSharp', 'VisualBasic')][string[]]$Languages = @('CSharp', 'VisualBasic'))
+      [ValidateSet('CSharp', 'VisualBasic')][string[]]$Languages = @('CSharp', 'VisualBasic'), [string]$PackagePath)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if (!$BuildDirectory) { $BuildDirectory = Join-Path $repo 'artifacts/VS2026' }
@@ -8,6 +8,10 @@ $BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
 $verification = if ($VerificationDirectory) { [IO.Path]::GetFullPath($VerificationDirectory) } else { Join-Path $BuildDirectory ('XamlVerification-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 if (Test-Path -LiteralPath $verification) { throw 'Use a fresh verification directory.' }
 New-Item -ItemType Directory -Path $verification | Out-Null
+. "$repo/ProjectTemplate/VS2026/PackageFeed.ps1"
+[xml]$graphics = Get-Content -LiteralPath "$repo/ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props" -Raw
+$restoreConfiguration = New-ProjectZRestoreConfiguration -ConfigPath "$verification/NuGet.Config" -PackagesPath "$verification/packages" -PackagePath $PackagePath -ExpectedVersion $graphics.Project.PropertyGroup.ProjectZFrameworkVersion
+Write-Host "XAML template verification uses $($restoreConfiguration.Mode), with a fresh isolated package cache."
 Set-Content -LiteralPath "$verification/Directory.Build.targets" -Value '<Project />'
 # Keep verification on the documented stable SDK even when a newer preview is
 # installed. Run the tool from this directory so MSBuildLocator uses it too.
@@ -47,7 +51,9 @@ function Expand-Project([string]$Folder, [string]$Name, [string]$Parent) {
 }
 
 Push-Location $verification
+$restoreEnvironment = $null
 try {
+$restoreEnvironment = Enter-ProjectZRestoreEnvironment -RestoreConfiguration $restoreConfiguration
 foreach ($language in $Languages) {
     $name = "Xaml$language"
     $suffix = if ($language -eq 'CSharp') { 'cs' } else { 'vb' }
@@ -61,6 +67,8 @@ foreach ($language in $Languages) {
     }
     $app = Expand-Project "$folder/$name.App" "$name.App" $name
     $designer = Expand-Project "$folder/$name.Designer" "$name.Designer" $name
+    [xml]$templateGraphics = Get-Content -LiteralPath "$folder/$name.App/ProjectZ/ProjectZ.Graphics.props" -Raw
+    if ($templateGraphics.Project.PropertyGroup.ProjectZFrameworkVersion -cne $restoreConfiguration.PackageVersion) { throw 'The template framework pin differs from the package verification version.' }
     $markup = Join-Path "$folder/$name.Designer" 'MainWindow.xaml'
     # VS evaluates project items before a build. The shared WPF source must
     # never enter the app's compiler as well as its native replacement.
@@ -140,8 +148,9 @@ foreach ($language in $Languages) {
         $text = [IO.File]::ReadAllText($game).Replace('        MyBase.Draw(gameTime)', $probe + [Environment]::NewLine + '        MyBase.Draw(gameTime)')
     }
     [IO.File]::WriteAllText($game, $text)
-    Run-Dotnet @('build', $designer, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/designer.build.txt"
-    Run-Dotnet @('restore', $app, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/design-time.restore.txt"
+    Run-Dotnet @('build', $designer, '--nologo') "$folder/designer.build.txt"
+    Run-Dotnet @('restore', $app, '--nologo') "$folder/design-time.restore.txt"
+    Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration
     Run-Dotnet @('msbuild', $app, '-nologo', '-t:Compile', '-p:DesignTimeBuild=true', '-p:SkipCompilerExecution=true', '-p:ProvideCommandLineArgs=true', '-p:BuildProjectReferences=false', '-getItem:Compile') "$folder/design-time-items.json"
     $designItems = (Get-Content -LiteralPath "$folder/design-time-items.json" -Raw | ConvertFrom-Json).Items.Compile
     if (@($designItems | Where-Object FullPath -EQ $originalCode).Count -or
@@ -153,7 +162,8 @@ foreach ($language in $Languages) {
     Write-Host $results[$results.Count - 1]
     foreach ($case in @(@('Debug', 'DirectX12'), @('Debug-DX11', 'DirectX11'), @('Debug-OpenGL', 'OpenGL'))) {
         $configuration, $backend = $case
-        Run-Dotnet @('build', $app, '-c', $configuration, '--source', 'https://api.nuget.org/v3/index.json', '--nologo') "$folder/$backend.build.txt"
+        Run-Dotnet @('build', $app, '-c', $configuration, '--nologo') "$folder/$backend.build.txt"
+        Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration
         $output = Join-Path "$folder/$name.App" "bin/$configuration/net10.0-windows"
         if ((Get-Content -LiteralPath "$output/$name.App.deps.json" -Raw).Contains("$name.Designer")) { throw 'The native app acquired a WPF designer assembly dependency.' }
         if (!$SkipRuntime) {
@@ -172,7 +182,7 @@ foreach ($language in $Languages) {
             }
             if ((Get-Content -LiteralPath $report -Raw).Trim() -ne $backend) { throw 'The XAML app used the wrong renderer.' }
         }
-        $results.Add("PASS $language $backend XAML designer and standalone build" + $(if (!$SkipRuntime) { ', edited markup, shared click handler and native Project-Z pixels' }))
+        $results.Add("PASS $language $backend XAML designer and standalone build from $($restoreConfiguration.Mode)" + $(if (!$SkipRuntime) { ', edited markup, shared click handler and native Project-Z pixels' }))
         Write-Host $results[$results.Count - 1]
     }
     $generated = Get-ChildItem -LiteralPath "$folder/$name.App/obj/Debug/net10.0-windows/ProjectZXaml" -Recurse -Filter "*.design.$suffix" | Select-Object -First 1
@@ -228,15 +238,19 @@ foreach ($language in $Languages) {
     Copy-Item -LiteralPath $converted -Destination $relocated -Recurse
     $relocatedProject = Join-Path $relocated ([IO.Path]::GetRelativePath($converted, $report.RootProject))
     Run-Dotnet @('build', $relocatedProject, '-c', 'Release', '--nologo') "$folder/relocated.build.txt"
+    Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration
     $protected = Get-ChildItem -LiteralPath "$converted/App/Source" -Recurse -Filter "*.$suffix" | Select-Object -First 1
     if (!$protected) { throw 'The converter did not preserve source in its generated tree.' }
     [IO.File]::AppendAllText($protected.FullName, [Environment]::NewLine + $(if ($suffix -eq 'cs') { '// User edit' } else { "' User edit" }))
     $protectedHash = (Get-FileHash -LiteralPath $protected.FullName).Hash
     Run-Dotnet @("$folder/$name.App/ProjectZ/Tools/ProjectZ.XamlCodegen.dll", 'import', $originalProject, '--output', $converted, '--root-directory', 'App') "$folder/protected-conversion.txt" $true
     if ((Get-FileHash -LiteralPath $protected.FullName).Hash -ne $protectedHash) { throw 'The converter overwrote an edited generated source.' }
-    $results.Add("PASS $language portable whole-project conversion, immutable source, protected edits and relocated output build")
+    $results.Add("PASS $language portable whole-project conversion, immutable source, protected edits and relocated output build from $($restoreConfiguration.Mode)")
     Write-Host $results[$results.Count - 1]
 }
 $results | Set-Content -LiteralPath "$verification/results.txt"
 $global:LASTEXITCODE = 0
-} finally { Pop-Location }
+} finally {
+    if ($null -ne $restoreEnvironment) { Exit-ProjectZRestoreEnvironment -Previous $restoreEnvironment }
+    Pop-Location
+}

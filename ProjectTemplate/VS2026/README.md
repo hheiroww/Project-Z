@@ -66,6 +66,20 @@ Output: `artifacts/VS2026/ProjectZ.VisualStudio2026.vsix` and `SHA256SUMS.txt`. 
 
 Verification restores standalone projects from NuGet.org, builds both languages with each renderer, runs the native windows, checks the actual backend and rendered pixels, and saves PNG captures. XAML checks also compile the designer projects, verify edited markup and native button events, reject unsupported markup, and build converted projects after relocation. IDE verification uses Visual Studio's actual template creation API. Use `-SkipRuntime` on a build server without an interactive graphics session.
 
+For a release candidate that NuGet.org has not indexed yet, pass the exact framework package to the build and verification scripts:
+
+```powershell
+dotnet build 'Project Z Windows.vbproj' -c Release -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
+$package = Resolve-Path 'bin/Release/ProjectZ.2026.10.25.2.nupkg'
+./ProjectTemplate/VS2026/Build.ps1 -PackagePath $package
+./tests/ProjectTemplates/Verify.ps1 -PackagePath $package
+./tests/ProjectTemplates/Verify-Xaml.ps1 -PackagePath $package
+```
+
+The scripts validate the package ID and pinned version, map `ProjectZ` exclusively to an isolated local feed, and verify the restored package hash. Other dependencies restore from NuGet.org. Each verification uses a fresh cache, including converted and relocated projects. Omitting `-PackagePath` retains public-only acceptance; a prior local-package run cannot satisfy that check from its cache.
+
+The template workflow builds and audits this exact package from its checkout before creating the installer. Its success proves local-package template acceptance independently of NuGet publishing/indexing. Run verification without `-PackagePath` separately to establish public package availability. Generated templates keep their normal public package references; feeds, caches and verification receipts stay outside the installer.
+
 Framework source builds can also select OpenGL directly:
 
 ```powershell
