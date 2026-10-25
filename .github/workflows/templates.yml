@@ -23,8 +23,9 @@ jobs:
         run: |
           [xml]$graphics = Get-Content 'ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props'
           [xml]$framework = Get-Content 'Project Z Windows.vbproj'
-          $version = [string]$graphics.Project.PropertyGroup.ProjectZFrameworkVersion
-          if ($version -ne [string]$framework.Project.PropertyGroup.Version) {
+          $version = $graphics.SelectSingleNode('/Project/PropertyGroup/ProjectZFrameworkVersion').InnerText.Trim()
+          $sourceVersion = $framework.SelectSingleNode('/Project/PropertyGroup/Version').InnerText.Trim()
+          if ($version -ne $sourceVersion) {
             throw 'The template package pin must match the framework source version.'
           }
           dotnet build 'Project Z Windows.vbproj' -c Release -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12 --nologo
