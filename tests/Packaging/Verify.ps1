@@ -38,6 +38,7 @@ try {
         'tools/native/win-x64/mgruntime.dll', 'buildTransitive/ProjectZ.targets',
         'tools/xaml-codegen/ProjectZ.XamlCodegen.dll', 'tools/xaml-codegen/ProjectZ.XamlCodegen.deps.json',
         'tools/xaml-codegen/ProjectZ.XamlCodegen.runtimeconfig.json',
+        'tools/xaml-codegen/ProjectZ.RenderingQuality.targets',
         'tools/xaml-codegen/BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll',
         'THIRD-PARTY-NOTICES.md', 'licenses/WPFPixelShaderLibrary/LICENSE',
         'ThirdParty/ProjectZSans/OFL.txt', 'ThirdParty/ProjectZSans/README.md')) {

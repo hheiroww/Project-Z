@@ -6,6 +6,8 @@ App links those files and translates the designer and code-behind during ordinar
 
 Use App's **Project Properties > Project-Z** page to inspect build-time conversion settings. `DesignerAndCodeBehind` is enabled for this solution. Keep this mode when sharing WPF code-behind. The standard desktop template leaves conversion disabled until you opt in.
 
+App's **Project Properties > Project-Z > Rendering quality** controls anti-aliasing and texture filtering after a rebuild. The defaults are **4x AA** and **16x anisotropic filtering**. Both apply to the native `Game`/`SceneManager` automatically; no assignment in `GameWindow` or generated WPF startup is required. Explicit runtime overrides remain effective across scenes.
+
 Choose **Debug/Release**, **Debug-DX11/Release-DX11**, or **Debug-OpenGL/Release-OpenGL** on App for DX12, DX11, or OpenGL. When using a command-line renderer override, clean first or use a separate output directory. Designer always uses the Windows XAML designer.
 
 To convert an existing C# or VB WPF project and its project references into a separate native project tree:

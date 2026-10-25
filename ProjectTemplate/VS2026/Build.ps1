@@ -14,7 +14,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Copy-XamlTooling([string]$Payload) {
     New-Item -ItemType Directory -Force -Path "$Payload/Tools" | Out-Null
-    foreach ($name in @('ProjectZ.Xaml.targets', 'ProjectZ.NativeXaml.targets', 'ProjectZ.Application.targets', 'ProjectZ.Settings.xaml')) {
+    foreach ($name in @('ProjectZ.Xaml.targets', 'ProjectZ.NativeXaml.targets', 'ProjectZ.Application.targets', 'ProjectZ.RenderingQuality.targets', 'ProjectZ.Settings.xaml')) {
         Copy-Item -LiteralPath "$repo/Project Z XAML Codegen/$name" -Destination $Payload
     }
     # Publish output only; exclude symbols, logs, source and machine settings.

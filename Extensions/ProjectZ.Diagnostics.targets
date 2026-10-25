@@ -1,4 +1,8 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)..\Project Z XAML Codegen\ProjectZ.RenderingQuality.targets"
+          Condition="'$(ProjectZRenderingQualityIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\Project Z XAML Codegen\ProjectZ.RenderingQuality.targets')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.RenderingQuality.targets"
+          Condition="'$(ProjectZRenderingQualityIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.RenderingQuality.targets')" />
   <PropertyGroup>
     <ProjectZXamlGeneratorDll Condition="'$(ProjectZXamlGeneratorDll)' == '' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll')">$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll</ProjectZXamlGeneratorDll>
     <ProjectZNativeXamlTool Condition="'$(ProjectZNativeXamlTool)' == '' and '$(ProjectZXamlGeneratorDll)' != ''">$(ProjectZXamlGeneratorDll)</ProjectZNativeXamlTool>

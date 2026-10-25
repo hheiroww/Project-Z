@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)ProjectZ.RenderingQuality.targets" Condition="'$(ProjectZRenderingQualityIntegrationImported)' != 'true'" />
   <PropertyGroup>
     <ProjectZApplicationIntegrationImported>true</ProjectZApplicationIntegrationImported>
     <ProjectZXamlToolProject Condition="'$(ProjectZXamlToolProject)' == ''">$(MSBuildThisFileDirectory)ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
@@ -8,8 +9,6 @@
     <ProjectZMainWindow Condition="'$(ProjectZMainWindow)' == ''">Default</ProjectZMainWindow>
     <ProjectZShutdownMode Condition="'$(ProjectZShutdownMode)' == ''">Default</ProjectZShutdownMode>
     <ProjectZFramesPerSecond Condition="'$(ProjectZFramesPerSecond)' == ''">60</ProjectZFramesPerSecond>
-    <ProjectZAntiAliasingSamples Condition="'$(ProjectZAntiAliasingSamples)' == ''">4</ProjectZAntiAliasingSamples>
-    <ProjectZTextureFiltering Condition="'$(ProjectZTextureFiltering)' == ''">Anisotropic16x</ProjectZTextureFiltering>
     <ProjectZInitialWidth Condition="'$(ProjectZInitialWidth)' == ''">1000</ProjectZInitialWidth>
     <ProjectZInitialHeight Condition="'$(ProjectZInitialHeight)' == ''">700</ProjectZInitialHeight>
     <ProjectZMinimumWidth Condition="'$(ProjectZMinimumWidth)' == ''">320</ProjectZMinimumWidth>

@@ -20,10 +20,10 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.25.1
+dotnet add package ProjectZ --version 2026.10.25.2
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.1/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.2/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
 
 The templates offer **DirectX 12**, **DirectX 11** and **OpenGL** configurations. The framework defaults to native DX12. [Template setup and renderer selection](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md).
 
@@ -74,7 +74,7 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 
 ## Current release
 
-**2026.10.25.1** removes the unused HTML5 scene engine and its automatically copied web assets. Updated C# and Visual Basic XAML templates keep original WPF code-behind out of the native app compiler, preventing duplicate constructors and ambiguous window types in Visual Studio. Native DX12, DX11, OpenGL and imported WebView2 controls remain supported. [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
+**2026.10.25.2** makes **Project Properties → Project-Z → Rendering quality** apply to native `Game`/`SceneManager` applications, including both desktop and XAML templates. The default **4x AA** and **16x anisotropic filtering** take effect without quality assignments in application code or generated WPF startup. Explicit runtime quality changes remain supported. Existing DX12 apps can update their `ProjectZFrameworkVersion` pin; DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime` assemblies from the new template. [Graphics quality](https://github.com/hheiroww/Project-Z/blob/master/docs/GRAPHICS_QUALITY.md) · [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 
 ## Support
 

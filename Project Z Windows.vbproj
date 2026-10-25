@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.25.1</Version>
+	<Version>2026.10.25.2</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.25.1 removes the unused HTML5 scene engine, desktop wrapper and automatic HTML content payload. XAML templates keep WPF code-behind as conversion inputs so Visual Studio sees only generated native window types. Retains native DX12, DX11, OpenGL and imported WebView2 controls.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.25.2 applies project anti-aliasing and texture-filtering settings to native Game/SceneManager applications without generated WPF startup or manual quality assignments. Defaults to 4x AA and anisotropic 16x filtering for package consumers, while preserving explicit runtime overrides. Includes the HTML5 cleanup and XAML template source-ambiguity fixes from 2026.10.25.1.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -197,6 +197,7 @@
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
+    <None Include="Project Z XAML Codegen\ProjectZ.RenderingQuality.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.RenderingQuality.targets" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
     <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
     <None Include="ThirdParty\DotNetRuntime\*" Pack="true" PackagePath="licenses\DotNetRuntime\" />
