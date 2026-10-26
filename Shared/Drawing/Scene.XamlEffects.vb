@@ -15,10 +15,14 @@ Namespace [Shared].Drawing
             Dim rasterizer = device.RasterizerState
             Dim wasBegun = hasBegun
             Dim physicalViewport = Quality.ScaleRectangle(viewport)
+            ' This is a scene rasterization pass, not just a shader scratch texture.
+            ' Flattening it without MSAA removes coverage from every other control
+            ' as soon as one hover effect becomes active. SSAA is already scaled.
+            Dim samples = If(Quality.AntiAliasingTechnique = "MSAA", Quality.SupportedSamples(device, Quality.AntiAliasingSamples), 0)
             If wasBegun Then spriteBatch.End() : hasBegun = False
-            If effectCanvas Is Nothing OrElse effectCanvas.Width <> physicalViewport.Width OrElse effectCanvas.Height <> physicalViewport.Height Then
+            If effectCanvas Is Nothing OrElse effectCanvas.Width <> physicalViewport.Width OrElse effectCanvas.Height <> physicalViewport.Height OrElse effectCanvas.MultiSampleCount <> samples Then
                 effectCanvas?.Dispose()
-                effectCanvas = New RenderTarget2D(device, physicalViewport.Width, physicalViewport.Height, False, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents)
+                effectCanvas = New RenderTarget2D(device, physicalViewport.Width, physicalViewport.Height, False, SurfaceFormat.Color, DepthFormat.None, samples, RenderTargetUsage.PreserveContents)
             End If
             If effectCompositeBatch Is Nothing Then effectCompositeBatch = New SpriteBatch(device)
             Try

@@ -71,9 +71,12 @@ Namespace [Shared].Drawing.UI.Primitives
                 End Using
                 batch = New SpriteBatch(device)
             End If
-            If source Is Nothing OrElse source.Width <> width OrElse source.Height <> height Then
+            Dim inputQuality = GraphicsQuality.ForDevice(device)
+            Dim samples = If(inputQuality.AntiAliasingTechnique = "MSAA", inputQuality.SupportedSamples(device, inputQuality.AntiAliasingSamples), 0)
+            If source Is Nothing OrElse source.Width <> width OrElse source.Height <> height OrElse source.MultiSampleCount <> samples Then
                 source?.Dispose() : scratch?.Dispose()
-                source = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents)
+                ' Resolve the antialiased geometry before the single-sample shader passes.
+                source = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None, samples, RenderTargetUsage.PreserveContents)
                 scratch = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents)
             End If
             device.SetRenderTarget(source)

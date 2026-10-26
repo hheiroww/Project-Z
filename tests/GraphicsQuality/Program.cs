@@ -144,6 +144,7 @@ sealed class QualityProbe : Game
                 Require(pixels[clip.Center.Y * 640 + clip.Right - 5].R > 240 && pixels[clip.Center.Y * 640 + clip.Right + 5].R == 0, "scaled clipping retains logical bounds");
                 results.Add($"PASS {samples}x AA: effect placement, blur halo, parent clipping");
             }
+            HoverQualityChecks.Run(this, time, output, results);
             Require(SceneElement.RenderExceptionCount == 0, "no swallowed rendering errors");
             results.Add("PASS compiled free vector font at 10–48pt, fractional bold, AA 16x / AF 16x; zero font atlases or render errors");
             File.WriteAllLines(Path.Combine(output, "result.txt"), results);
