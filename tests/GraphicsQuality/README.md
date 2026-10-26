@@ -18,3 +18,6 @@ MSAA is retained while rasterizing both the scene's effect canvas and individual
 effect inputs. Shader scratch passes remain single-sample. SSAA retains its scaled
 coordinates without also allocating multisampled targets. PNGs and results are
 written only to the chosen output directory.
+
+Shutdown also retains a scene manager until `Game.Run` returns, then disposes it
+twice. This covers hosts that release their native window before final cleanup.

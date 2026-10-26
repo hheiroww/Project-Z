@@ -9,6 +9,7 @@ using ProjectZ.Shared.Drawing.Designer;
 
 using var game = new QualityProbe(args.Length > 0 ? args[0] : "quality-results");
 game.Run();
+game.VerifyShutdown();
 
 sealed class ProbeScene(SceneManager manager) : Scene(manager);
 
@@ -19,6 +20,7 @@ sealed class QualityProbe : Game
     readonly List<string> results = new();
     SpriteBatch batch;
     ContentContainer resources;
+    SceneManager lifetimeManager;
 
     public QualityProbe(string directory)
     {
@@ -37,6 +39,16 @@ sealed class QualityProbe : Game
         Services.AddService(typeof(SpriteBatch), batch);
         Services.AddService(typeof(GraphicsDevice), GraphicsDevice);
         Services.AddService(typeof(ContentContainer), resources);
+        lifetimeManager = new SceneManager(this);
+    }
+
+    public void VerifyShutdown()
+    {
+        // WindowsDX releases Game.Window before Run returns. Applications commonly
+        // retain their manager until Game.Dispose, after that window is gone.
+        lifetimeManager.Dispose();
+        lifetimeManager.Dispose();
+        File.AppendAllText(Path.Combine(output, "result.txt"), "PASS scene manager shutdown after Run and repeated disposal" + Environment.NewLine);
     }
 
     protected override void Draw(GameTime time)

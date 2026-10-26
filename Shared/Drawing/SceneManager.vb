@@ -1285,9 +1285,13 @@ Namespace [Shared].Drawing
             Global.ProjectZ.RuntimeDiagnostics.GraphicsDiagnostics.Register(Sender.GraphicsDevice)
 #End If
             graphicsManager = TryCast(Sender.Services.GetService(GetType(IGraphicsDeviceManager)), GraphicsDeviceManager)
-            AddHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
+            subscribedWindow = Sender.Window
+            If subscribedWindow IsNot Nothing Then AddHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
         End Sub
 
+        ' Game.Run may release Game.Window before its owner's final Dispose.
+        ' Unsubscribe from the window we attached to, rather than reacquiring it.
+        Private subscribedWindow As GameWindow
         Private viewportResizePending As Boolean
 
         Private Sub HandleClientSizeChanged(senderObject As Object, e As EventArgs)
@@ -1341,7 +1345,10 @@ Namespace [Shared].Drawing
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
                 If disposing Then
-                    RemoveHandler Sender.Window.ClientSizeChanged, AddressOf HandleClientSizeChanged
+                    If subscribedWindow IsNot Nothing Then
+                        RemoveHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+                        subscribedWindow = Nothing
+                    End If
                     ' Dispose all scenes
                     For Each scene In Scenes.Values
                         scene?.Dispose()
