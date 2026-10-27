@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.26.1</Version>
+	<Version>2026.10.26.2</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.26.1 preserves antialiasing when native hover effects activate and safely disposes SceneManager after the host releases Game.Window. Retains project rendering-quality settings and template compatibility fixes from 2026.10.25.2.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.26.2 adds BackgroundBlur for sharp foreground content over blurred backdrops and viewport-bounded ComboBox dropdowns with mouse, scrollbar and keyboard navigation through every item.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>

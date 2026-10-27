@@ -23,6 +23,25 @@ Namespace [Shared].Drawing.UI.Input
         Private _itemHeight As Single = 28.0F
         Private Shadows ReadOnly ownerScene As Scene
         Private _highlightedIndex As Integer = -1
+        Private _dropDownScroll As ScrollViewer
+        Private _dropDownContent As StackPanel
+        Private _maxDropDownHeight As Single = 320.0F
+        ''' <summary>Maximum popup height in layout pixels. The viewport can constrain it further.</summary>
+        Public Property MaxDropDownHeight As Single
+            Get
+                Return _maxDropDownHeight
+            End Get
+            Set(value As Single)
+                If Not Single.IsFinite(value) OrElse value <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                _maxDropDownHeight = value
+                OnUserInvalidated()
+            End Set
+        End Property
+        Public ReadOnly Property DropDownScrollViewer As ScrollViewer
+            Get
+                Return _dropDownScroll
+            End Get
+        End Property
 
         Public ReadOnly Property HighlightedIndex As Integer
             Get
@@ -126,6 +145,7 @@ Namespace [Shared].Drawing.UI.Input
                 Return _itemHeight
             End Get
             Set(value As Single)
+                If Not Single.IsFinite(value) OrElse value <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
                 _itemHeight = value
                 UpdateVisual()
             End Set
@@ -164,14 +184,17 @@ Namespace [Shared].Drawing.UI.Input
 
         Private Function ContainsDropDownWithMargin(point As Point, margin As Single) As Boolean
             Dim bounds = Rectangle
-            For Each item In _dropDownItems
-                bounds = Microsoft.Xna.Framework.Rectangle.Union(bounds, item.Rectangle)
-            Next
+            If _dropDownScroll IsNot Nothing Then bounds = Microsoft.Xna.Framework.Rectangle.Union(bounds, _dropDownScroll.Rectangle)
             bounds.Inflate(CInt(margin), CInt(margin))
             Return bounds.Contains(point)
         End Function
 
         Private Sub HandleSceneMouseMove(currentPoint As Point, lastPoint As Point)
+            Dim captured = ownerScene?.CapturedPointerElement
+            While captured IsNot Nothing
+                If captured Is _dropDownScroll Then Return
+                captured = captured.Parent
+            End While
             If _isDropDownOpen AndAlso Not ContainsDropDownWithMargin(currentPoint, DismissDistance) Then
                 IsDropDownOpen = False
             End If
@@ -194,6 +217,7 @@ Namespace [Shared].Drawing.UI.Input
             End If
 
             AlignHeader()
+            If _isDropDownOpen Then UpdateDropDown()
         End Sub
 
         Private Sub AlignHeader()
@@ -209,10 +233,40 @@ Namespace [Shared].Drawing.UI.Input
 
         Protected Overrides Sub AlignChildren()
             AlignHeader()
-            For index = 0 To _dropDownItems.Count - 1
-                _dropDownItems(index).Position = New Vector2(Rectangle.Left, Rectangle.Bottom + index * _itemHeight)
-                _dropDownItems(index).Size = New Vector2(Rectangle.Width, _itemHeight)
+            LayoutDropDown()
+        End Sub
+
+        Private Sub LayoutDropDown()
+            If _dropDownScroll Is Nothing OrElse Scene Is Nothing Then Return
+            Dim scale = Scene.Quality.RenderScale
+            Dim width = Scene.graphicsDevice.Viewport.Width / scale.X
+            Dim height = Scene.graphicsDevice.Viewport.Height / scale.Y
+            Dim bounds = Rectangle
+            Dim below = Math.Max(0, height - bounds.Bottom - 4)
+            Dim above = Math.Max(0, bounds.Top - 4)
+            Dim desired = Math.Min(Math.Max(_itemHeight, MaxDropDownHeight), _items.Count * _itemHeight)
+            Dim openAbove = below < desired AndAlso above > below
+            Dim popupHeight = Math.Min(desired, If(openAbove, above, below))
+            Dim popupWidth = Math.Min(bounds.Width, Math.Max(0, width - 8))
+            _dropDownScroll.Position = New Vector2(Math.Clamp(CSng(bounds.Left), 4, Math.Max(4, width - popupWidth - 4)), If(openAbove, bounds.Top - popupHeight, bounds.Bottom))
+            _dropDownScroll.Size = New Vector2(popupWidth, popupHeight)
+            _dropDownScroll.BackgroundBlur = BackgroundBlur
+            Dim rowWidth = Math.Max(0, popupWidth - If(_items.Count * _itemHeight > popupHeight, 12, 0))
+            _dropDownContent.Size = New Vector2(rowWidth, _items.Count * _itemHeight)
+            For Each item In _dropDownItems
+                item.Size = New Vector2(rowWidth, _itemHeight)
             Next
+            _dropDownScroll.ScrollTo(_dropDownScroll.ScrollOffset)
+            _dropDownContent.ArrangeChildren()
+        End Sub
+
+        Private Sub EnsureHighlightVisible()
+            If _dropDownScroll Is Nothing OrElse _highlightedIndex < 0 Then Return
+            Dim top = _highlightedIndex * _itemHeight
+            Dim offset = _dropDownScroll.ScrollOffset.Y
+            If top < offset Then offset = top
+            If top + _itemHeight > offset + _dropDownScroll.Size.Y Then offset = top + _itemHeight - _dropDownScroll.Size.Y
+            _dropDownScroll.ScrollTo(New Vector2(0, offset))
         End Sub
 
         Private Function IsItemEnabled(index As Integer) As Boolean
@@ -230,6 +284,7 @@ Namespace [Shared].Drawing.UI.Input
             If Not IsItemEnabled(index) Then Return
             Dim changed = _highlightedIndex <> index
             _highlightedIndex = index
+            EnsureHighlightVisible()
             For row = 0 To _dropDownItems.Count - 1
                 Dim item = _dropDownItems(row)
                 Dim fill = If(row = index, DropDownHighlightColor, DropDownBackgroundColor)
@@ -263,7 +318,7 @@ Namespace [Shared].Drawing.UI.Input
                         Highlight(If(key = Keys.Home, FindEnabled(-1, 1), FindEnabled(_items.Count, -1)))
                     ElseIf wasOpen OrElse _selectedIndex >= 0 Then
                         Dim direction = If(key = Keys.Up OrElse key = Keys.PageUp, -1, 1)
-                        Dim steps = If(key = Keys.PageUp OrElse key = Keys.PageDown, 5, 1)
+                        Dim steps = If(key = Keys.PageUp OrElse key = Keys.PageDown, Math.Max(1, CInt(Math.Floor(If(_dropDownScroll?.Size.Y, MaxDropDownHeight) / _itemHeight))), 1)
                         For stepIndex = 1 To steps
                             Dim nextIndex = FindEnabled(_highlightedIndex, direction)
                             If nextIndex < 0 Then Exit For
@@ -286,16 +341,20 @@ Namespace [Shared].Drawing.UI.Input
 
         Private Sub UpdateDropDown()
             AlignHeader()
-            ' Remove existing dropdown items
-            For Each item In _dropDownItems
-                If Scene IsNot Nothing Then
-                    Scene.RemoveElement(item)
-                End If
-                item.Dispose()
-            Next
+            _dropDownScroll?.Dispose()
+            _dropDownScroll = Nothing
+            _dropDownContent = Nothing
             _dropDownItems.Clear()
 
             If _isDropDownOpen AndAlso Scene IsNot Nothing Then
+                _dropDownScroll = New ScrollViewer(Scene) With {.Padding = New Thickness(0), .IsOverlay = True, .KeyboardFocusTarget = Me,
+                    .BackgroundColor = Color.Transparent, .BackgroundBlur = BackgroundBlur, .CornerRadius = 4,
+                    .HorizontalScrollBarVisibility = 0, .VerticalScrollBarVisibility = 1}
+                For Each chrome In _dropDownScroll.Children
+                    chrome.KeyboardFocusTarget = Me
+                Next
+                _dropDownContent = New StackPanel(Scene) With {.Padding = New Thickness(0), .Spacing = 0, .KeyboardFocusTarget = Me}
+                _dropDownScroll.Content = _dropDownContent
                 Dim yOffset As Single = Rectangle.Bottom
                 For i As Integer = 0 To _items.Count - 1
                     Dim index As Integer = i
@@ -319,7 +378,7 @@ Namespace [Shared].Drawing.UI.Input
                     itemBg.Children.Add(itemText)
                     If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(i, itemBg, itemText)
                     _dropDownItems.Add(itemBg)
-                    Scene.AddElement(itemBg)
+                    _dropDownContent.Children.Add(itemBg)
                     AddHandler itemBg.MouseEnter, Sub() Highlight(index)
 
                     AddHandler itemBg.MouseLeftClick, Sub(p)
@@ -330,7 +389,9 @@ Namespace [Shared].Drawing.UI.Input
 
                     yOffset += _itemHeight
                 Next
+                LayoutDropDown()
                 Highlight(_highlightedIndex)
+                Scene.AddElement(_dropDownScroll)
             End If
         End Sub
 

@@ -129,6 +129,16 @@ Namespace [Shared].Drawing.UI.Primitives
             batch.End()
         End Sub
 
+        Friend Sub CompositeBackdrop(device As GraphicsDevice, texture As Texture2D, destination As Rectangle, bounds As Vector4, corners As Vector4, opacity As Single)
+            shader.Parameters("Mode").SetValue(8.0F)
+            shader.Parameters("TexelSize").SetValue(New Vector2(1.0F / texture.Width, 1.0F / texture.Height))
+            shader.Parameters("BackdropBounds").SetValue(bounds)
+            shader.Parameters("BackdropCorners").SetValue(corners)
+            batch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, device.RasterizerState, shader)
+            batch.Draw(texture, destination, Color.White * opacity)
+            batch.End()
+        End Sub
+
         Private Sub Pass(device As GraphicsDevice, input As Texture2D, output As RenderTarget2D, mode As Single, stepSize As Vector2)
             device.SetRenderTarget(output)
             device.Clear(Color.Transparent)

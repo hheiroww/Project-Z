@@ -33,6 +33,8 @@ float Amount;
 float Phase;
 float Angle;
 float Mode;
+float4 BackdropBounds;
+float4 BackdropCorners;
 struct SpriteInput { float4 Position : SV_POSITION; float4 Color : COLOR0; float2 TexCoord : TEXCOORD0; };
 float4 SoftSample(float2 uv) {
     // Separable nine-tap Gaussian. Radius is expressed in arranged device pixels.
@@ -45,6 +47,17 @@ float4 SoftSample(float2 uv) {
 }
 float4 PortedEffect(SpriteInput input) : PS_TARGET {
     float2 uv = input.TexCoord;
+    if (Mode > 7.5) {
+        float2 local = uv / TexelSize - BackdropBounds.xy;
+        float2 halfSize = BackdropBounds.zw * 0.5;
+        float2 p = local - halfSize;
+        float radius = p.y < 0 ? (p.x < 0 ? BackdropCorners.x : BackdropCorners.y)
+                               : (p.x < 0 ? BackdropCorners.w : BackdropCorners.z);
+        radius = clamp(radius, 0, min(halfSize.x, halfSize.y));
+        float2 q = abs(p) - halfSize + radius;
+        float distance = length(max(q, 0)) + min(max(q.x, q.y), 0) - radius;
+        return SAMPLE(uv) * saturate(0.5 - distance) * input.Color;
+    }
     if (Mode > 6.5) {
         // Exact box resolve of the 2/4/8/16 subpixel grid, including alpha.
         float4 total = 0;

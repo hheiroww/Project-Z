@@ -415,6 +415,28 @@ Namespace [Shared].Drawing.UI
         ''' <summary>WPF-compatible opacity, inherited multiplicatively from visual parents.</summary>
         Public Property Opacity As Single = 1.0F
 
+        Private _backgroundBlur As Single
+        Private backgroundBlurRenderer As Primitives.XamlNativeEffect
+        ''' <summary>Radius in layout pixels for blurring content behind this element. Zero disables backdrop blur; foreground content stays sharp.</summary>
+        Public Property BackgroundBlur As Single
+            Get
+                Return _backgroundBlur
+            End Get
+            Set(value As Single)
+                If Not Single.IsFinite(value) OrElse value < 0 OrElse value > 100 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If _backgroundBlur = value Then Return
+                _backgroundBlur = value
+                Scene?.RequestRender()
+            End Set
+        End Property
+        Friend ReadOnly Property BackgroundBlurEffect As Primitives.XamlNativeEffect
+            Get
+                If backgroundBlurRenderer Is Nothing Then backgroundBlurRenderer = New Primitives.XamlNativeEffect With {.Kind = Primitives.XamlEffectKind.Blur}
+                backgroundBlurRenderer.Radius = BackgroundBlur * Math.Clamp(Scene.Quality.BlurRadiusScale, 0, 3)
+                Return backgroundBlurRenderer
+            End Get
+        End Property
+
         Protected Friend Function ApplyOpacity(color As Color) As Color
             Dim effective = Math.Clamp(Opacity, 0.0F, 1.0F)
             Dim ancestor = Parent
@@ -1048,7 +1070,10 @@ Namespace [Shared].Drawing.UI
 
         ' IDisposable
         Protected Overridable Sub Dispose(disposing As Boolean)
-            If disposing Then rotationSurface?.Dispose()
+            If disposing Then
+                rotationSurface?.Dispose()
+                backgroundBlurRenderer?.Dispose()
+            End If
             If Not Me.disposedValue Then
                 Me.disposedValue = True
                 If disposing Then

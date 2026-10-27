@@ -821,7 +821,9 @@ Namespace [Shared].Drawing
             ' order is hierarchical.  Sorting here preserves Panel.ZIndex inside
             ' each parent and promotes an IsOverlay ancestor together with all of
             ' its descendants above ordinary content added at any later time.
-            If ordered.Any(Function(element) element.DrawingEffect IsNot Nothing AndAlso element.DrawingEffect.IsActive AndAlso IsEffectivelyVisible(element)) Then
+            If ordered.Any(Function(element) IsEffectivelyVisible(element) AndAlso
+                ((element.BackgroundBlur > 0 AndAlso Quality.EffectsEnabled) OrElse
+                 (element.DrawingEffect IsNot Nothing AndAlso element.DrawingEffect.IsActive))) Then
                 DrawXamlEffectCanvas(ordered, gd, viewportRect, ForceClip)
             Else
                 For Each E As SceneElement In ordered

@@ -48,6 +48,9 @@ Namespace [Shared].Drawing
             While index < limit
                 Dim element = ordered(index)
                 If Not IsEffectivelyVisible(element) Then index += 1 : Continue While
+                If element.BackgroundBlur > 0 AndAlso Quality.EffectsEnabled AndAlso element IsNot skipEffect Then
+                    DrawBackgroundBlur(element, device, viewport, forceClip)
+                End If
                 Dim fx = element.DrawingEffect
                 If fx Is Nothing OrElse Not fx.IsActive OrElse element Is skipEffect Then
                     DrawElementRecursive(element, device, viewport, forceClip)
