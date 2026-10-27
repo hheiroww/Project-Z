@@ -20,7 +20,7 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.25.2
+dotnet add package ProjectZ --version 2026.10.26.1
 ```
 
 For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.2/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
@@ -73,6 +73,8 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 - [Third-party notices](THIRD-PARTY-NOTICES.md)
 
 ## Current release
+
+**2026.10.26.1** preserves antialiasing when reactive native effects activate, and fixes shutdown after the game host releases its window. The shared scene manager detaches from its original window safely, including repeated disposal. Applications receive the shutdown fix when rebuilt with this framework; no application-specific exception suppression is required. DX11 and DX12 GPU checks cover hover transitions and cleanup after the run loop.
 
 **2026.10.25.2** makes **Project Properties → Project-Z → Rendering quality** apply to native `Game`/`SceneManager` applications, including both desktop and XAML templates. The default **4x AA** and **16x anisotropic filtering** take effect without quality assignments in application code or generated WPF startup. Explicit runtime quality changes remain supported. Existing DX12 apps can update their `ProjectZFrameworkVersion` pin; DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime` assemblies from the new template. [Graphics quality](docs/GRAPHICS_QUALITY.md) · [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 

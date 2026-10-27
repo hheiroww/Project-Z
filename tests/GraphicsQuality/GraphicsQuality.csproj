@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="ProjectSettings/**/*.cs" />
     <ProjectReference Include="../../Project Z Windows.vbproj" />
 
   </ItemGroup>

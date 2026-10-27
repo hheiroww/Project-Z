@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.25.2</Version>
+	<Version>2026.10.26.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.25.2 applies project anti-aliasing and texture-filtering settings to native Game/SceneManager applications without generated WPF startup or manual quality assignments. Defaults to 4x AA and anisotropic 16x filtering for package consumers, while preserving explicit runtime overrides. Includes the HTML5 cleanup and XAML template source-ambiguity fixes from 2026.10.25.1.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.26.1 preserves antialiasing when native hover effects activate and safely disposes SceneManager after the host releases Game.Window. Retains project rendering-quality settings and template compatibility fixes from 2026.10.25.2.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
