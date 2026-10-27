@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZXamlToolProject>$(MSBuildThisFileDirectory)Tools/ProjectZ.XamlCodegen.csproj</ProjectZXamlToolProject>
+    <ProjectZXamlTool>$(MSBuildThisFileDirectory)Tools/ProjectZ.XamlCodegen.dll</ProjectZXamlTool>
+    <ProjectZNativeXamlToolProject>$(ProjectZXamlToolProject)</ProjectZNativeXamlToolProject>
+    <ProjectZNativeXamlTool>$(ProjectZXamlTool)</ProjectZNativeXamlTool>
+    <ProjectZCompatibilityAssembly>$(MSBuildThisFileDirectory)Runtime/ProjectZ.WpfCompatibility.dll</ProjectZCompatibilityAssembly>
+    <ProjectZApplicationSettingsSchema Condition="'$(ProjectZApplicationSettingsSchema)' == ''">$(MSBuildThisFileDirectory)ProjectZ.Settings.xaml</ProjectZApplicationSettingsSchema>
+  </PropertyGroup>
+</Project>

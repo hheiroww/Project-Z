@@ -16,12 +16,12 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.24.5</Version>
+	<Version>2026.10.25.2</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.24.5 preserves complete Unicode graphemes during wrapping and trimming, shapes modern emoji with the installed color font, caches native HWND lookup, and moves handled exception snapshot writes off the UI thread.</PackageReleaseNotes>
-	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**;Project Z HTML5 Host\**</DefaultItemExcludes>
+    <PackageReleaseNotes>2026.10.25.2 applies project anti-aliasing and texture-filtering settings to native Game/SceneManager applications without generated WPF startup or manual quality assignments. Defaults to 4x AA and anisotropic 16x filtering for package consumers, while preserving explicit runtime overrides. Includes the HTML5 cleanup and XAML template source-ambiguity fixes from 2026.10.25.1.</PackageReleaseNotes>
+	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
 	<PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
@@ -163,19 +163,6 @@
     <Folder Include="Shared\Drawing\Designer\DesignTime\" />
   </ItemGroup>
   <ItemGroup>
-    <None Remove="Project Z HTML5\index.html" />
-    <None Remove="Project Z HTML5\styles.css" />
-    <None Remove="Project Z HTML5\src\**\*.js" />
-    <Content Include="Project Z HTML5\index.html;Project Z HTML5\styles.css">
-      <Pack>True</Pack>
-      <PackagePath>contentFiles\any\any\Project Z HTML5\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
-    </Content>
-    <Content Include="Project Z HTML5\src\**\*.js">
-      <Pack>True</Pack>
-      <PackagePath>contentFiles\any\any\Project Z HTML5\src\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
-    </Content>
-  </ItemGroup>
-  <ItemGroup>
     <None Update="README.NuGet.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
@@ -210,6 +197,7 @@
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
+    <None Include="Project Z XAML Codegen\ProjectZ.RenderingQuality.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.RenderingQuality.targets" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
     <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
     <None Include="ThirdParty\DotNetRuntime\*" Pack="true" PackagePath="licenses\DotNetRuntime\" />

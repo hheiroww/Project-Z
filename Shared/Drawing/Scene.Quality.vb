@@ -21,7 +21,7 @@ Namespace [Shared].Drawing
 
         Public ReadOnly Property Quality As GraphicsQuality
             Get
-                Return GraphicsQuality.ForDevice(graphicsDevice)
+                Return GraphicsQuality.ForDevice(graphicsDevice, sender().GetType().Assembly)
             End Get
         End Property
 

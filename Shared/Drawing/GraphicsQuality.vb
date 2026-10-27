@@ -1,4 +1,6 @@
 Imports System.Runtime.CompilerServices
+Imports System.Globalization
+Imports System.Reflection
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
 
@@ -44,8 +46,19 @@ Namespace [Shared].Drawing
         Public Property ShaderMotionSpeed As Single = 1
 
         Public Shared Function ForDevice(device As GraphicsDevice) As GraphicsQuality
+            Return ForDevice(device, Assembly.GetEntryAssembly())
+        End Function
+
+        Friend Shared Function ForDevice(device As GraphicsDevice, applicationAssembly As Assembly) As GraphicsQuality
             Return devices.GetValue(device, Function(key)
                 Dim quality As New GraphicsQuality()
+                ' Apply build settings once, before any scene renders. Subsequent
+                ' scenes/managers must preserve explicit runtime quality changes.
+                Dim entryAssembly = Assembly.GetEntryAssembly()
+                quality.ApplyProjectSettings(applicationAssembly)
+                ' A reusable Game library can carry its own defaults. The running
+                ' application's project settings take precedence over those.
+                If entryAssembly IsNot applicationAssembly Then quality.ApplyProjectSettings(entryAssembly)
                 AddHandler key.Disposing, Sub(sender, args)
                     For Each cachedSampler As SamplerState In quality.samplers.Values
                         cachedSampler.Dispose()
@@ -55,6 +68,20 @@ Namespace [Shared].Drawing
                 Return quality
             End Function)
         End Function
+
+        Private Sub ApplyProjectSettings(applicationAssembly As Assembly)
+            If applicationAssembly Is Nothing Then Return
+            For Each setting In applicationAssembly.GetCustomAttributes(Of AssemblyMetadataAttribute)()
+                Select Case setting.Key
+                    Case "ProjectZ.AntiAliasingSamples"
+                        AntiAliasingSamples = Integer.Parse(setting.Value, NumberStyles.Integer, CultureInfo.InvariantCulture)
+                    Case "ProjectZ.TextureFiltering"
+                        Dim value = [Enum].Parse(Of TextureFiltering)(setting.Value)
+                        If Not [Enum].IsDefined(value) Then Throw New ArgumentOutOfRangeException(NameOf(setting.Value))
+                        Filtering = value
+                End Select
+            Next
+        End Sub
 
         Public Property AntiAliasingSamples As Integer
             Get

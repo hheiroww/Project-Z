@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZRenderingQualityIntegrationImported>true</ProjectZRenderingQualityIntegrationImported>
+    <ProjectZAntiAliasingSamples Condition="'$(ProjectZAntiAliasingSamples)' == ''">4</ProjectZAntiAliasingSamples>
+    <ProjectZTextureFiltering Condition="'$(ProjectZTextureFiltering)' == ''">Anisotropic16x</ProjectZTextureFiltering>
+  </PropertyGroup>
+  <!-- Native Game/SceneManager applications keep their own entry point. Carry rendering
+       settings separately so they also apply when application startup generation is off. -->
+  <Target Name="ProjectZPrepareRenderingQuality" DependsOnTargets="PrepareForBuild">
+    <Error Condition="'$(ProjectZAntiAliasingSamples)' != '0' and '$(ProjectZAntiAliasingSamples)' != '2' and '$(ProjectZAntiAliasingSamples)' != '4' and '$(ProjectZAntiAliasingSamples)' != '8' and '$(ProjectZAntiAliasingSamples)' != '16'" Text="ProjectZAntiAliasingSamples must be 0, 2, 4, 8 or 16." />
+    <Error Condition="'$(ProjectZTextureFiltering)' != 'Bilinear' and '$(ProjectZTextureFiltering)' != 'Trilinear' and '$(ProjectZTextureFiltering)' != 'Anisotropic2x' and '$(ProjectZTextureFiltering)' != 'Anisotropic4x' and '$(ProjectZTextureFiltering)' != 'Anisotropic8x' and '$(ProjectZTextureFiltering)' != 'Anisotropic16x'" Text="ProjectZTextureFiltering must be Bilinear, Trilinear, Anisotropic2x, Anisotropic4x, Anisotropic8x or Anisotropic16x." />
+    <PropertyGroup>
+      <_ProjectZRenderingQualitySource>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZRenderingQuality$(DefaultLanguageSourceExtension)'))</_ProjectZRenderingQualitySource>
+      <_ProjectZRenderingQualityInputs>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ProjectZRenderingQuality.settings'))</_ProjectZRenderingQualityInputs>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_ProjectZRenderingQualityInputs)" Lines="$(ProjectZAntiAliasingSamples);$(ProjectZTextureFiltering)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <FileWrites Include="$(_ProjectZRenderingQualityInputs)" />
+      <_ProjectZRenderingQualityAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ProjectZ.AntiAliasingSamples</_Parameter1><_Parameter2>$(ProjectZAntiAliasingSamples)</_Parameter2>
+      </_ProjectZRenderingQualityAttribute>
+      <_ProjectZRenderingQualityAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ProjectZ.TextureFiltering</_Parameter1><_Parameter2>$(ProjectZTextureFiltering)</_Parameter2>
+      </_ProjectZRenderingQualityAttribute>
+    </ItemGroup>
+  </Target>
+  <!-- Keep this independent of GenerateAssemblyInfo, including consumers with hand-written
+       AssemblyInfo files. The settings cache also invalidates incremental property changes. -->
+  <Target Name="ProjectZGenerateRenderingQuality" BeforeTargets="BeforeCompile;CoreCompile"
+          DependsOnTargets="ProjectZPrepareRenderingQuality"
+          Condition="'$(Language)' == 'C#' or '$(Language)' == 'VB'"
+          Inputs="$(_ProjectZRenderingQualityInputs);$(MSBuildThisFileFullPath)"
+          Outputs="$(_ProjectZRenderingQualitySource)">
+    <ItemGroup><Compile Remove="$(_ProjectZRenderingQualitySource)" /></ItemGroup>
+    <WriteCodeFragment AssemblyAttributes="@(_ProjectZRenderingQualityAttribute)" Language="$(Language)" OutputFile="$(_ProjectZRenderingQualitySource)">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+      <Output TaskParameter="OutputFile" ItemName="FileWrites" />
+    </WriteCodeFragment>
+  </Target>
+</Project>

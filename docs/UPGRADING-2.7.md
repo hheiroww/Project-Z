@@ -3,7 +3,6 @@
 ## Choose the right starting point
 
 - **Native interface:** continue using Project-Z scenes, controls and XAML with the default DX12 renderer. DX11 remains a source-build option.
-- **HTML5 interface:** use the JavaScript scene engine in `Project Z HTML5`, then attach it to a desktop window with `Html5EngineHost`. The desktop host requires WebView2. Its page uses Canvas2D, not the native DirectX scene renderer.
 - **Existing WPF application:** use the source importer and compatibility library from this repository. They convert supported project source and XAML into a separate output directory. They are separate source projects, not extra libraries bundled into the main ProjectZ package.
 
 ## Install the framework
@@ -12,7 +11,7 @@
 dotnet add package ProjectZ --version 2.7.0
 ```
 
-The package contains the native framework and its model-import helper. HTML5 page assets are included as content files; your application must point the host at the deployed content directory. Start with the [HTML5 host example](../Project%20Z%20HTML5/README.md) to understand window and content setup.
+The package contains the native framework and its model-import helper. Starting with 2026.10.25.1, the separate HTML5 demo engine and `Html5EngineHost` wrapper are removed and HTML content is no longer copied into consuming projects. Imported WebView2 browser controls remain supported.
 
 ## Move a supported WPF project
 

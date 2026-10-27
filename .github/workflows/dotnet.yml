@@ -45,6 +45,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/VectorFontsOnly/VectorFontsOnly.csproj -c Release -p:GeneratePackageOnBuild=false -p:UseLocalSocketJack=false
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify native project rendering quality settings
+        shell: pwsh
+        run: ./tests/GraphicsQuality/Verify-ProjectSettings.ps1 -SkipRuntime
       - name: Build Release package
         run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Verify standalone NuGet consumer

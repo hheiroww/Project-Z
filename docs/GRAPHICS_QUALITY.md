@@ -1,5 +1,20 @@
 # Graphics quality
 
+In Project-Z **2026.10.25.2** and later, choose **Project Properties > Project-Z > Rendering quality** and rebuild. The defaults are **4x anti-aliasing** and **16x anisotropic filtering**. Both apply to native `Game`/`SceneManager` applications, including desktop and XAML templates, without assignments in `GameWindow` or generated WPF startup.
+
+The same build settings can be set in the application project:
+
+```xml
+<PropertyGroup>
+  <ProjectZAntiAliasingSamples>4</ProjectZAntiAliasingSamples>
+  <ProjectZTextureFiltering>Anisotropic16x</ProjectZTextureFiltering>
+</PropertyGroup>
+```
+
+`ProjectZAntiAliasingSamples` accepts `0`, `2`, `4`, `8` or `16`; `0` disables AA. `ProjectZTextureFiltering` accepts `Bilinear`, `Trilinear`, `Anisotropic2x`, `Anisotropic4x`, `Anisotropic8x` or `Anisotropic16x`. The package writes these settings into the application assembly at build time. Each graphics device reads them once before its first scene renders. Later runtime changes remain effective when another scene or manager uses the same device.
+
+For an existing DX12 template app, update `ProjectZFrameworkVersion` in `ProjectZ/ProjectZ.Graphics.props` to `2026.10.25.2` and rebuild. A direct package consumer can update its `ProjectZ` package reference instead. The package supplies the quality build target even when the app retains an older copied `ProjectZ.Application.targets`. DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime/<renderer>/ProjectZ.dll` from the new template. Remove manual quality assignments when the project properties should control rendering.
+
 heirowSnap's **Settings > Graphics** provides Off, 2x, 4x, 8x and 16x AA,
 plus bilinear, trilinear, and anisotropic 2x/4x/8x/16x filtering. Save applies
 the choices across the device's windows and persists them in the Project-Z
@@ -40,3 +55,11 @@ dotnet run --project tests/GraphicsQuality -c Release -p:ProjectZGraphicsBackend
 It checks actual fractional triangle coverage, caller render-target restoration,
 direct and offscreen scenes, every filter, compiled vector text, and blur/clipping
 at each AA level. Each run writes PNG captures and `result.txt`.
+
+Verify that C# and VB project properties reach native rendering without an initial code override:
+
+```powershell
+./tests/GraphicsQuality/Verify-ProjectSettings.ps1 -Backends DirectX12,DirectX11,OpenGL
+```
+
+This checks default 4x, explicit off and 8x settings, filtering, incremental builds, invalid values, and projects with `GenerateAssemblyInfo=false`. It also checks fractional triangle coverage and that later runtime overrides survive another `SceneManager`. Use `-SkipRuntime` for build and assembly-metadata checks on machines without an interactive graphics session.

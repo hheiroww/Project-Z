@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>$ext_safeprojectname$</RootNamespace>
+    <AssemblyName>$safeprojectname$</AssemblyName>
+    <ProjectZXamlMode>DesignerAndCodeBehind</ProjectZXamlMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectZXaml Include="../$ext_safeprojectname$.Designer/MainWindow.xaml" Link="Views/MainWindow.xaml" />
+    <None Include="../$ext_safeprojectname$.Designer/MainWindow.xaml.cs" Link="Views/MainWindow.xaml.cs" />
+    <ProjectZXamlSource Include="../$ext_safeprojectname$.Designer/MainWindow.xaml.cs" />
+  </ItemGroup>
+  <Import Project="ProjectZ/ProjectZ.Tooling.props" />
+  <Import Project="ProjectZ/ProjectZ.Graphics.props" />
+  <Import Project="ProjectZ/ProjectZ.Graphics.targets" />
+  <Import Project="ProjectZ/ProjectZ.Xaml.targets" />
+</Project>
