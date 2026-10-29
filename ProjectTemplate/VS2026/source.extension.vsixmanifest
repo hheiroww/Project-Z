@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="ProjectZ.VisualStudio2026.Templates" Version="2026.10.25.2" Language="en-US" Publisher="hheiroww" />
+    <Identity Id="ProjectZ.VisualStudio2026.Templates" Version="2026.10.28.1" Language="en-US" Publisher="hheiroww" />
     <DisplayName>Project-Z for Visual Studio 2026</DisplayName>
     <Description xml:space="preserve">C# and Visual Basic desktop and XAML designer solutions with automatic build-time XAML, a portable WPF project converter, and DirectX 12, DirectX 11 and OpenGL configurations.</Description>
     <MoreInfo>https://github.com/hheiroww/Project-Z</MoreInfo>

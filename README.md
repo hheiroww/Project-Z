@@ -23,7 +23,7 @@ Add the framework to a Windows .NET 8 or .NET 10 project:
 dotnet add package ProjectZ --version 2026.10.26.1
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.2/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.28.1/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
 
 Choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
 
@@ -75,6 +75,8 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 ## Current release
 
 **2026.10.26.1** preserves antialiasing when reactive native effects activate, and fixes shutdown after the game host releases its window. The shared scene manager detaches from its original window safely, including repeated disposal. Applications receive the shutdown fix when rebuilt with this framework; no application-specific exception suppression is required. DX11 and DX12 GPU checks cover hover transitions and cleanup after the run loop.
+
+**2026.10.28.1** makes native dropdowns reuse their row tree, batch layout and update only changed highlights. Configure popup-only blur with `DropDownBackgroundBlur` (unset inherits `BackgroundBlur`; zero disables it), including native XAML style setters. Foreground text stays sharp. The DX11 offscreen probe passed 34 behavior/pixel checks; a 160-entry warm reopen measured 27.43 ms to 3.72 ms p50 at unchanged effective AA/AF. [API and measurement details](https://github.com/hheiroww/Project-Z/blob/master/tests/FloatingControls/README.md).
 
 **2026.10.25.2** makes **Project Properties → Project-Z → Rendering quality** apply to native `Game`/`SceneManager` applications, including both desktop and XAML templates. The default **4x AA** and **16x anisotropic filtering** take effect without quality assignments in application code or generated WPF startup. Explicit runtime quality changes remain supported. Existing DX12 apps can update their `ProjectZFrameworkVersion` pin; DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime` assemblies from the new template. [Graphics quality](docs/GRAPHICS_QUALITY.md) · [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 

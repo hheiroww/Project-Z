@@ -1,6 +1,6 @@
 # Project-Z templates for Visual Studio 2026
 
-**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.25.2/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.25.2)
+**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.28.1/ProjectZ.VisualStudio2026.vsix)** · [Release and SHA-256 checksums](https://github.com/hheiroww/Project-Z/releases/tag/vs2026-2026.10.28.1)
 
 The installer adds **Project-Z Desktop** and **Project-Z XAML Desktop**, each in **C#** and **Visual Basic**, to Visual Studio 2026, including 2026 Insiders, on Windows x64. Each creates a .NET 10 Windows application with compiled free vector fonts and standalone crash diagnostics. Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs** first. Administrator access is not required for a per-user VSIX install.
 
@@ -16,9 +16,11 @@ Release **2026.10.25.1** keeps the linked WPF code-behind out of App's `Compile`
 
 All four templates include **Project Properties → Project-Z** for build-time settings and the complete portable tooling in `ProjectZ`. Code-first desktop projects leave conversion disabled until you select a mode and add `ProjectZXaml` inputs. Keep generated files under `obj` and edit the original inputs. No Project-Z source checkout is required on the consuming machine.
 
-Release **2026.10.25.2** applies **Project Properties → Project-Z → Rendering quality** to each native `Game`/`SceneManager`, including desktop and XAML apps. The default **4x AA** and **16x anisotropic filtering** work without assignments in `GameWindow` and without enabling generated WPF startup. Rebuild after changing these properties. Settings initialize once per graphics device, so later explicit code overrides remain effective across scenes.
+Since release **2026.10.25.2**, the framework applies **Project Properties → Project-Z → Rendering quality** to each native `Game`/`SceneManager`, including desktop and XAML apps. The default **4x AA** and **16x anisotropic filtering** work without assignments in `GameWindow` and without enabling generated WPF startup. Rebuild after changing these properties. Settings initialize once per graphics device, so later explicit code overrides remain effective across scenes.
 
-For an existing DX12 template app, change `ProjectZFrameworkVersion` in `ProjectZ/ProjectZ.Graphics.props` to **2026.10.25.2** and rebuild. The package supplies the rendering settings build target, so older copied application targets also receive the fix. For DX11/OpenGL, also replace the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` with the matching version from this template. Remove any manual AA workaround when you want the project property to control quality.
+For an existing DX12 template app, change `ProjectZFrameworkVersion` in `ProjectZ/ProjectZ.Graphics.props` to **2026.10.28.1** and rebuild. The package supplies the rendering settings build target, so older copied application targets also receive the fix. For DX11/OpenGL, also replace the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` with the matching version from this template. Remove any manual AA workaround when you want the project property to control quality.
+
+Release **2026.10.28.1** also includes cached native dropdowns and configurable popup backdrop blur. `DropDownBackgroundBlur` inherits `BackgroundBlur` when unset; zero disables it. Native scene styles, compilation and export preserve blur, popup colors and sizing. See the [API and GPU verification notes](../../tests/FloatingControls/README.md).
 
 ## Project converter utility
 
@@ -34,7 +36,7 @@ Run from the app directory. `-RootDirectory App` optionally selects a stable gen
 
 | Visual Studio configuration | Framework and MonoGame renderer |
 | --- | --- |
-| Debug / Release | DirectX 12, the public ProjectZ 2026.10.25.2 runtime |
+| Debug / Release | DirectX 12, the public ProjectZ 2026.10.28.1 runtime |
 | Debug-DX11 / Release-DX11 | DirectX 11, MonoGame WindowsDX 3.8.5.1 |
 | Debug-OpenGL / Release-OpenGL | OpenGL, MonoGame DesktopGL 3.8.5.1 |
 
@@ -48,7 +50,7 @@ dotnet build MyApp.csproj -c Release
 
 `-p:ProjectZGraphicsBackend=OpenGL` also works; use a separate output directory or clean before switching a command-line override. Supported values are `DirectX12`, `DirectX11` and `OpenGL`. Unsupported values fail the build. This template targets **Windows x64**; OpenGL selects the graphics API and does not make the Windows desktop integration cross-platform.
 
-The public ProjectZ package is pinned to **2026.10.25.2** and supplies common dependencies, content, the native scene XAML generator and diagnostics. The template also supplies the full WPF view/project converter and compatibility assembly. DX11/OpenGL select the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` shipped in the template and exclude the package's DX12 managed graphics assets. These backend assemblies are built from this repository with the matching shaders. Keep the complete `ProjectZ` directory, its notices and licenses in your application's source control.
+The public ProjectZ package is pinned to **2026.10.28.1** and supplies common dependencies, content, the native scene XAML generator and diagnostics. The template also supplies the full WPF view/project converter and compatibility assembly. DX11/OpenGL select the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` shipped in the template and exclude the package's DX12 managed graphics assets. These backend assemblies are built from this repository with the matching shaders. Keep the complete `ProjectZ` directory, its notices and licenses in your application's source control.
 
 ## Build the installer from source
 
@@ -70,7 +72,7 @@ For a release candidate that NuGet.org has not indexed yet, pass the exact frame
 
 ```powershell
 dotnet build 'Project Z Windows.vbproj' -c Release -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
-$package = Resolve-Path 'bin/Release/ProjectZ.2026.10.25.2.nupkg'
+$package = Resolve-Path 'bin/Release/ProjectZ.2026.10.28.1.nupkg'
 ./ProjectTemplate/VS2026/Build.ps1 -PackagePath $package
 ./tests/ProjectTemplates/Verify.ps1 -PackagePath $package
 ./tests/ProjectTemplates/Verify-Xaml.ps1 -PackagePath $package

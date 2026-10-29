@@ -94,4 +94,30 @@ and explicit-zero/null round trips.
    blur/text acceptance. Extend to other backends only after their never-shown
    native-context host is reviewed.
 
-No measurements or runtime acceptance are implied by adding these test sources.
+## GPU verification for 2026.10.28.1
+
+The hidden DirectX 11 probe passed all 34 behavior and pixel checks on a GTX
+TITAN X. Both builds requested 16x AA and used the adapter's supported 8x MSAA
+with 16x anisotropic filtering. Native text remained sharp over the blurred
+backdrop, and changing radius between 0, 12 and 24 changed the actual popup pixels.
+
+The comparison used framework commit `f1be92f` with only the identical diagnostics
+opt-out overlay and the same probe. The candidate used `27bcaca`; subsequent
+changes before release update only fixture coverage, documentation and version
+metadata. All timing groups rendered at 720x480 with the same effective quality.
+
+| Entries | Baseline warm reopen p50 | Updated warm reopen p50 | Baseline p95 | Updated p95 |
+| --- | ---: | ---: | ---: | ---: |
+| 90 | 20.43 ms | 4.07 ms | 23.01 ms | 4.98 ms |
+| 160 | 27.43 ms | 3.72 ms | 31.05 ms | 5.07 ms |
+| 1000 | 107.20 ms | 4.22 ms | 280.00 ms | 5.66 ms |
+
+At 1000 entries, steady-open p50 decreased from 5.12 to 2.78 ms. First opening
+still constructs the entries (182.17 ms p50 in the 1000-entry stress case).
+Hover and wheel results were mixed; the measurements do not establish that every
+interaction is faster. These are one paired run with 20 warm reopens and 60
+steady/hover/wheel frames per size; cold percentiles use only three samples.
+
+This is DirectX 11 runtime acceptance. DirectX 12 and OpenGL have separate
+backend builds and template checks; these measurements do not claim GPU runtime
+acceptance for those hosts.

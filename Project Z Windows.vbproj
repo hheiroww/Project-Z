@@ -16,11 +16,11 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.26.2</Version>
+	<Version>2026.10.28.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.26.2 adds BackgroundBlur for sharp foreground content over blurred backdrops and viewport-bounded ComboBox dropdowns with mouse, scrollbar and keyboard navigation through every item.</PackageReleaseNotes>
+    <PackageReleaseNotes>2026.10.28.1 reuses native dropdown rows, batches layout and updates only changed highlights. Native XAML styles, compilation and export support popup blur, colors and sizing. DropDownBackgroundBlur inherits BackgroundBlur when unset and accepts zero to disable popup blur. GPU checks verify sharp text, backdrop blur and keyboard, scrollbar and resize behavior without reducing rendering quality.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>

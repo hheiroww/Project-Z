@@ -48,6 +48,13 @@ jobs:
       - name: Verify native project rendering quality settings
         shell: pwsh
         run: ./tests/GraphicsQuality/Verify-ProjectSettings.ps1 -SkipRuntime
+      - name: Verify native popup XAML and appearance export
+        shell: pwsh
+        run: |
+          ./tests/NativeSceneXaml/Verify.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/NativeSceneExport/Verify.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Release package
         run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Verify standalone NuGet consumer
