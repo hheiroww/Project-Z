@@ -24,8 +24,47 @@ Namespace [Shared].Drawing.UI.Input
         Private Shadows ReadOnly ownerScene As Scene
         Private _highlightedIndex As Integer = -1
         Private _dropDownScroll As ScrollViewer
-        Private _dropDownContent As StackPanel
+        Private _dropDownContent As DropDownPanel
+        Private ReadOnly _dropDownLabels As New List(Of TextElement)
+        Private ReadOnly _dropDownValues As New List(Of String)
+        Private ReadOnly _rowFills As New List(Of Color)
+        Private ReadOnly _rowBorders As New List(Of Color)
+        Private ReadOnly _rowBorderWidths As New List(Of Single)
+        Private _paintedHighlight As Integer = -1
+        Private _dropDownGeometryDirty As Boolean = True
+        Private _dropDownAppearanceDirty As Boolean = True
+        Private _dropDownBounds As Rectangle
+        Private _dropDownViewport As Vector2
+        Private _dropDownBackgroundBlur As Single?
         Private _maxDropDownHeight As Single = 320.0F
+
+        ' The owner lays out fixed-height rows only after geometry changes.
+        ' Scrolling still invokes StackPanel's RectangleChanged arrangement;
+        ' drawing the already arranged panel must not repeat that full walk.
+        Private NotInheritable Class DropDownPanel
+            Inherits StackPanel
+
+            Public Sub New(scene As Scene)
+                MyBase.New(scene)
+            End Sub
+
+            Protected Overrides Sub AlignChildren()
+            End Sub
+        End Class
+
+        ''' <summary>Popup-only blur radius. Nothing inherits BackgroundBlur; an explicit zero disables popup blur.</summary>
+        Public Property DropDownBackgroundBlur As Single?
+            Get
+                Return _dropDownBackgroundBlur
+            End Get
+            Set(value As Single?)
+                If value.HasValue AndAlso (Not Single.IsFinite(value.Value) OrElse value.Value < 0 OrElse value.Value > 100) Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If Nullable.Equals(_dropDownBackgroundBlur, value) Then Return
+                _dropDownBackgroundBlur = value
+                Scene?.RequestRender()
+            End Set
+        End Property
+
         ''' <summary>Maximum popup height in layout pixels. The viewport can constrain it further.</summary>
         Public Property MaxDropDownHeight As Single
             Get
@@ -33,7 +72,9 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Single)
                 If Not Single.IsFinite(value) OrElse value <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If _maxDropDownHeight = value Then Return
                 _maxDropDownHeight = value
+                _dropDownGeometryDirty = True
                 OnUserInvalidated()
             End Set
         End Property
@@ -53,13 +94,74 @@ Namespace [Shared].Drawing.UI.Input
                 Return _dropDownItems.AsReadOnly()
             End Get
         End Property
-        Public Property DropDownBackgroundColor As Color = New Color(16, 35, 30, 242)
-        Public Property DropDownHighlightColor As Color = New Color(36, 84, 68, 246)
-        Public Property DropDownIndicatorColor As Color = New Color(122, 210, 184)
+        Private _dropDownBackgroundColor As New Color(16, 35, 30, 242)
+        Private _dropDownHighlightColor As New Color(36, 84, 68, 246)
+        Private _dropDownIndicatorColor As New Color(122, 210, 184)
+        Public Property DropDownBackgroundColor As Color
+            Get
+                Return _dropDownBackgroundColor
+            End Get
+            Set(value As Color)
+                If _dropDownBackgroundColor = value Then Return
+                _dropDownBackgroundColor = value
+                _dropDownAppearanceDirty = True
+                Scene?.RequestRender()
+            End Set
+        End Property
+        Public Property DropDownHighlightColor As Color
+            Get
+                Return _dropDownHighlightColor
+            End Get
+            Set(value As Color)
+                If _dropDownHighlightColor = value Then Return
+                _dropDownHighlightColor = value
+                _dropDownAppearanceDirty = True
+                Scene?.RequestRender()
+            End Set
+        End Property
+        Public Property DropDownIndicatorColor As Color
+            Get
+                Return _dropDownIndicatorColor
+            End Get
+            Set(value As Color)
+                If _dropDownIndicatorColor = value Then Return
+                _dropDownIndicatorColor = value
+                _dropDownAppearanceDirty = True
+                Scene?.RequestRender()
+            End Set
+        End Property
 
         Public Property DismissDistance As Single = 28.0F
+        Private _itemIsEnabled As Func(Of Integer, Boolean)
+        Private _itemAppearance As Action(Of Integer, RectangleElement, TextElement)
         Public Property ItemIsEnabled As Func(Of Integer, Boolean)
+            Get
+                Return _itemIsEnabled
+            End Get
+            Set(value As Func(Of Integer, Boolean))
+                _itemIsEnabled = value
+                _dropDownAppearanceDirty = True
+                Scene?.RequestRender()
+            End Set
+        End Property
         Public Property ItemAppearance As Action(Of Integer, RectangleElement, TextElement)
+            Get
+                Return _itemAppearance
+            End Get
+            Set(value As Action(Of Integer, RectangleElement, TextElement))
+                If _itemAppearance Is value Then Return
+                _itemAppearance = value
+                _dropDownAppearanceDirty = True
+                ' A different customization delegate can change any row/text
+                ' property. Recreate only for that explicit template change so
+                ' styles removed by the new delegate cannot leak from the old one.
+                If _dropDownScroll IsNot Nothing Then
+                    DisposeDropDown()
+                    If _isDropDownOpen Then UpdateDropDown()
+                End If
+                Scene?.RequestRender()
+            End Set
+        End Property
 
         Private editor As Textbox
         Public Event TextChanged()
@@ -91,7 +193,9 @@ Namespace [Shared].Drawing.UI.Input
                 Return _items
             End Get
             Set(value As List(Of String))
+                If value Is Nothing Then Throw New ArgumentNullException(NameOf(value))
                 _items = value
+                If _selectedIndex >= _items.Count Then _selectedIndex = -1
                 UpdateVisual()
             End Set
         End Property
@@ -146,7 +250,9 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Single)
                 If Not Single.IsFinite(value) OrElse value <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If _itemHeight = value Then Return
                 _itemHeight = value
+                _dropDownGeometryDirty = True
                 UpdateVisual()
             End Set
         End Property
@@ -175,6 +281,9 @@ Namespace [Shared].Drawing.UI.Input
             AddHandler editor.OnTextChanged, Sub() RaiseEvent TextChanged()
             AddHandler MouseLeftClick, Sub(point) IsDropDownOpen = Not IsDropDownOpen
             AddHandler Deselected, Sub() IsDropDownOpen = False
+            AddHandler VisibilityChanged, Sub()
+                                              If Not isVisible Then IsDropDownOpen = False
+                                          End Sub
             If ownerScene IsNot Nothing Then
                 AddHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
                 AddHandler ownerScene.OnMouseLeftDown, AddressOf HandleSceneMouseLeftDown
@@ -237,27 +346,39 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub LayoutDropDown()
-            If _dropDownScroll Is Nothing OrElse Scene Is Nothing Then Return
+            If Not _isDropDownOpen OrElse _dropDownScroll Is Nothing OrElse Scene Is Nothing Then Return
+            _dropDownScroll.BackgroundBlur = DropDownBackgroundBlur.GetValueOrDefault(BackgroundBlur)
+            ' Tint the popup once, including gaps and scrollbar space. Row text
+            ' and highlights are painted afterwards, outside the backdrop effect.
+            _dropDownScroll.BackgroundColor = DropDownBackgroundColor
+            If _dropDownAppearanceDirty Then RefreshDropDownAppearance()
             Dim scale = Scene.Quality.RenderScale
             Dim width = Scene.graphicsDevice.Viewport.Width / scale.X
             Dim height = Scene.graphicsDevice.Viewport.Height / scale.Y
             Dim bounds = Rectangle
+            Dim viewport As New Vector2(width, height)
+            If Not _dropDownGeometryDirty AndAlso bounds = _dropDownBounds AndAlso viewport = _dropDownViewport Then Return
+            _dropDownBounds = bounds
+            _dropDownViewport = viewport
+            _dropDownGeometryDirty = False
             Dim below = Math.Max(0, height - bounds.Bottom - 4)
             Dim above = Math.Max(0, bounds.Top - 4)
             Dim desired = Math.Min(Math.Max(_itemHeight, MaxDropDownHeight), _items.Count * _itemHeight)
             Dim openAbove = below < desired AndAlso above > below
             Dim popupHeight = Math.Min(desired, If(openAbove, above, below))
             Dim popupWidth = Math.Min(bounds.Width, Math.Max(0, width - 8))
-            _dropDownScroll.Position = New Vector2(Math.Clamp(CSng(bounds.Left), 4, Math.Max(4, width - popupWidth - 4)), If(openAbove, bounds.Top - popupHeight, bounds.Bottom))
-            _dropDownScroll.Size = New Vector2(popupWidth, popupHeight)
-            _dropDownScroll.BackgroundBlur = BackgroundBlur
             Dim rowWidth = Math.Max(0, popupWidth - If(_items.Count * _itemHeight > popupHeight, 12, 0))
-            _dropDownContent.Size = New Vector2(rowWidth, _items.Count * _itemHeight)
-            For Each item In _dropDownItems
-                item.Size = New Vector2(rowWidth, _itemHeight)
-            Next
-            _dropDownScroll.ScrollTo(_dropDownScroll.ScrollOffset)
-            _dropDownContent.ArrangeChildren()
+            Using _dropDownContent.DeferArrangement()
+                _dropDownScroll.Position = New Vector2(Math.Clamp(CSng(bounds.Left), 4, Math.Max(4, width - popupWidth - 4)), If(openAbove, bounds.Top - popupHeight, bounds.Bottom))
+                _dropDownScroll.Size = New Vector2(popupWidth, popupHeight)
+                _dropDownContent.Size = New Vector2(rowWidth, _items.Count * _itemHeight)
+                For Each item In _dropDownItems
+                    item.Size = New Vector2(rowWidth, _itemHeight)
+                Next
+                _dropDownScroll.ScrollTo(_dropDownScroll.ScrollOffset)
+                _dropDownContent.ArrangeChildren()
+            End Using
+            EnsureHighlightVisible()
         End Sub
 
         Private Sub EnsureHighlightVisible()
@@ -281,23 +402,46 @@ Namespace [Shared].Drawing.UI.Input
             Return -1
         End Function
         Private Sub Highlight(index As Integer)
-            If Not IsItemEnabled(index) Then Return
-            Dim changed = _highlightedIndex <> index
+            If index <> -1 AndAlso Not IsItemEnabled(index) Then Return
             _highlightedIndex = index
             EnsureHighlightVisible()
-            For row = 0 To _dropDownItems.Count - 1
-                Dim item = _dropDownItems(row)
-                Dim fill = If(row = index, DropDownHighlightColor, DropDownBackgroundColor)
-                Dim border = If(row = index, DropDownIndicatorColor, New Color(122, 180, 161, 40))
-                changed = changed OrElse item.BackgroundColor <> fill OrElse item.BorderColor <> border
-                item.BackgroundColor = fill
-                item.BorderColor = border
-                item.BorderThickness = 1
-            Next
-            If changed Then OnUserInvalidated()
+            If _paintedHighlight = index Then Return
+            PaintDropDownRow(_paintedHighlight, False)
+            PaintDropDownRow(index, True)
+            _paintedHighlight = index
+            OnUserInvalidated()
         End Sub
+
+        Private Sub PaintDropDownRow(index As Integer, highlighted As Boolean)
+            If index < 0 OrElse index >= _dropDownItems.Count OrElse index >= _rowFills.Count Then Return
+            Dim item = _dropDownItems(index)
+            item.BackgroundColor = If(highlighted, DropDownHighlightColor, _rowFills(index))
+            item.BorderColor = If(highlighted, DropDownIndicatorColor, _rowBorders(index))
+            item.BorderThickness = If(highlighted, 1.0F, _rowBorderWidths(index))
+        End Sub
+
+        ''' <summary>Refreshes enabled states and custom row styles after their backing data changes.</summary>
         Public Sub RefreshDropDownAppearance()
+            _dropDownAppearanceDirty = False
+            _rowFills.Clear()
+            _rowBorders.Clear()
+            _rowBorderWidths.Clear()
+            For index = 0 To _dropDownItems.Count - 1
+                Dim item = _dropDownItems(index)
+                item.isEnabled = IsItemEnabled(index)
+                item.BackgroundColor = Color.Transparent
+                item.BorderColor = New Color(122, 180, 161, 40)
+                item.BorderThickness = 1
+                _dropDownLabels(index).ForegroundColor = Color.White
+                If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(index, item, _dropDownLabels(index))
+                _rowFills.Add(item.BackgroundColor)
+                _rowBorders.Add(item.BorderColor)
+                _rowBorderWidths.Add(item.BorderThickness)
+            Next
+            If Not IsItemEnabled(_highlightedIndex) Then _highlightedIndex = FindEnabled(-1, 1)
+            _paintedHighlight = -1
             Highlight(_highlightedIndex)
+            Scene?.RequestRender()
         End Sub
         Private Sub CommitHighlight()
             If IsItemEnabled(_highlightedIndex) Then SelectedIndex = _highlightedIndex
@@ -341,58 +485,95 @@ Namespace [Shared].Drawing.UI.Input
 
         Private Sub UpdateDropDown()
             AlignHeader()
+            If Not _isDropDownOpen Then
+                If _dropDownScroll IsNot Nothing Then
+                    _dropDownScroll.StopScrolling()
+                    Dim captured = Scene?.CapturedPointerElement
+                    Dim ancestor = captured
+                    While ancestor IsNot Nothing
+                        If ancestor Is _dropDownScroll Then
+                            Scene.ReleasePointerCapture(captured)
+                            Exit While
+                        End If
+                        ancestor = ancestor.Parent
+                    End While
+                    _dropDownScroll.isVisible = False
+                    _dropDownScroll.isEnabled = False
+                End If
+                Return
+            End If
+            If Scene Is Nothing Then Return
+
+            ' Items remains a mutable List for compatibility. Compare once when
+            ' opening/updating, so direct same-count edits are also detected.
+            Dim sameItems = _dropDownValues.Count = _items.Count
+            If sameItems Then
+                For index = 0 To _items.Count - 1
+                    If Not String.Equals(_dropDownValues(index), _items(index), StringComparison.Ordinal) Then
+                        sameItems = False
+                        Exit For
+                    End If
+                Next
+            End If
+            If _dropDownScroll Is Nothing OrElse Not sameItems Then BuildDropDown()
+            _dropDownScroll.isVisible = True
+            _dropDownScroll.isEnabled = True
+            RefreshDropDownAppearance()
+            LayoutDropDown()
+            EnsureHighlightVisible()
+        End Sub
+
+        Private Sub BuildDropDown()
+            DisposeDropDown()
+            _dropDownScroll = New ScrollViewer(Scene) With {.Padding = New Thickness(0), .IsOverlay = True, .KeyboardFocusTarget = Me,
+                .BackgroundColor = DropDownBackgroundColor, .CornerRadius = 4,
+                .HorizontalScrollBarVisibility = 0, .VerticalScrollBarVisibility = 1}
+            For Each chrome In _dropDownScroll.Children
+                chrome.KeyboardFocusTarget = Me
+            Next
+            _dropDownContent = New DropDownPanel(Scene) With {.Padding = New Thickness(0), .Spacing = 0, .KeyboardFocusTarget = Me}
+            _dropDownContent.VirtualizationViewport = _dropDownScroll
+            _dropDownScroll.Content = _dropDownContent
+            Using _dropDownContent.DeferArrangement()
+                For index = 0 To _items.Count - 1
+                    Dim rowIndex = index
+                    Dim item As New RectangleElement(Scene) With {
+                        .Size = New Vector2(Rectangle.Width, _itemHeight), .BackgroundColor = Color.Transparent,
+                        .CornerRadius = 4, .KeyboardFocusTarget = Me
+                    }
+                    Dim label As New TextElement(Scene) With {
+                        .Text = _items(index), .ForegroundColor = Color.White,
+                        .Margin = New Thickness(8, 4, 0, 0), .isMouseBypassEnabled = True
+                    }
+                    item.Children.Add(label)
+                    _dropDownItems.Add(item)
+                    _dropDownLabels.Add(label)
+                    _dropDownValues.Add(_items(index))
+                    _dropDownContent.Children.Add(item)
+                    AddHandler item.MouseEnter, Sub() Highlight(rowIndex)
+                    AddHandler item.MouseLeftClick, Sub(p)
+                                                        If Not item.isEnabled OrElse Not IsItemEnabled(rowIndex) Then Return
+                                                        _highlightedIndex = rowIndex
+                                                        CommitHighlight()
+                                                    End Sub
+                Next
+            End Using
+            _dropDownGeometryDirty = True
+            Scene.AddElement(_dropDownScroll)
+        End Sub
+
+        Private Sub DisposeDropDown()
             _dropDownScroll?.Dispose()
             _dropDownScroll = Nothing
             _dropDownContent = Nothing
             _dropDownItems.Clear()
-
-            If _isDropDownOpen AndAlso Scene IsNot Nothing Then
-                _dropDownScroll = New ScrollViewer(Scene) With {.Padding = New Thickness(0), .IsOverlay = True, .KeyboardFocusTarget = Me,
-                    .BackgroundColor = Color.Transparent, .BackgroundBlur = BackgroundBlur, .CornerRadius = 4,
-                    .HorizontalScrollBarVisibility = 0, .VerticalScrollBarVisibility = 1}
-                For Each chrome In _dropDownScroll.Children
-                    chrome.KeyboardFocusTarget = Me
-                Next
-                _dropDownContent = New StackPanel(Scene) With {.Padding = New Thickness(0), .Spacing = 0, .KeyboardFocusTarget = Me}
-                _dropDownScroll.Content = _dropDownContent
-                Dim yOffset As Single = Rectangle.Bottom
-                For i As Integer = 0 To _items.Count - 1
-                    Dim index As Integer = i
-                    Dim itemBg As New RectangleElement(Scene) With {
-                        .Position = New Vector2(Rectangle.Left, yOffset),
-                        .Size = New Vector2(Rectangle.Width, _itemHeight),
-                        .BackgroundColor = If(i = _highlightedIndex, DropDownHighlightColor, DropDownBackgroundColor),
-                        .CornerRadius = 4, .BorderColor = New Color(122, 180, 161, 40), .BorderThickness = 1,
-                        .KeyboardFocusTarget = Me,
-                        .IsOverlay = True
-                    }
-                    itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(i)
-
-                    Dim itemText As New TextElement(Scene) With {
-                        .Text = _items(i),
-                        .ForegroundColor = Color.White,
-                        .Margin = New Thickness(8, 4, 0, 0),
-                        .isMouseBypassEnabled = True
-                    }
-
-                    itemBg.Children.Add(itemText)
-                    If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(i, itemBg, itemText)
-                    _dropDownItems.Add(itemBg)
-                    _dropDownContent.Children.Add(itemBg)
-                    AddHandler itemBg.MouseEnter, Sub() Highlight(index)
-
-                    AddHandler itemBg.MouseLeftClick, Sub(p)
-                                                          If Not itemBg.isEnabled Then Return
-                                                          _highlightedIndex = index
-                                                          CommitHighlight()
-                                                      End Sub
-
-                    yOffset += _itemHeight
-                Next
-                LayoutDropDown()
-                Highlight(_highlightedIndex)
-                Scene.AddElement(_dropDownScroll)
-            End If
+            _dropDownLabels.Clear()
+            _dropDownValues.Clear()
+            _rowFills.Clear()
+            _rowBorders.Clear()
+            _rowBorderWidths.Clear()
+            _paintedHighlight = -1
+            _dropDownGeometryDirty = True
         End Sub
 
         Public Sub AddItem(item As String)
@@ -425,10 +606,8 @@ Namespace [Shared].Drawing.UI.Input
                     RemoveHandler ownerScene.OnMouseLeftDown, AddressOf HandleSceneMouseLeftDown
                     RemoveHandler ownerScene.OnPointerCancelled, AddressOf HandlePointerCancelled
                 End If
-                If _isDropDownOpen OrElse _dropDownItems.Count > 0 Then
-                    _isDropDownOpen = False
-                    UpdateDropDown()
-                End If
+                _isDropDownOpen = False
+                DisposeDropDown()
             End If
             MyBase.Dispose(disposing)
         End Sub

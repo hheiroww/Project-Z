@@ -1003,6 +1003,9 @@ End Function
             If xmlElement.HasAttribute("Opacity") Then
                 element.Opacity = Math.Clamp(GetAttributeSingle(xmlElement, "Opacity", 1.0F), 0.0F, 1.0F)
             End If
+            If xmlElement.HasAttribute("BackgroundBlur") Then
+                element.BackgroundBlur = Single.Parse(xmlElement.GetAttribute("BackgroundBlur"), NumberStyles.Float, CultureInfo.InvariantCulture)
+            End If
 
             If xmlElement.HasAttribute("IsHitTestVisible") Then
                 element.isMouseBypassEnabled = Not GetAttributeBoolean(xmlElement, "IsHitTestVisible", True)
@@ -1459,6 +1462,16 @@ End Function
 
         Private Function CreateComboBox(xmlElement As XmlElement) As SceneElement
             Dim comboBox As New ComboBox(_scene)
+            If xmlElement.HasAttribute("DropDownBackgroundBlur") Then
+                Dim blur = xmlElement.GetAttribute("DropDownBackgroundBlur").Trim()
+                comboBox.DropDownBackgroundBlur = If(blur = "{x:Null}" OrElse blur.Equals("inherit", StringComparison.OrdinalIgnoreCase),
+                    CType(Nothing, Single?), Single.Parse(blur, NumberStyles.Float, CultureInfo.InvariantCulture))
+            End If
+            comboBox.MaxDropDownHeight = GetAttributeSingle(xmlElement, "MaxDropDownHeight", comboBox.MaxDropDownHeight)
+            comboBox.ItemHeight = GetAttributeSingle(xmlElement, "ItemHeight", comboBox.ItemHeight)
+            comboBox.DropDownBackgroundColor = GetAttributeColor(xmlElement, "DropDownBackgroundColor", comboBox.DropDownBackgroundColor)
+            comboBox.DropDownHighlightColor = GetAttributeColor(xmlElement, "DropDownHighlightColor", comboBox.DropDownHighlightColor)
+            comboBox.DropDownIndicatorColor = GetAttributeColor(xmlElement, "DropDownIndicatorColor", comboBox.DropDownIndicatorColor)
             comboBox.BackgroundColor = GetAttributeColor(xmlElement, "Background", comboBox.BackgroundColor)
 
             ' Parse items from ComboBox.Items child element

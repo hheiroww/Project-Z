@@ -45,6 +45,8 @@ internal static class NativeSceneExporter
             ["Font"] = "string", ["Size"] = "Vector2", ["Position"] = "Vector2", ["TextPadding"] = "Vector2",
             ["CornerRadius"] = "float", ["BorderThickness"] = "float", ["MaxWidth"] = "float", ["MaxHeight"] = "float",
             ["BackgroundColor"] = "Color", ["ForegroundColor"] = "Color", ["BorderColor"] = "Color",
+            ["BackgroundBlur"] = "float", ["DropDownBackgroundBlur"] = "float?", ["MaxDropDownHeight"] = "float", ["ItemHeight"] = "float",
+            ["DropDownBackgroundColor"] = "Color", ["DropDownHighlightColor"] = "Color", ["DropDownIndicatorColor"] = "Color",
             ["MouseOverBackgroundColor"] = "Color", ["MouseDownBackgroundColor"] = "Color",
             ["Clip"] = "bool", ["AutoSizeWidthOnTextOverflow"] = "bool", ["IsOverlay"] = "bool",
             ["TextWrapping"] = "TextWrapping", ["TextTrimming"] = "TextTrimming", ["Stretch"] = "ImageStretch"
@@ -56,6 +58,7 @@ internal static class NativeSceneExporter
             value is MemberAccessExpressionSyntax member && member.Expression is IdentifierNameSyntax type && type.Identifier.ValueText is "Color" or "TextWrapping" or "TextTrimming" or "ImageStretch";
         static string MarkupValue(ExpressionSyntax value, string type)
         {
+            if (type == "float?" && value.IsKind(SyntaxKind.NullLiteralExpression)) return "{x:Null}";
             if (value is LiteralExpressionSyntax literal) return type == "string" ? literal.Token.ValueText : literal.Token.Value is bool boolean ? (boolean ? "true" : "false") : Convert.ToString(literal.Token.Value, System.Globalization.CultureInfo.InvariantCulture)!;
             if (type == "Vector2" && value is ImplicitObjectCreationExpressionSyntax vector && vector.ArgumentList.Arguments.All(a => a.Expression is LiteralExpressionSyntax))
                 return string.Join(",", vector.ArgumentList.Arguments.Select(a => Convert.ToString(((LiteralExpressionSyntax)a.Expression).Token.Value, System.Globalization.CultureInfo.InvariantCulture)));

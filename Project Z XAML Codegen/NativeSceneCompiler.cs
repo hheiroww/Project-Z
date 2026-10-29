@@ -11,6 +11,8 @@ internal static class NativeSceneCompiler
         ["Height"] = "float", ["Font"] = "string", ["TextPadding"] = "Vector2", ["CornerRadius"] = "float",
         ["BorderThickness"] = "float", ["BorderColor"] = "Color", ["BackgroundColor"] = "Color", ["ForegroundColor"] = "Color",
         ["MouseOverBackgroundColor"] = "Color", ["MouseDownBackgroundColor"] = "Color", ["MaxWidth"] = "float", ["MaxHeight"] = "float",
+        ["BackgroundBlur"] = "float", ["DropDownBackgroundBlur"] = "float?", ["MaxDropDownHeight"] = "float", ["ItemHeight"] = "float",
+        ["DropDownBackgroundColor"] = "Color", ["DropDownHighlightColor"] = "Color", ["DropDownIndicatorColor"] = "Color",
         ["Clip"] = "bool", ["IsOverlay"] = "bool", ["AutoSizeWidthOnTextOverflow"] = "bool", ["TextWrapping"] = "TextWrapping", ["TextTrimming"] = "TextTrimming"
     };
     internal static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -25,6 +27,7 @@ internal static class NativeSceneCompiler
         if (value.StartsWith("{Resource ") && value.EndsWith('}')) return Identifier(value[10..^1]);
         return type switch
         {
+            "float?" => value is "{x:Null}" or "inherit" ? "null" : Expression(value, "float"),
             "string" => Quote(value),
             "bool" => bool.Parse(value) ? "true" : "false",
             "Vector2" when !value.StartsWith('{') => "new Vector2(" + string.Join(", ", value.Split(',').Select(v => Expression(v.Trim(), "float"))) + ")",

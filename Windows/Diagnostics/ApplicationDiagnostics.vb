@@ -38,6 +38,10 @@ Public NotInheritable Class ApplicationDiagnostics
     Public Shared Sub Initialize(Optional options As DiagnosticOptions = Nothing)
         If Threading.Interlocked.Exchange(initialized, 1) <> 0 Then Return
         options = If(options, New DiagnosticOptions())
+        ' Initialization is first-call-wins, including an explicit opt-out.
+        ' Claim that state before returning so a concurrent/later SceneManager
+        ' cannot start an observer after an offscreen host disabled diagnostics.
+        If Not options.Enabled Then Return
         Dim entry = Reflection.Assembly.GetEntryAssembly()
         displayName = If(options.ApplicationName, If(entry?.GetName().Name, "Project-Z application"))
         Dim safeName = String.Concat(displayName.Select(Function(ch) If(Path.GetInvalidFileNameChars().Contains(ch), "_"c, ch)))

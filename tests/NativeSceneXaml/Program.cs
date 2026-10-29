@@ -6,6 +6,8 @@ sealed class Control(View owner)
     public string Font { get; set; } = "";
     public Microsoft.Xna.Framework.Vector2 Size { get; set; }
     public bool Enabled { get; set; } = true;
+    public float BackgroundBlur { get; set; }
+    public float? DropDownBackgroundBlur { get; set; }
     public event Action<object>? Click;
     public void Activate() => Click?.Invoke(this);
 }
@@ -19,13 +21,16 @@ partial class View
         var control = CreateHeading(() => calls++);
         if (!ReferenceEquals(attached, control) || control.Width != 240 || control.Text != expected) throw new Exception("Markup was not compiled into the control.");
         if (control.Font != "fixture_22" || control.Size.Y != 30 || !ProjectZNativeXamlFontSizes.Contains(22)) throw new Exception("Declarative appearance or font metadata was lost.");
+        if (control.BackgroundBlur != 12 || control.DropDownBackgroundBlur != 0) throw new Exception("Popup blur zero must override inherited background blur.");
+        var inherited = CreateInheritedBlur(() => { });
+        if (inherited.BackgroundBlur != 24 || inherited.DropDownBackgroundBlur != null) throw new Exception("Popup blur null fallback was lost in native XAML.");
         control.Activate(); control.Enabled = false; control.Activate();
         if (calls != 1) throw new Exception("Native action gating failed.");
         var objectControl = CreateObject(() => 125);
         if (objectControl.Text != "Object from XAML" || objectControl.Width != 125) throw new Exception("Object template binding failed.");
         ProjectZCreateAdditionalControls((page, create) => { if (page != "Home") throw new Exception("Page metadata lost."); create(); });
         if (attached?.Text != "Added in XAML" || attached.Width != 80) throw new Exception("XAML-only addition was not created.");
-        Console.WriteLine("PASS native markup, attach, edit, enabled action");
+        Console.WriteLine("PASS native markup, attach, edit, enabled action, popup blur inheritance and explicit zero");
     }
 }
 static class Program

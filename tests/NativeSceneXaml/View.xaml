@@ -11,7 +11,10 @@
       <Event Name="Click" Action="{Parameter action}" When="element.Enabled" />
     </Element>
   </Factory>
-  <Button x:Name="CreateHeading" Factory="Button" Text="{Resource Heading}" Width="240" Height="30" Font="fixture_22" Click="{Parameter action}">
+  <Button x:Name="CreateHeading" Factory="Button" Text="{Resource Heading}" Width="240" Height="30" Font="fixture_22" BackgroundBlur="12" DropDownBackgroundBlur="0" Click="{Parameter action}">
+    <Parameter Name="action" Type="Action" />
+  </Button>
+  <Button x:Name="CreateInheritedBlur" Factory="Button" Text="Inherited" BackgroundBlur="24" DropDownBackgroundBlur="{x:Null}" Click="{Parameter action}">
     <Parameter Name="action" Type="Action" />
   </Button>
   <ObjectFactory x:Name="CreateObject" Type="Control">

@@ -94,6 +94,36 @@ Namespace [Shared].Drawing.UI.Layout
 
 #Region "Methods"
 
+        Private arrangementDeferrals As Integer
+        Private arrangementPending As Boolean
+
+        ''' <summary>Coalesces nested child/geometry mutations into one arrangement when the outer scope is disposed.</summary>
+        Public Function DeferArrangement() As IDisposable
+            arrangementDeferrals += 1
+            Return New ArrangementScope(Me)
+        End Function
+
+        Private NotInheritable Class ArrangementScope
+            Implements IDisposable
+
+            Private panel As StackPanel
+
+            Public Sub New(owner As StackPanel)
+                panel = owner
+            End Sub
+
+            Public Sub Dispose() Implements IDisposable.Dispose
+                Dim owner = panel
+                If owner Is Nothing Then Return
+                panel = Nothing
+                owner.arrangementDeferrals -= 1
+                If owner.arrangementDeferrals = 0 AndAlso owner.arrangementPending Then
+                    owner.arrangementPending = False
+                    owner.ArrangeChildren()
+                End If
+            End Sub
+        End Class
+
         Private Sub OnChildAdded(c As SceneElement)
             ArrangeChildren()
         End Sub
@@ -111,6 +141,10 @@ Namespace [Shared].Drawing.UI.Layout
         ''' </summary>
         Public Sub ArrangeChildren()
             If ImportedLayout IsNot Nothing Then Return
+            If arrangementDeferrals > 0 Then
+                arrangementPending = True
+                Return
+            End If
             Dim currentOffset As Single = 0
             Dim maxCrossSize As Single = 0
 
@@ -169,8 +203,10 @@ Namespace [Shared].Drawing.UI.Layout
         ''' Clears all child elements.
         ''' </summary>
         Public Sub ClearChildren()
-            Children.Clear()
-            ArrangeChildren()
+            Using DeferArrangement()
+                Children.Clear()
+                ArrangeChildren()
+            End Using
         End Sub
 
 #End Region
