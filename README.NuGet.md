@@ -4,6 +4,8 @@
 
 **Familiar XAML. Native graphics. Expressive desktop UI.**
 
+From 2026.11.1.1, the base runtime excludes native crash capture, Assimp model importing, WebView2 hosting and XAML compiler tools. Install those features only when needed; networking apps reference SocketJack directly. [Packages and migration](https://github.com/hheiroww/Project-Z/blob/master/docs/MODULAR-PACKAGES.md).
+
 Build desktop tools, creative applications and game interfaces with a GPU-rendered scene system, native Windows integration and a WPF-inspired programming model.
 
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ?color=21c982&logo=nuget)](https://www.nuget.org/packages/ProjectZ)

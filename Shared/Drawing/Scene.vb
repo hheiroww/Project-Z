@@ -8,7 +8,6 @@ Imports ProjectZ.Shared.Drawing.UI
 Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports System.Collections
 Imports ProjectZ.Shared.Drawing
-Imports SocketJack.Extensions
 
 #End Region
 

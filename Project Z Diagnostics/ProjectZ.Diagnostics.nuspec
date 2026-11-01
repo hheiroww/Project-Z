@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>ProjectZ.Diagnostics</id>
+    <version>$version$</version>
+    <authors>Project-Z</authors>
+    <readme>MODULAR-PACKAGES.md</readme>
+    <projectUrl>https://github.com/hheiroww/Project-Z</projectUrl>
+    <repository type="git" url="https://github.com/hheiroww/Project-Z" />
+    <description>Optional standalone native crash observer and dump capture for Project-Z applications.</description>
+    <dependencies>
+      <group targetFramework="net8.0-windows7.0">
+        <dependency id="ProjectZ" version="[$version$]" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin/$configuration$/net8.0-windows7.0/win-x64/publish/ProjectZ.Diagnostics.exe" target="tools/diagnostics/" />
+    <file src="ProjectZ.Diagnostics.targets" target="buildTransitive/" />
+    <file src="../docs/MODULAR-PACKAGES.md" target="/" />
+    <file src="../ThirdParty/DotNetRuntime/*" target="licenses/DotNetRuntime/" />
+  </files>
+</package>

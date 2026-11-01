@@ -22,15 +22,14 @@ jobs:
         shell: pwsh
         run: |
           [xml]$graphics = Get-Content 'ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props'
-          [xml]$framework = Get-Content 'Project Z Windows.vbproj'
+          [xml]$framework = Get-Content 'Extensions/ProjectZ.Package.props'
           $version = $graphics.SelectSingleNode('/Project/PropertyGroup/ProjectZFrameworkVersion').InnerText.Trim()
           $sourceVersion = $framework.SelectSingleNode('/Project/PropertyGroup/Version').InnerText.Trim()
           if ($version -ne $sourceVersion) {
             throw 'The template package pin must match the framework source version.'
           }
-          dotnet build 'Project Z Windows.vbproj' -c Release -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12 --nologo
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $package = (Resolve-Path "bin/Release/ProjectZ.$version.nupkg").Path
+          ./tools/Pack-RuntimePackages.ps1
+          $package = (Resolve-Path "artifacts/runtime-packages/ProjectZ.$version.nupkg").Path
           ./tests/Packaging/Verify.ps1 -PackagePath $package
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "PROJECTZ_TEMPLATE_PACKAGE=$package" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append

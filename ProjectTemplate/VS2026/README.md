@@ -16,6 +16,8 @@ Release **2026.10.25.1** keeps the linked WPF code-behind out of App's `Compile`
 
 All four templates include **Project Properties → Project-Z** for build-time settings and the complete portable tooling in `ProjectZ`. Code-first desktop projects leave conversion disabled until you select a mode and add `ProjectZXaml` inputs. Keep generated files under `obj` and edit the original inputs. No Project-Z source checkout is required on the consuming machine.
 
+The framework pin is now 2026.11.1.1. New base projects no longer include the optional native crash observer, model importer, browser SDK or networking library, including with alternate graphics backends. Add the [optional packages](../../docs/MODULAR-PACKAGES.md) when using those features. Template tooling remains on the developer machine.
+
 Since release **2026.10.25.2**, the framework applies **Project Properties → Project-Z → Rendering quality** to each native `Game`/`SceneManager`, including desktop and XAML apps. The default **4x AA** and **16x anisotropic filtering** work without assignments in `GameWindow` and without enabling generated WPF startup. Rebuild after changing these properties. Settings initialize once per graphics device, so later explicit code overrides remain effective across scenes.
 
 For an existing DX12 template app, change `ProjectZFrameworkVersion` in `ProjectZ/ProjectZ.Graphics.props` to **2026.10.28.1** and rebuild. The package supplies the rendering settings build target, so older copied application targets also receive the fix. For DX11/OpenGL, also replace the corresponding `ProjectZ/Runtime/<renderer>/ProjectZ.dll` with the matching version from this template. Remove any manual AA workaround when you want the project property to control quality.

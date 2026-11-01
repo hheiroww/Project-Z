@@ -35,6 +35,21 @@ public static unsafe class AssimpModelBridge
 {
     private const long MaximumInputBytes = 512L * 1024L * 1024L;
 
+    private static Assimp CreateApi()
+    {
+        // Silk's default loader does not probe the native extraction directory
+        // of a single-file host. Use the CLR's paths before its normal fallback.
+        var directories = ((AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") as string) ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries).Append(AppContext.BaseDirectory);
+        var name = Environment.Is64BitProcess ? "Assimp64.dll" : "Assimp32.dll";
+        foreach (var directory in directories)
+        {
+            var nativePath = Path.Combine(directory, name);
+            if (System.IO.File.Exists(nativePath)) return new Assimp(Assimp.CreateDefaultContext(new[] { nativePath }));
+        }
+        return Assimp.GetApi();
+    }
+
     public static ImportedModel Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -44,7 +59,7 @@ public static unsafe class AssimpModelBridge
         if (file.Length > MaximumInputBytes)
             throw new InvalidDataException("The model exceeds Project Z's 512 MB import limit.");
 
-        using var api = Assimp.GetApi();
+        using var api = CreateApi();
         var flags = PostProcessSteps.Triangulate |
                     PostProcessSteps.JoinIdenticalVertices |
                     PostProcessSteps.GenerateSmoothNormals |

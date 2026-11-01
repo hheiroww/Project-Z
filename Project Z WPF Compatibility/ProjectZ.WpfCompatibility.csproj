@@ -8,6 +8,7 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="[1.0.3124.44,)" />
     <ProjectReference Include="../Project Z Windows.vbproj" Condition="'$(ProjectZFrameworkPackageVersion)' == ''" />
     <PackageReference Include="ProjectZ" Version="[$(ProjectZFrameworkPackageVersion)]" Condition="'$(ProjectZFrameworkPackageVersion)' != ''" />
   </ItemGroup>

@@ -7,7 +7,6 @@ Imports ProjectZ.Shared.XNA
 Imports ProjectZ.Shared.Animations
 Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports ProjectZ.Shared.Drawing.UI.Input
-Imports SocketJack.Serialization
 
 Namespace [Shared].Drawing.UI
 
@@ -823,27 +822,13 @@ Namespace [Shared].Drawing.UI
         Private ProtoButton As PrototypeElement
 
         Public Sub UpdateElement(newElement As SceneElement)
-            Dim PropertyList As List(Of PropertyReference) = Wrapper.GetPropertyReferences(Me)
-            Dim NewPropertyList As List(Of PropertyReference) = Wrapper.GetPropertyReferences(newElement)
-            For i As Integer = 0 To PropertyList.Count - 1
-                Dim p As PropertyReference = PropertyList(i)
-                Dim np As PropertyReference = NewPropertyList(i)
-                If p.Info.CanWrite Then
-                    If p.Info.Name = np.Info.Name Then
-                        Dim v As Object = np.Info.GetValue(newElement)
-                        Dim ov As Object = np.Info.GetValue(newElement)
-                        Dim oldElement As SceneElement = DirectCast(Me, SceneElement)
-                        'If v.GetType = GetType(Integer) Then
-                        '    Dim ianim As New DoubleAnimation(New Easing.CircleEase(Easing.EaseType.EaseInOut), CDbl(ov), CDbl(v), TimeSpan.FromMilliseconds(16.7), Scene.gameTime)
-                        '    oldElement.BindAnimation(oldElement.HeightProperty, ianim)
-                        '    oldElement.BindAnimation(oldElement.WidthProperty, ianim)
-                        'ElseIf v.GetType = GetType(Double) Then
-                        'End If
-                        p.Info.SetValue(Me, v)
-
-                    End If
-                End If
-
+            If newElement Is Nothing Then Throw New ArgumentNullException(NameOf(newElement))
+            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public
+            For Each target In Me.GetType().GetProperties(flags)
+                If Not target.CanWrite OrElse target.SetMethod Is Nothing OrElse Not target.SetMethod.IsPublic OrElse target.GetIndexParameters().Length <> 0 Then Continue For
+                Dim source = newElement.GetType().GetProperty(target.Name, flags)
+                If source Is Nothing OrElse Not source.CanRead OrElse source.GetMethod Is Nothing OrElse Not source.GetMethod.IsPublic OrElse source.GetIndexParameters().Length <> 0 Then Continue For
+                If target.PropertyType.IsAssignableFrom(source.PropertyType) Then target.SetValue(Me, source.GetValue(newElement))
             Next
         End Sub
 

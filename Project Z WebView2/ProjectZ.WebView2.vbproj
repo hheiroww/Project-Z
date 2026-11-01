@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Extensions/ProjectZ.Package.props" />
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <AssemblyName>ProjectZ.WebView2</AssemblyName>
+    <PackageId>ProjectZ.WebView2</PackageId>
+    <Description>Optional WebView2 HTML5 hosting for Project-Z applications.</Description>
+    <UseWindowsForms>true</UseWindowsForms>
+    <OptionStrict>On</OptionStrict>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Project Z Windows.vbproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="[1.0.3124.44,)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <Version>2026.11.1.1</Version>
+    <Authors>Project-Z</Authors>
+    <RepositoryUrl>https://github.com/hheiroww/Project-Z</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <PackageReadmeFile>MODULAR-PACKAGES.md</PackageReadmeFile>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../docs/MODULAR-PACKAGES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

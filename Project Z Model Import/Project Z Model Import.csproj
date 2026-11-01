@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Extensions/ProjectZ.Package.props" />
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <PackageId>ProjectZ.ModelImport</PackageId>
+    <Description>Optional Assimp OBJ/FBX model importing for Project-Z applications.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -8,6 +11,7 @@
     <RootNamespace>ProjectZ.ModelImport</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Project Z Windows.vbproj" />
     <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
   </ItemGroup>
 </Project>

@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: windows-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -18,20 +18,6 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - name: Wait for SocketJack dependency to be indexed
-        shell: pwsh
-        run: |
-          [xml]$project = Get-Content 'Project Z Windows.vbproj'
-          $version = ($project.Project.ItemGroup.PackageReference | Where-Object Include -eq 'SocketJack').Version
-          for ($attempt = 1; $attempt -le 20; $attempt++) {
-            $index = Invoke-RestMethod 'https://api.nuget.org/v3-flatcontainer/socketjack/index.json'
-            if ($index.versions -contains $version) { break }
-            if ($attempt -eq 20) { throw "SocketJack $version is not yet available from NuGet." }
-            Write-Host "Waiting for NuGet to index SocketJack $version ($attempt/20)."
-            Start-Sleep -Seconds 30
-          }
-      - name: Restore and audit direct and transitive dependencies
-        run: dotnet restore "Project Z Windows.vbproj" -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
       - name: Verify linked CSharp and VB XAML conversion
         shell: pwsh
         run: ./tests/WpfImport/Verify.ps1 -SkipRuntime
@@ -55,31 +41,49 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./tests/NativeSceneExport/Verify.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build Release package
-        run: dotnet build "Project Z Windows.vbproj" -c Release --no-restore -p:UseLocalSocketJack=false -p:ProjectZGraphicsBackend=DirectX12
-      - name: Verify standalone NuGet consumer
+      - name: Build base runtime and optional co-packages
+        shell: pwsh
+        run: ./tools/Pack-RuntimePackages.ps1
+      - name: Verify standalone base and optional package consumers
         shell: pwsh
         run: |
-          $packages = @(Get-ChildItem bin/Release/ProjectZ.*.nupkg | Where-Object Name -NotLike '*.symbols.nupkg')
-          if ($packages.Count -ne 1) { throw "Expected exactly one ProjectZ package." }
-          ./tests/Packaging/Verify.ps1 -PackagePath $packages[0].FullName
-      - name: Preserve package artifact
+          [xml]$properties = Get-Content Extensions/ProjectZ.Package.props
+          $version = $properties.Project.PropertyGroup.Version
+          ./tests/Packaging/Verify.ps1 -PackagePath "artifacts/runtime-packages/ProjectZ.$version.nupkg"
+      - name: Preserve packages for GitHub distribution
         uses: actions/upload-artifact@v4
         with:
-          name: ProjectZ-nuget
-          path: bin/Release/ProjectZ.*.nupkg
+          name: ProjectZ-runtime-packages
+          path: artifacts/runtime-packages/*.nupkg
           if-no-files-found: error
+      - name: Publish validated packages on GitHub
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [xml]$properties = Get-Content Extensions/ProjectZ.Package.props
+          $version = $properties.Project.PropertyGroup.Version
+          $tag = "v$version"
+          gh release view $tag --json tagName 1>$null 2>$null
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          $packages = @(Get-ChildItem artifacts/runtime-packages/*.nupkg | ForEach-Object FullName)
+          if ($packages.Count -ne 5) { throw 'Expected the base runtime and four optional co-packages.' }
+          gh release create $tag @packages --target '${{ github.sha }}' --title "ProjectZ $version" --notes-file docs/MODULAR-PACKAGES.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: NuGet Trusted Publishing
         uses: NuGet/login@v1
         id: login
         with:
           user: Pathogenix
-      - name: Push ProjectZ to NuGet
+      - name: Push base runtime and co-packages to NuGet
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
-          $packages = @(Get-ChildItem bin/Release/ProjectZ.*.nupkg | Where-Object Name -NotLike '*.symbols.nupkg')
-          if ($packages.Count -ne 1) { throw "Expected exactly one ProjectZ package." }
-          dotnet nuget push $packages[0].FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Publish optional features before the new base version is discoverable.
+          $packages = @(Get-ChildItem artifacts/runtime-packages/*.nupkg | Sort-Object @{Expression={ if ($_.Name -match '^ProjectZ\.\d') { 1 } else { 0 } }},Name)
+          if ($packages.Count -ne 5) { throw 'Expected the base runtime and four optional co-packages.' }
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

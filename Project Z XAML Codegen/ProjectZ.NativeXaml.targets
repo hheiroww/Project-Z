@@ -16,6 +16,7 @@
     <MakeDir Directories="$(_ProjectZNativeXamlDirectory)" />
     <WriteLinesToFile File="$(_ProjectZNativeXamlDirectory)/pages" Lines="@(ProjectZSceneXaml->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <MSBuild Projects="$(ProjectZNativeXamlToolProject)" Targets="Restore;Build" Properties="Configuration=Release" RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained" Condition="Exists('$(ProjectZNativeXamlToolProject)')" />
+    <Error Condition="!Exists('$(ProjectZNativeXamlTool)')" Text="Install the ProjectZ.XamlTools NuGet package (PrivateAssets=all) to compile native scene XAML." />
     <Exec Command="dotnet &quot;$(ProjectZNativeXamlTool)&quot; build-native-scenes &quot;$(_ProjectZNativeXamlDirectory)/pages&quot;" />
     <ReadLinesFromFile File="$(_ProjectZNativeXamlDirectory)/native-compile-items"><Output TaskParameter="Lines" ItemName="_ProjectZNativeCompile" /></ReadLinesFromFile>
     <ItemGroup>

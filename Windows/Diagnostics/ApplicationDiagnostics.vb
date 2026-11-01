@@ -47,20 +47,31 @@ Public NotInheritable Class ApplicationDiagnostics
         Dim safeName = String.Concat(displayName.Select(Function(ch) If(Path.GetInvalidFileNameChars().Contains(ch), "_"c, ch)))
         diagnosticFolder = If(options.DirectoryPath, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project-Z", safeName, "Diagnostics"))
         Dim silent = Not options.ShowErrorDialogs
+        ' Extract-all single-file hosts use an extracted AppContext directory;
+        ' the optional observer is a sidecar beside the actual executable.
+        Dim processDirectory = Path.GetDirectoryName(Environment.ProcessPath)
+        Dim helper = Path.Combine(If(processDirectory, AppContext.BaseDirectory), "ProjectZ.Diagnostics.exe")
+        If Not File.Exists(helper) Then helper = Path.Combine(AppContext.BaseDirectory, "ProjectZ.Diagnostics.exe")
+        Dim assemblyDirectory = Path.GetDirectoryName(GetType(ApplicationDiagnostics).Assembly.Location)
+        If Not File.Exists(helper) AndAlso Not String.IsNullOrEmpty(assemblyDirectory) Then helper = Path.Combine(assemblyDirectory, "ProjectZ.Diagnostics.exe")
+        Dim observerInstalled = File.Exists(helper)
         Try
             Directory.CreateDirectory(folder)
             SessionPath = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") & "-" & Environment.ProcessId & ".log")
-            Try
-                managedMap = MemoryMappedFile.CreateOrOpen(ManagedMapName(SessionPath), ManagedMapCapacity, MemoryMappedFileAccess.ReadWrite)
-                managedView = managedMap.CreateViewAccessor()
-            Catch ex As Exception
-                Log("Managed context shared memory unavailable: " & ex.GetType().Name)
-            End Try
+            If observerInstalled Then
+                Try
+                    managedMap = MemoryMappedFile.CreateOrOpen(ManagedMapName(SessionPath), ManagedMapCapacity, MemoryMappedFileAccess.ReadWrite)
+                    managedView = managedMap.CreateViewAccessor()
+                Catch ex As Exception
+                    Log("Managed context shared memory unavailable: " & ex.GetType().Name)
+                End Try
+            End If
             Log("Start; executable=" & Environment.ProcessPath & "; version=" & If(entry?.GetName().Version?.ToString(), "unknown") &
                 "; runtime=" & RuntimeInformation.FrameworkDescription & "; OS=" & RuntimeInformation.OSDescription)
             Dim marker = Path.Combine(AppContext.BaseDirectory, "ProjectZ.Release.json")
             If IO.File.Exists(marker) Then Log("Release=" & IO.File.ReadAllText(marker).Trim())
-            Log("Application SHA256=" & Convert.ToHexString(Security.Cryptography.SHA256.HashData(IO.File.ReadAllBytes(entry.Location))))
+            Dim entryPath = If(String.IsNullOrEmpty(entry?.Location), Environment.ProcessPath, entry.Location)
+            If Not String.IsNullOrEmpty(entryPath) AndAlso File.Exists(entryPath) Then Log("Application SHA256=" & Convert.ToHexString(Security.Cryptography.SHA256.HashData(IO.File.ReadAllBytes(entryPath))))
             For Each old In New DirectoryInfo(folder).GetFiles("*.log").OrderByDescending(Function(file) file.LastWriteTimeUtc).Skip(20)
                 Try
                     old.Delete()
@@ -69,25 +80,26 @@ Public NotInheritable Class ApplicationDiagnostics
                 Catch
                 End Try
             Next
-            Dim helper = Path.Combine(Path.GetDirectoryName(GetType(ApplicationDiagnostics).Assembly.Location), "ProjectZ.Diagnostics.exe")
-            Dim start As New ProcessStartInfo(helper) With {.UseShellExecute = False, .CreateNoWindow = True, .WindowStyle = ProcessWindowStyle.Hidden, .WorkingDirectory = AppContext.BaseDirectory}
-            start.ArgumentList.Add("--diagnostics-watch")
-            start.ArgumentList.Add(Environment.ProcessId.ToString())
-            start.ArgumentList.Add("--diagnostics-session")
-            start.ArgumentList.Add(SessionPath)
-            start.ArgumentList.Add("--application-name")
-            start.ArgumentList.Add(displayName)
-            If silent Then start.ArgumentList.Add("--diagnostics-no-dialog")
-            Using observer = Process.Start(start)
-                Dim timeout = Stopwatch.StartNew()
-                While Not IO.File.Exists(SessionPath & ".ready") AndAlso Not observer.HasExited AndAlso timeout.ElapsedMilliseconds < 5000
-                    Threading.Thread.Sleep(20)
-                End While
-            End Using
-            If IO.File.Exists(SessionPath & ".ready") Then
-                IO.File.Delete(SessionPath & ".ready")
-            Else
-                Log("WARNING: Native crash observer did not acknowledge startup.")
+            If observerInstalled Then
+                Dim start As New ProcessStartInfo(helper) With {.UseShellExecute = False, .CreateNoWindow = True, .WindowStyle = ProcessWindowStyle.Hidden, .WorkingDirectory = AppContext.BaseDirectory}
+                start.ArgumentList.Add("--diagnostics-watch")
+                start.ArgumentList.Add(Environment.ProcessId.ToString())
+                start.ArgumentList.Add("--diagnostics-session")
+                start.ArgumentList.Add(SessionPath)
+                start.ArgumentList.Add("--application-name")
+                start.ArgumentList.Add(displayName)
+                If silent Then start.ArgumentList.Add("--diagnostics-no-dialog")
+                Using observer = Process.Start(start)
+                    Dim timeout = Stopwatch.StartNew()
+                    While Not IO.File.Exists(SessionPath & ".ready") AndAlso Not observer.HasExited AndAlso timeout.ElapsedMilliseconds < 5000
+                        Threading.Thread.Sleep(20)
+                    End While
+                End Using
+                If IO.File.Exists(SessionPath & ".ready") Then
+                    IO.File.Delete(SessionPath & ".ready")
+                Else
+                    Log("WARNING: Native crash observer did not acknowledge startup.")
+                End If
             End If
         Catch ex As Exception
             Log("Diagnostic initialization failed: " & ex.ToString())
@@ -96,8 +108,10 @@ Public NotInheritable Class ApplicationDiagnostics
         ' A native debugger can see a fatal CLR event before UnhandledException.
         ' Publish bounded context to shared memory; only the background writer
         ' and external observer touch disk for ordinary first-chance snapshots.
-        AddHandler AppDomain.CurrentDomain.FirstChanceException, Sub(sender, args) CaptureManagedContext(args.Exception)
-        managedFlushTimer = New Threading.Timer(Sub(state) FlushManagedContext(), Nothing, 250, 250)
+        If observerInstalled Then
+            AddHandler AppDomain.CurrentDomain.FirstChanceException, Sub(sender, args) CaptureManagedContext(args.Exception)
+            managedFlushTimer = New Threading.Timer(Sub(state) FlushManagedContext(), Nothing, 250, 250)
+        End If
         AddHandler TaskScheduler.UnobservedTaskException, Sub(sender, args) Report("Unobserved task", args.Exception)
 #If Not PROJECTZ_DIAGNOSTICS_OBSERVER Then
         AddHandler System.Windows.Forms.Application.ThreadException, Sub(sender, args)

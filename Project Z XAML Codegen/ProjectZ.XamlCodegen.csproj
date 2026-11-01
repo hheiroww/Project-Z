@@ -1,10 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Extensions/ProjectZ.Package.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ProjectZ.XamlCodegen</AssemblyName>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>ProjectZ.XamlTools</PackageId>
+    <Description>Optional build-time XAML conversion and native scene compiler tools for Project-Z.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
@@ -16,4 +24,16 @@
     <Compile Include="../Project Z WPF Compatibility/NativeMarkup.cs" Link="NativeMarkup.cs" />
     <Compile Include="../Project Z WPF Compatibility/MarkupTranslation.cs" Link="MarkupTranslation.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="ProjectZ.XamlTools.targets" Pack="true" PackagePath="buildTransitive/ProjectZ.XamlTools.targets" />
+    <None Include="ProjectZ.NativeXaml.targets;ProjectZ.RenderingQuality.targets" Pack="true" PackagePath="tools/xaml-codegen/" />
+    <None Include="../ThirdParty/XamlCodegen/*" Pack="true" PackagePath="licenses/XamlCodegen/" />
+  </ItemGroup>
+  <Target Name="IncludeXamlToolPayload" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <_ProjectZXamlToolPayload Include="$(OutputPath)**/*" Exclude="$(OutputPath)**/*.pdb;$(OutputPath)**/*.nupkg;$(OutputPath)ProjectZ.XamlCodegen.exe" />
+      <None Include="@(_ProjectZXamlToolPayload)" Pack="true"
+            PackagePath="tools/xaml-codegen/%(_ProjectZXamlToolPayload.RecursiveDir)%(_ProjectZXamlToolPayload.Filename)%(_ProjectZXamlToolPayload.Extension)" />
+    </ItemGroup>
+  </Target>
 </Project>

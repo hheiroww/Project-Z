@@ -1,6 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Extensions/ProjectZ.Package.props" />
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <PackageId>ProjectZ.Diagnostics</PackageId>
+    <Description>Optional standalone native crash observer and dump capture for Project-Z applications.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- An explicit manifest declares the runtime dependency without linking
+         Windows Desktop into this independently trimmed console observer. -->
+    <NuspecFile>ProjectZ.Diagnostics.nuspec</NuspecFile>
+    <NuspecProperties>version=$(Version);configuration=$(Configuration)</NuspecProperties>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
     <TargetFramework>net8.0-windows7.0</TargetFramework>
     <RootNamespace>ProjectZ</RootNamespace>
     <AssemblyName>ProjectZ.Diagnostics</AssemblyName>
@@ -10,6 +19,8 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <RollForward>Major</RollForward>
@@ -21,4 +32,14 @@
     <Compile Include="..\Windows\Diagnostics\ApplicationDiagnostics.vb" Link="ApplicationDiagnostics.vb" />
     <Compile Include="..\Windows\Diagnostics\DiagnosticOptions.vb" Link="DiagnosticOptions.vb" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive/ProjectZ.Diagnostics.targets" />
+    <None Include="../ThirdParty/DotNetRuntime/*" Pack="true" PackagePath="licenses/DotNetRuntime/" />
+  </ItemGroup>
+  <Target Name="IncludeStandaloneObserver" BeforeTargets="GenerateNuspec" DependsOnTargets="Publish">
+    <Error Condition="!Exists('$(PublishDir)ProjectZ.Diagnostics.exe')" Text="Publish the standalone crash observer before packaging." />
+    <ItemGroup>
+      <None Include="$(PublishDir)ProjectZ.Diagnostics.exe" Pack="true" PackagePath="tools/diagnostics/" />
+    </ItemGroup>
+  </Target>
 </Project>

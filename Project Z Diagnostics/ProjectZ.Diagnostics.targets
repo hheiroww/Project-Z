@@ -1,0 +1,12 @@
+<Project>
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)../tools/diagnostics/ProjectZ.Diagnostics.exe" Pack="false">
+      <Link>ProjectZ.Diagnostics.exe</Link>
+      <TargetPath>ProjectZ.Diagnostics.exe</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <!-- The observer is launched as a separate process, including by bundled hosts. -->
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+</Project>

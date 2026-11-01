@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="Extensions/ProjectZ.Package.props" />
 
   <PropertyGroup>
 	<TargetFramework>net8.0-windows7.0</TargetFramework>
@@ -16,11 +17,10 @@
 	<SingleInstance>True</SingleInstance>
 	<EnableVisualStyles>True</EnableVisualStyles>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<Version>2026.10.28.1</Version>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
-    <PackageReleaseNotes>2026.10.28.1 reuses native dropdown rows, batches layout and updates only changed highlights. Native XAML styles, compilation and export support popup blur, colors and sizing. DropDownBackgroundBlur inherits BackgroundBlur when unset and accepts zero to disable popup blur. GPU checks verify sharp text, backdrop blur and keyboard, scrollbar and resize behavior without reducing rendering quality.</PackageReleaseNotes>
+    <PackageReleaseNotes>Smaller base runtime. Native crash capture, Assimp model importing, WebView2 hosting and XAML compiler tools are optional co-packages. Networking applications reference SocketJack directly. Managed error logging remains in the base runtime. See docs/MODULAR-PACKAGES.md for migration.</PackageReleaseNotes>
 	<DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**;Project Z Linux Test\**</DefaultItemExcludes>
 	<Title>Project Z</Title>
 	<Description>An XNA UI Framework that runs on modern .NET 8.0</Description>
@@ -28,12 +28,7 @@
 	<PackageIcon>project-z-icon.png</PackageIcon>
 	<PackageProjectUrl>https://github.com/hheiroww/Project-Z</PackageProjectUrl>
 	<ProjectZGraphicsBackend Condition="'$(ProjectZGraphicsBackend)' == ''">DirectX12</ProjectZGraphicsBackend>
-    <!-- Declare the supported SDK floor so a consumer's compatible direct pin
-         does not become a package downgrade. The browser runtime updates separately. -->
-	<ProjectZWebView2SdkVersion Condition="'$(ProjectZWebView2SdkVersion)' == ''">[1.0.3124.44,)</ProjectZWebView2SdkVersion>
-	<!-- Published packages must not depend on an unpublished sibling checkout. -->
-	<SocketJackProject Condition="'$(UseLocalSocketJack)' == 'true' and '$(SocketJackProject)' == ''">..\..\Documents\GitHub\SocketJack\SocketJack\SocketJack.csproj</SocketJackProject>
-	<TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectZModelImport</TargetsForTfmSpecificBuildOutput>
+	<TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectZVectorText</TargetsForTfmSpecificBuildOutput>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">$(DefineConstants),PROJECTZ_DIRECTX12=-1</DefineConstants>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'">$(DefineConstants),PROJECTZ_DIRECTX11=-1</DefineConstants>
 	<DefineConstants Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">$(DefineConstants),PROJECTZ_OPENGL=-1</DefineConstants>
@@ -49,6 +44,7 @@
 	<Compile Remove="packages\**" />
 	<Compile Remove="Project Z Application\**" />
 	<Compile Remove="Project Z Diagnostics\**" />
+	<Compile Remove="Project Z WebView2\**" />
 	<Compile Remove="Project Z Audio\**" />
 	<Compile Remove="Project Z Test\**" />
 	<Compile Remove="Project Z Tower Defense\**" />
@@ -86,10 +82,7 @@
 	<PackageReference Include="MonoGame.Runtime.Windows.DX12" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'" />
 	<PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
 	<PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" />
-	<PackageReference Include="SocketJack" Version="2026.10.17.3" Condition="!Exists('$(SocketJackProject)')" />
-	<PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
 	<PackageReference Include="LibTessDotNet" Version="1.1.15" />
-	<PackageReference Include="Microsoft.Web.WebView2" Version="$(ProjectZWebView2SdkVersion)" />
 	<!-- Needed by the WindowsDX fallback's SharpDX dependency graph. -->
 	<PackageReference Include="System.Net.Http" Version="4.3.4" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
 	<PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX11'" />
@@ -99,21 +92,13 @@
 	<Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11' and '$(ProjectZGraphicsBackend)' != 'OpenGL'" Text="ProjectZGraphicsBackend must be DirectX12, DirectX11 or OpenGL." />
 </Target>
 
-<ItemGroup Condition="Exists('$(SocketJackProject)')">
-	<ProjectReference Include="$(SocketJackProject)" />
-</ItemGroup>
-
 <ItemGroup>
-	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
-	<ProjectReference Include="Project Z XAML Codegen\ProjectZ.XamlCodegen.csproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
-	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Vector Text\ProjectZ.VectorText.csproj" PrivateAssets="all" />
 </ItemGroup>
 
-  <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
-  <Target Name="IncludeProjectZModelImport">
+  <!-- Vector text is required by the base UI. Optional features ship separately. -->
+  <Target Name="IncludeProjectZVectorText">
     <ItemGroup>
-      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ModelImport.dll" />
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
     </ItemGroup>
   </Target>
@@ -175,32 +160,11 @@
     </None>
   </ItemGroup>
 
-  <!-- Include all VB code files by default (SDK-style) -->
-  <Target Name="IncludeProjectZDiagnosticsRuntime" BeforeTargets="AssignTargetPaths;_GetPackageFiles" Condition="'$(ProjectZDiagnosticsPrepared)' != 'true'">
-    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Restore;Build" Condition="'$(NoBuild)' != 'true'" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;RuntimeIdentifier;Platform;ArtifactsPath;GeneratePackageOnBuild" />
-    <MSBuild Projects="$(MSBuildThisFileDirectory)Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" Targets="Restore;Publish" Condition="'$(NoBuild)' != 'true'"
-             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true"
-             RemoveProperties="TargetFramework;Platform;ArtifactsPath;GeneratePackageOnBuild;PublishDir" />
-    <PropertyGroup><ProjectZDiagnosticsPrepared>true</ProjectZDiagnosticsPrepared></PropertyGroup>
-    <Error Condition="!Exists('$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\publish\ProjectZ.Diagnostics.exe')" Text="Build the standalone diagnostics observer before packaging." />
-    <ItemGroup>
-      <_ProjectZDiagnosticPayload Include="$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\publish\ProjectZ.Diagnostics.exe;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.dll;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.deps.json;$(MSBuildThisFileDirectory)Project Z Diagnostics\bin\$(Configuration)\net8.0-windows7.0\win-x64\ProjectZ.Diagnostics.runtimeconfig.json" />
-      <Content Include="@(_ProjectZDiagnosticPayload)">
-        <Link>%(Filename)%(Extension)</Link>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-        <Pack>true</Pack>
-        <PackagePath>tools\diagnostics\</PackagePath>
-      </Content>
-    </ItemGroup>
-  </Target>
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.RenderingQuality.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.RenderingQuality.targets" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
-    <None Include="ThirdParty\XamlCodegen\*" Pack="true" PackagePath="licenses\XamlCodegen\" />
-    <None Include="ThirdParty\DotNetRuntime\*" Pack="true" PackagePath="licenses\DotNetRuntime\" />
     <Content Include="ThirdParty\MonoGame.Native\win-x64\mgruntime.dll;ThirdParty\MonoGame.Native\win-x64\runtime.json;ThirdParty\MonoGame.Native\LICENSE*" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
       <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -209,15 +173,6 @@
       <PackagePath>tools\native\win-x64\</PackagePath>
     </Content>
   </ItemGroup>
-  <Target Name="IncludeProjectZXamlCodegenRuntime" BeforeTargets="_GetPackageFiles">
-    <ItemGroup>
-      <!-- Preserve build-host and satellite subdirectories; the DLL alone cannot run. -->
-      <_ProjectZXamlCodegenPayload Include="$(MSBuildThisFileDirectory)Project Z XAML Codegen\bin\$(Configuration)\net8.0\**\*"
-            Exclude="$(MSBuildThisFileDirectory)Project Z XAML Codegen\bin\$(Configuration)\net8.0\**\*.pdb" />
-      <None Include="@(_ProjectZXamlCodegenPayload)" Pack="true"
-            PackagePath="tools\xaml-codegen\%(_ProjectZXamlCodegenPayload.RecursiveDir)%(_ProjectZXamlCodegenPayload.Filename)%(_ProjectZXamlCodegenPayload.Extension)" />
-    </ItemGroup>
-  </Target>
   <ItemGroup>
     <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />
   </ItemGroup>
