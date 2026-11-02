@@ -1,3 +1,4 @@
+Imports ProjectZ.Shared.Extensions
 #Region "Using Statements"
 Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
@@ -1370,7 +1371,14 @@ Namespace [Shared].Drawing
 
             ' Try to load the backend-specific FXAA shader effect.
             Try
-                Dim FXAA As New Effect(graphicsDevice, My.Resources.FXAA)
+                Dim shader As Byte()
+                Using stream = GetType(Scene).Assembly.GetManifestResourceStream("ProjectZ.Resources.FXAA.mgfx")
+                    Using bytes As New IO.MemoryStream()
+                        stream.CopyTo(bytes)
+                        shader = bytes.ToArray()
+                    End Using
+                End Using
+                Dim FXAA As New Effect(graphicsDevice, shader)
                 FXAA.Parameters.Item("EdgeThreshold").SetValue(0.125F)
                 FXAA.Parameters.Item("SubPixelAliasingRemoval").SetValue(1.0F)
                 Effects.Add(FXAA)

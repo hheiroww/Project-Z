@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ProjectZ.macOS</PackageId>
+    <ProjectZDesktopPlatform>macOS</ProjectZDesktopPlatform>
+    <DefineConstants>$(DefineConstants),MACOS=-1</DefineConstants>
+  </PropertyGroup>
+  <Import Project="../Project Z DesktopGL/ProjectZ.DesktopGL.props" />
+  <Import Project="../Project Z DesktopGL/ProjectZ.DesktopGL.targets" />
+</Project>

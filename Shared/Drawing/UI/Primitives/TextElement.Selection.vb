@@ -70,6 +70,8 @@ Namespace [Shared].Drawing.UI.Primitives
             Catch ex As System.Runtime.InteropServices.ExternalException
                 Return False
             End Try
+#ElseIf PROJECTZ_DESKTOPGL Then
+            Return Global.ProjectZ.Shared.Input.DesktopClipboard.TrySetText(value)
 #Else
             Return False
 #End If

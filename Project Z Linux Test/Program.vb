@@ -3,7 +3,6 @@ Imports System.Collections.Generic
 Imports System.Linq
 #End Region
 
-#If WINDOWS OrElse LINUX Then
 ''' <summary>
 ''' The main class.
 ''' </summary>
@@ -20,4 +19,3 @@ Public NotInheritable Class Program
         End Using
 	End Sub
 End Class
-#End If

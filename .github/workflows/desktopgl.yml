@@ -1,0 +1,75 @@
+name: Build DesktopGL packages
+on:
+  push:
+    branches: [master, 'codex/linux-macos-targets']
+    paths:
+      - 'Shared/**'
+      - 'Project Z DesktopGL/**'
+      - 'Project Z Linux/**'
+      - 'Project Z macOS/**'
+      - 'Project Z Vector Text/**'
+      - 'tests/DesktopGL/**'
+      - 'tools/*DesktopGL*'
+      - 'Extensions/ProjectZ.Package.props'
+      - '.github/workflows/desktopgl.yml'
+  pull_request:
+    paths:
+      - 'Shared/**'
+      - 'Project Z DesktopGL/**'
+      - 'Project Z Linux/**'
+      - 'Project Z macOS/**'
+      - 'Project Z Vector Text/**'
+      - 'tests/DesktopGL/**'
+      - 'tools/*DesktopGL*'
+      - 'Extensions/ProjectZ.Package.props'
+      - '.github/workflows/desktopgl.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-15-intel
+            rid: osx-x64
+          - os: macos-15
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build both platform NuGet packages
+        run: ./tools/Pack-DesktopGLPackages.ps1
+      - name: Build desktop sample
+        run: |
+          dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release -p:ProjectZDesktopPlatform=macOS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify independent packages, native graphics and RID publishing
+        if: runner.os != 'Linux'
+        run: ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics
+      - name: Verify Linux packages and graphics under Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri libopenal1
+          xvfb-run -a pwsh -NoProfile -File ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve validated NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-DesktopGL-${{ matrix.rid }}
+          path: artifacts/desktopgl-packages/*.nupkg
+          if-no-files-found: error

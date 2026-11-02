@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Project Z Linux/ProjectZ.Linux.vbproj" />
+  <Project Path="Project Z macOS/ProjectZ.macOS.vbproj" />
+  <Project Path="Project Z Vector Text/ProjectZ.VectorText.csproj" />
+</Solution>

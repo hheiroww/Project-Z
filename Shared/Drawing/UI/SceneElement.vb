@@ -1,3 +1,4 @@
+Imports ProjectZ.Shared.Extensions
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Input
 Imports Microsoft.Xna.Framework.Graphics
@@ -31,6 +32,8 @@ Namespace [Shared].Drawing.UI
             If String.IsNullOrEmpty(text) Then Return
 #If WINDOWS Then
             System.Windows.Forms.Clipboard.SetText(text)
+#ElseIf PROJECTZ_DESKTOPGL Then
+            Global.ProjectZ.Shared.Input.DesktopClipboard.TrySetText(text)
 #End If
         End Sub
         ''' <summary>Optional compatibility routing before native input handlers. True consumes the event.</summary>

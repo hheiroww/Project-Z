@@ -7,7 +7,8 @@ flow into every application.
 
 | Package | Install when the application needs |
 | --- | --- |
-| `ProjectZ` | The base native UI runtime. |
+| `ProjectZ` | The Windows native UI runtime. |
+| `ProjectZ.Linux` / `ProjectZ.macOS` | The corresponding Linux or macOS DesktopGL runtime. Install one platform runtime per target. See [DesktopGL](DESKTOPGL.md). |
 | `ProjectZ.ModelImport` | Assimp-backed OBJ/FBX loading through `ModelImporter3D` or `Surface3DElement.LoadModel`. |
 | `ProjectZ.WebView2` | `ProjectZ.Shared.Html5.Html5EngineHost` and WebView2 HTML5 hosting. The separate Microsoft WebView2 browser runtime must also be available. |
 | `ProjectZ.Diagnostics` | An external native crash observer, forced-exit detection and minidumps. Includes its own runtime and deploys as a sidecar executable. |

@@ -22,8 +22,19 @@ Namespace [Shared].Drawing.UI.Input
     ''' <summary>Offline Windows spelling with an application-owned UTF-8 word list.
     ''' No typed text is written to disk or sent over the network.</summary>
     Public NotInheritable Class OfflineSpellChecker
+#If WINDOWS Then
         Private Shared ReadOnly jobs As New BlockingCollection(Of Action)
         Private Shared ReadOnly worker As Thread = StartWorker()
+#End If
+        Public Shared ReadOnly Property IsSupported As Boolean
+            Get
+#If WINDOWS Then
+                Return True
+#Else
+                Return False
+#End If
+            End Get
+        End Property
         Private Shared ReadOnly defaultInstance As New Lazy(Of OfflineSpellChecker)(
             Function() New OfflineSpellChecker(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ProjectZ", "Spelling", If(Assembly.GetEntryAssembly()?.GetName().Name, "Application"), "dictionary.txt")))
@@ -82,6 +93,7 @@ Namespace [Shared].Drawing.UI.Input
                 revisionValue += 1
             End SyncLock
         End Sub
+#If WINDOWS Then
         Private Shared Function StartWorker() As Thread
             Dim result As New Thread(Sub()
                                          For Each job In jobs.GetConsumingEnumerable()
@@ -92,8 +104,10 @@ Namespace [Shared].Drawing.UI.Input
             result.Start()
             Return result
         End Function
+#End If
         ''' <summary>Runs the local WPF/Windows spelling engine on a dedicated STA, away from rendering.</summary>
         Public Function CheckAsync(text As String, language As String, Optional cancellationToken As CancellationToken = Nothing) As Task(Of IReadOnlyList(Of SpellingIssue))
+#If WINDOWS Then
             Dim completion As New TaskCompletionSource(Of IReadOnlyList(Of SpellingIssue))(TaskCreationOptions.RunContinuationsAsynchronously)
             jobs.Add(Sub()
                          Try
@@ -127,6 +141,9 @@ Namespace [Shared].Drawing.UI.Input
                          End Try
                      End Sub)
             Return completion.Task
+#Else
+            Return Task.FromException(Of IReadOnlyList(Of SpellingIssue))(New PlatformNotSupportedException("The built-in offline spelling engine requires Windows."))
+#End If
         End Function
     End Class
 End Namespace

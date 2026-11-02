@@ -35,6 +35,8 @@ Namespace [Shared].Drawing
         Private _UseHardwareInput As Boolean = False
         ''' <summary>Route this HWND's queued mouse messages through the scene event system.</summary>
         Public Property UseWindowMessagesInput As Boolean
+#Else
+        Private Const UseHardwareInput As Boolean = False
 #End If
 
         Public Property LimitFPS As Integer
@@ -102,7 +104,7 @@ Namespace [Shared].Drawing
 #If WINDOWS Then
                 Return nativeKeyboard IsNot Nothing AndAlso Not UseExternalInput
 #Else
-                Return False
+                Return Not UseExternalInput AndAlso subscribedWindow IsNot Nothing
 #End If
             End Get
         End Property
@@ -1232,15 +1234,17 @@ Namespace [Shared].Drawing
 #If WINDOWS Then
                     DrainKeyboardMessages()
 #Else
+                    ActiveScene.UsesNativeTextInput = UsesNativeTextInput
                     DetectKeyPress(gameTime)
+                    DrainTextInput()
 #End If
                 End If
 #If WINDOWS Then
                 If Not UseExternalInput AndAlso Not UseWindowMessagesInput Then
                     DetectMouseEvents(gameTime, UseHardwareInput)
                 End If
-#ElseIf LINUX Then
-                DetectMouseEvents(gameTime)
+#Else
+                If Not UseExternalInput Then DetectMouseEvents(gameTime)
 #End If
                 ActiveScene.Tick(gameTime)
             End If
@@ -1286,11 +1290,30 @@ Namespace [Shared].Drawing
 #End If
             graphicsManager = TryCast(Sender.Services.GetService(GetType(IGraphicsDeviceManager)), GraphicsDeviceManager)
             subscribedWindow = Sender.Window
-            If subscribedWindow IsNot Nothing Then AddHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+            If subscribedWindow IsNot Nothing Then
+                AddHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+#If Not WINDOWS Then
+                AddHandler subscribedWindow.TextInput, AddressOf HandleTextInput
+#End If
+            End If
         End Sub
 
         ' Game.Run may release Game.Window before its owner's final Dispose.
         ' Unsubscribe from the window we attached to, rather than reacquiring it.
+#If Not WINDOWS Then
+        Private ReadOnly textInput As New System.Collections.Concurrent.ConcurrentQueue(Of Char)
+        Private Sub HandleTextInput(senderObject As Object, args As TextInputEventArgs)
+            If Not UseExternalInput AndAlso Not Char.IsControl(args.Character) Then textInput.Enqueue(args.Character)
+        End Sub
+        Private Sub DrainTextInput()
+            Dim value As Char
+            Dim text As New System.Text.StringBuilder()
+            While textInput.TryDequeue(value)
+                text.Append(value)
+            End While
+            If text.Length > 0 Then ActiveScene.InsertNativeText(text.ToString())
+        End Sub
+#End If
         Private subscribedWindow As GameWindow
         Private viewportResizePending As Boolean
 
@@ -1347,6 +1370,9 @@ Namespace [Shared].Drawing
                 If disposing Then
                     If subscribedWindow IsNot Nothing Then
                         RemoveHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+#If Not WINDOWS Then
+                        RemoveHandler subscribedWindow.TextInput, AddressOf HandleTextInput
+#End If
                         subscribedWindow = Nothing
                     End If
                     ' Dispose all scenes

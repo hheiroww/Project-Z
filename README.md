@@ -29,6 +29,8 @@ For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 
 
 Choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
 
+Linux and macOS applications use the new `ProjectZ.Linux` and `ProjectZ.macOS` packages with MonoGame DesktopGL. [Platform features, source builds and packaging](docs/DESKTOPGL.md).
+
 ## heirowSnap built with Project Z
 
 A native file gallery and Graphics panel share the same transparent theme. Watch the gallery scroll while a colorful desktop moves behind the windows, then explore the native Graphics controls.

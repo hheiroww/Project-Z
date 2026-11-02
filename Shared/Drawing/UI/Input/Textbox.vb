@@ -428,6 +428,8 @@ Namespace [Shared].Drawing.UI.Input
             Catch ex As System.Runtime.InteropServices.ExternalException
                 Return False
             End Try
+#ElseIf PROJECTZ_DESKTOPGL Then
+            Return Global.ProjectZ.Shared.Input.DesktopClipboard.TrySetText(SelectedText)
 #Else
             Return False
 #End If
@@ -460,6 +462,17 @@ Namespace [Shared].Drawing.UI.Input
             Catch ex As System.Runtime.InteropServices.ExternalException
                 Return False
             End Try
+#ElseIf PROJECTZ_DESKTOPGL Then
+            Dim text As String = Nothing
+            If Not Global.ProjectZ.Shared.Input.DesktopClipboard.TryGetText(text) Then Return False
+            Dim context As New ScenePastingContext(text, "UnicodeText")
+            Dim pasteEvent = SceneRoutedEvent.Register("Pasting", SceneEventRouting.Bubble)
+            SceneEvents.RaiseEvent(Me, New SceneRoutedEventArgs(pasteEvent, Me, context))
+            If context.Cancelled Then Return False
+            text = TryCast(context.DataObject, String)
+            If text Is Nothing Then Return False
+            ReplaceSelection(text)
+            Return True
 #Else
             Return False
 #End If
