@@ -69,6 +69,13 @@ the dependency graph, loads fonts, validates both embedded OpenGL shaders, and
 publishes Linux x64 and Intel / Apple Silicon macOS payloads. Native CI runs the
 build and checks on Ubuntu and macOS as well as Windows.
 
+The main `dotnet.yml` publishing workflow waits for all DesktopGL matrix checks
+before pushing either platform package, using the repository's existing NuGet
+Trusted Publishing identity. Its manual inputs `desktopgl_only=true` and
+`publish_desktopgl=true` release just these packages. Windows hosted CI checks
+builds and publishing without graphics; native Linux and Mac jobs also run the
+graphics, Unicode input and clipboard smoke tests.
+
 OpenGL shader binaries are intentionally versioned source assets so Linux and
 Mac builds do not need the Windows HLSL compiler. After editing either shader or
 the MonoGame tool manifest, regenerate them on Windows with

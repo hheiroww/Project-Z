@@ -3,10 +3,20 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      desktopgl_only:
+        description: Build only the Linux and macOS packages
+        type: boolean
+        default: false
+      publish_desktopgl:
+        description: Publish validated Linux and macOS packages to NuGet
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   publish:
+    if: ${{ inputs.desktopgl_only != true }}
     runs-on: windows-latest
     permissions:
       contents: write
@@ -83,6 +93,42 @@ jobs:
           # Publish optional features before the new base version is discoverable.
           $packages = @(Get-ChildItem artifacts/runtime-packages/*.nupkg | Sort-Object @{Expression={ if ($_.Name -match '^ProjectZ\.\d') { 1 } else { 0 } }},Name)
           if ($packages.Count -ne 5) { throw 'Expected the base runtime and four optional co-packages.' }
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+  desktopgl:
+    if: ${{ github.event_name == 'push' || inputs.desktopgl_only == true || inputs.publish_desktopgl == true }}
+    uses: ./.github/workflows/desktopgl.yml
+  publish-desktopgl:
+    if: ${{ github.event_name == 'push' || inputs.publish_desktopgl == true }}
+    needs: desktopgl
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: ProjectZ-DesktopGL-linux-x64
+          path: desktopgl-packages
+      - name: NuGet Trusted Publishing
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Pathogenix
+      - name: Push Linux and macOS packages to NuGet
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $packages = @(Get-ChildItem desktopgl-packages/*.nupkg)
+          if ($packages.Count -ne 2 -or @($packages | Where-Object Name -NotMatch '^ProjectZ\.(Linux|macOS)\.\d').Count -ne 0) {
+            throw 'Expected exactly the validated Linux and macOS packages.'
+          }
           foreach ($package in $packages) {
             dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

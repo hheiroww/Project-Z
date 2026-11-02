@@ -1,7 +1,7 @@
 name: Build DesktopGL packages
 on:
   push:
-    branches: [master, 'codex/linux-macos-targets']
+    branches: ['codex/linux-macos-targets']
     paths:
       - 'Shared/**'
       - 'Project Z DesktopGL/**'
@@ -24,6 +24,7 @@ on:
       - 'Extensions/ProjectZ.Package.props'
       - '.github/workflows/desktopgl.yml'
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -58,8 +59,13 @@ jobs:
           dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release -p:ProjectZDesktopPlatform=macOS
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify independent packages, native graphics and RID publishing
-        if: runner.os != 'Linux'
+        if: runner.os == 'macOS'
         run: ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics
+      - name: Verify Windows cross-build and RID publishing
+        if: runner.os == 'Windows'
+        # Hosted Windows runners have no suitable OpenGL framebuffer driver.
+        # Graphics checks run on the native Linux and macOS targets above/below.
+        run: ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}'
       - name: Verify Linux packages and graphics under Xvfb
         if: runner.os == 'Linux'
         run: |
