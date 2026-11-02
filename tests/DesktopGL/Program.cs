@@ -56,7 +56,7 @@ internal static class Program
 #endif
         if (args.Contains("--graphics"))
         {
-            using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"));
+            using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"), args.FirstOrDefault(a => a.StartsWith("--capture="))?[10..]);
             game.Run();
             Require(game.Completed, "Graphics smoke did not complete.");
         }
@@ -77,13 +77,15 @@ internal sealed class SmokeGame : Game
     private int frames;
     private readonly bool testBackdrop;
     private readonly bool nativeBackdrop;
+    private readonly string? capturePath;
     private NativeBackdropFixture? nativeFixture;
     public bool Completed { get; private set; }
 
-    public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false)
+    public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false, string? capturePath = null)
     {
         this.testBackdrop = testBackdrop;
         this.nativeBackdrop = nativeBackdrop;
+        this.capturePath = capturePath;
         graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 480, PreferredBackBufferHeight = 320,
@@ -171,13 +173,14 @@ internal sealed class SmokeGame : Game
     {
         manager.Draw(gameTime);
         frames++;
-        if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active))
+        if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active)
+            && (!nativeBackdrop || manager.DesktopBackdrop.CapturedFrameCount >= 4))
         {
             Program.Require(textbox.Text == "é", $"Unicode TextInput failed: {textbox.Text}");
             Program.Require(SceneElement.RenderExceptionCount == 0, SceneElement.FirstRenderException ?? "Scene rendering failed.");
             var pixels = new Color[GraphicsDevice.PresentationParameters.BackBufferWidth * GraphicsDevice.PresentationParameters.BackBufferHeight];
             GraphicsDevice.GetBackBufferData(pixels);
-            Program.Require(pixels.Any(p => p.G > 100 && p.G > p.R * 1.5f), "Scene did not render the green rectangle.");
+            if (!nativeBackdrop) Program.Require(pixels.Any(p => p.G > 100 && p.G > p.R * 1.5f), "Scene did not render the green rectangle.");
             Program.Require(pixels.Any(p => p.R > 180 && p.G > 180 && p.B > 180), "Vector text was not rendered.");
             if (testBackdrop && !nativeBackdrop)
             {
@@ -185,14 +188,26 @@ internal sealed class SmokeGame : Game
                 var left = pixels[290 * width + 30]; var center = pixels[290 * width + 240]; var right = pixels[290 * width + 450];
                 Program.Require(left.R > 220 && left.B < 30 && right.B > 220 && right.R < 30, "Desktop material lost its source colors.");
                 Program.Require(center.R > 40 && center.B > 40 && center.R < 215 && center.B < 215, "Gaussian desktop transition did not blur.");
+                var largestStep = Enumerable.Range(185, 110).Max(x => Math.Max(Math.Abs(pixels[290 * width + x].R - pixels[290 * width + x + 1].R), Math.Abs(pixels[290 * width + x].B - pixels[290 * width + x + 1].B)));
+                Program.Require(largestStep <= 8, $"Gaussian transition has visible contour bands: adjacent channel step={largestStep}.");
                 Console.WriteLine("DESKTOP_BLUR_SHADER_OK");
             }
             if (nativeBackdrop)
             {
                 var width = GraphicsDevice.PresentationParameters.BackBufferWidth;
                 var sample = pixels[100 * width + 100];
-                Program.Require(sample.G > 225 && sample.R < 30 && sample.B < 30, "Desktop source included the red host or lost the controlled underlying window.");
+                Program.Require(sample.G > 225 && sample.R < 30 && sample.B < 30, $"Desktop source included the host or lost the controlled underlying window: RGBA={sample}.");
+                var foreground = pixels[50 * width + 100];
+                Program.Require(foreground.R > 225 && foreground.G < 30 && foreground.B < 30, "The host foreground did not stay sharp over the native backdrop.");
                 Console.WriteLine($"NATIVE_DESKTOP_EXCLUSION_OK captureMs={manager.DesktopBackdrop.LastCaptureMilliseconds:F2}");
+            }
+            if (capturePath != null && !nativeBackdrop)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(capturePath))!);
+                using var image = new Texture2D(GraphicsDevice, GraphicsDevice.PresentationParameters.BackBufferWidth, GraphicsDevice.PresentationParameters.BackBufferHeight);
+                image.SetData(pixels);
+                using var file = File.Create(capturePath);
+                image.SaveAsPng(file, image.Width, image.Height);
             }
             Completed = true;
             Console.WriteLine("DESKTOPGL_GRAPHICS_OK");

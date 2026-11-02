@@ -31,6 +31,7 @@ Namespace [Shared].Composition
         Private lastRequest As DesktopBackdropRequests.Request
         Private input As Texture2D
         Private downsampled, scratch, blurred As RenderTarget2D
+        Private ReadOnly prefilterTargets As New List(Of RenderTarget2D)()
         Private shader As Effect
         Private batch As SpriteBatch
         Private white As Texture2D
@@ -184,8 +185,13 @@ Namespace [Shared].Composition
                             End Using
                         End Using
                     End If
-                    Dim reduction = If(Settings.BlurRadius >= 16, 2, 1)
-                    Dim width = Math.Max(1, input.Width \ reduction), height = Math.Max(1, input.Height \ reduction)
+                    Dim radius = Math.Clamp(Settings.BlurRadius, 0, 100) * dpi
+                    ' Paired bilinear taps represent adjacent Gaussian texels.
+                    ' Scaling their spacing above one texel creates gaps and visible
+                    ' bands, so match the working resolution to the requested sigma.
+                    Dim workingScale = Math.Max(captureScale, radius / 2.94F)
+                    Dim width = Math.Max(1, CInt(Math.Floor(frameArea.Width / workingScale)))
+                    Dim height = Math.Max(1, CInt(Math.Floor(frameArea.Height / workingScale)))
                     If blurred Is Nothing OrElse blurred.Width <> width OrElse blurred.Height <> height Then
                         downsampled?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
                         downsampled = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
@@ -193,16 +199,15 @@ Namespace [Shared].Composition
                         blurred = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
                         dirty = True
                     End If
-                    Dim radius = Math.Clamp(Settings.BlurRadius, 0, 100) * dpi
                     If dirty OrElse radius <> renderedRadius Then
+                        Dim filtered = Prefilter(device, width, height)
                         device.SetRenderTarget(downsampled)
                         batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone)
-                        batch.Draw(input, New Rectangle(0, 0, width, height), Color.White)
+                        batch.Draw(filtered, New Rectangle(0, 0, width, height), Color.White)
                         batch.End()
                         shader.Parameters("Mode").SetValue(0.0F)
-                        Dim stepSize = radius / 2.94F / (frameArea.Width / CSng(width))
-                        Pass(device, downsampled, scratch, New Vector2(stepSize / width, 0))
-                        Pass(device, scratch, blurred, New Vector2(0, stepSize / height))
+                        Pass(device, downsampled, scratch, New Vector2(radius / 2.94F / frameArea.Width, 0))
+                        Pass(device, scratch, blurred, New Vector2(0, radius / 2.94F / frameArea.Height))
                         dirty = False : renderedRadius = radius
                     End If
                     If targets.Length = 0 Then device.SetRenderTarget(Nothing) Else device.SetRenderTargets(targets)
@@ -236,6 +241,33 @@ Namespace [Shared].Composition
                 device.RasterizerState = rasterizer : device.BlendState = blend : device.DepthStencilState = depth
             End Try
         End Function
+        Private Function Prefilter(device As GraphicsDevice, targetWidth As Integer, targetHeight As Integer) As Texture2D
+            Dim current As Texture2D = input
+            Dim index = 0
+            ' Reduce by at most two per pass so fine desktop details are averaged
+            ' before decimation instead of aliasing into the broad blur material.
+            While current.Width > targetWidth * 2 OrElse current.Height > targetHeight * 2
+                Dim width = Math.Max(targetWidth, (current.Width + 1) \ 2)
+                Dim height = Math.Max(targetHeight, (current.Height + 1) \ 2)
+                If index = prefilterTargets.Count Then
+                    prefilterTargets.Add(New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None))
+                ElseIf prefilterTargets(index).Width <> width OrElse prefilterTargets(index).Height <> height Then
+                    prefilterTargets(index).Dispose()
+                    prefilterTargets(index) = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
+                End If
+                Dim target = prefilterTargets(index)
+                device.SetRenderTarget(target)
+                batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone)
+                batch.Draw(current, target.Bounds, Color.White)
+                batch.End()
+                current = target : index += 1
+            End While
+            While prefilterTargets.Count > index
+                prefilterTargets(prefilterTargets.Count - 1).Dispose()
+                prefilterTargets.RemoveAt(prefilterTargets.Count - 1)
+            End While
+            Return current
+        End Function
         Private Sub Pass(device As GraphicsDevice, sourceTexture As Texture2D, target As RenderTarget2D, direction As Vector2)
             device.SetRenderTarget(target)
             shader.Parameters("BlurStep").SetValue(direction)
@@ -250,6 +282,10 @@ Namespace [Shared].Composition
             _State = DesktopBackdropState.Disabled
             DesktopBackdropRequests.Remove(NativeWindowHandle)
             input?.Dispose() : downsampled?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
+            For Each target In prefilterTargets
+                target.Dispose()
+            Next
+            prefilterTargets.Clear()
             white?.Dispose() : shader?.Dispose() : batch?.Dispose()
         End Sub
     End Class

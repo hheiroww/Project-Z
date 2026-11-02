@@ -1,21 +1,5 @@
 name: Build DesktopGL packages
 on:
-  push:
-    branches: ['codex/linux-macos-targets']
-    paths:
-      - 'Shared/**'
-      - 'Project Z DesktopGL/**'
-      - 'Project Z Linux/**'
-      - 'Project Z macOS/**'
-      - 'Project Z Vector Text/**'
-      - 'Native/DesktopCapture/**'
-      - 'Resources/**'
-      - 'tests/DesktopGL/**'
-      - 'tests/DesktopBlurWindows/**'
-      - 'tools/*DesktopGL*'
-      - 'Extensions/ProjectZ.Package.props'
-      - 'Extensions/ProjectZ.DesktopCapture.Source.targets'
-      - '.github/workflows/desktopgl.yml'
   pull_request:
     paths:
       - 'Shared/**'

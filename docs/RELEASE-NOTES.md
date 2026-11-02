@@ -23,4 +23,4 @@ backends through supported hooks, keeping optional native engines out of the
 base UI package. Existing Windows defaults remain available for text, spelling
 and media. DWM material requests now use the shader and no companion window.
 
-[Desktop blur and setup](DESKTOP-BLUR.md) · [Platform integration pathways](PLATFORM-PATHWAYS.md)
+[Desktop blur and setup](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOP-BLUR.md) · [Platform integration pathways](https://github.com/hheiroww/Project-Z/blob/master/docs/PLATFORM-PATHWAYS.md)

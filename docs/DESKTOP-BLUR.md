@@ -14,9 +14,11 @@ backdrop.Settings.NoiseOpacity = 0.006f;
 scene.BackgroundColor = new Color(12, 16, 20) * 0.45f; // Background-only tint; controls stay sharp
 ```
 
-The material uses a prefiltered, reduced-resolution desktop image and separable
-Gaussian passes. Bilinear tap pairing covers 17 texels with nine texture reads
-per axis. Padding around the client area prevents clipped blur at the edges.
+The material uses a progressively prefiltered, reduced-resolution desktop image
+and separable Gaussian passes. The working resolution follows the requested
+radius, keeping the bilinear tap pairs contiguous to avoid contour bands.
+Tap pairing covers 17 texels with nine texture reads per axis. Padding around
+the client area prevents clipped blur at the edges.
 The result is cached between capture updates. Saturation, tint and stable subtle
 noise provide an acrylic-style finish; these are configurable rather than tied
 to an OS theme. The DWM compositor's exact material/kernel is not a public API,

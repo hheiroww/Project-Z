@@ -12,7 +12,7 @@ foreach ($backend in @('DirectX12','DirectX11','OpenGL')) {
     if (!$SkipGraphics) {
         $program = Get-ChildItem (Join-Path $artifacts 'bin/DesktopBlurWindows') -Filter DesktopBlurWindows.dll -Recurse -File | Select-Object -First 1
         if (!$program) { throw "$backend executable was not built." }
-        dotnet $program.FullName --graphics --desktop-blur "--backend=$backend"
+        dotnet $program.FullName --graphics --desktop-blur "--backend=$backend" "--capture=$artifacts/desktop-blur.png"
         if ($LASTEXITCODE -ne 0) { throw "$backend Gaussian shader checks failed." }
         dotnet $program.FullName --graphics --desktop-blur --native-desktop "--backend=$backend"
         if ($LASTEXITCODE -ne 0) { throw "$backend desktop exclusion checks failed." }
