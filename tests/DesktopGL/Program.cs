@@ -8,6 +8,8 @@ using ProjectZ.Shared.Drawing.Designer;
 using ProjectZ.Shared.Drawing.UI;
 using ProjectZ.Shared.Drawing.UI.Input;
 using ProjectZ.Shared.Drawing.UI.Primitives;
+using Color = Microsoft.Xna.Framework.Color;
+using Keys = Microsoft.Xna.Framework.Input.Keys;
 
 internal static class Program
 {
@@ -19,10 +21,21 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+#if PROJECTZ_WINDOWS_RUNTIME
+        System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
+        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(new ProjectZ.RuntimeDiagnostics.DiagnosticOptions { DirectoryPath = Path.Combine(AppContext.BaseDirectory, "diagnostics"), ShowErrorDialogs = false });
+#endif
         ProviderChecks.Run();
+#if PROJECTZ_WINDOWS_RUNTIME
+        var backend = args.FirstOrDefault(x => x.StartsWith("--backend="))?.Split('=')[1] ?? "DirectX12";
+        Require(GraphicsBackendInfo.Current.ToString() == backend, "Wrong Windows graphics backend.");
+#else
         Require(GraphicsBackendInfo.Current == ProjectZGraphicsBackend.OpenGL, "Wrong graphics backend.");
+#endif
         var assembly = typeof(Scene).Assembly;
+#if !PROJECTZ_WINDOWS_RUNTIME
         Require(!assembly.GetReferencedAssemblies().Any(a => new[] { "PresentationCore", "PresentationFramework", "WindowsBase", "System.Windows.Forms", "SocketJack", "Microsoft.Web.WebView2.Core" }.Contains(a.Name)), "Windows/private dependencies leaked into DesktopGL.");
+#endif
         foreach (var name in new[] { "FXAA", "XamlEffects", "DesktopBlur" })
         {
             using var stream = assembly.GetManifestResourceStream($"ProjectZ.Resources.{name}.mgfx")!;
@@ -32,14 +45,18 @@ internal static class Program
         using var bold = new VectorFont("ProjectZ Sans", 700, 12);
         using var fallback = new VectorFont("Missing platform font", 400, 12);
         Require(regular.Measure("Linux / macOS").X > 40 && bold.Measure("Hello").Y > 0, "Compiled font metrics failed.");
+#if !PROJECTZ_WINDOWS_RUNTIME
         Require(fallback.FamilyName == "ProjectZ Sans", "Platform font fallback failed.");
+#endif
         Require(regular.Measure("A\r\nB").Y > regular.Measure("A").Y, "Multiline text layout failed.");
+#if !PROJECTZ_WINDOWS_RUNTIME
         try { using var custom = new VectorFont("missing.ttf", 12); throw new Exception("Custom font did not report platform limitation."); }
         catch (PlatformNotSupportedException) { }
         Require(!OfflineSpellChecker.IsSupported, "Windows spelling advertised on DesktopGL.");
+#endif
         if (args.Contains("--graphics"))
         {
-            using var game = new SmokeGame(args.Contains("--desktop-blur"));
+            using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"));
             game.Run();
             Require(game.Completed, "Graphics smoke did not complete.");
         }
@@ -59,11 +76,14 @@ internal sealed class SmokeGame : Game
     private Textbox textbox = null!;
     private int frames;
     private readonly bool testBackdrop;
+    private readonly bool nativeBackdrop;
+    private NativeBackdropFixture? nativeFixture;
     public bool Completed { get; private set; }
 
-    public SmokeGame(bool testBackdrop = false)
+    public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false)
     {
         this.testBackdrop = testBackdrop;
+        this.nativeBackdrop = nativeBackdrop;
         graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 480, PreferredBackBufferHeight = 320,
@@ -71,6 +91,7 @@ internal sealed class SmokeGame : Game
         };
         IsFixedTimeStep = false;
         Window.Title = "Project-Z DesktopGL package verification";
+        if (nativeBackdrop) Window.Position = new Microsoft.Xna.Framework.Point(450, 350);
     }
 
     protected override void LoadContent()
@@ -84,7 +105,16 @@ internal sealed class SmokeGame : Game
         manager = new SceneManager(this, 60);
         if (testBackdrop)
         {
-            manager.DesktopBackdrop.CaptureSourceFactory = () => new BackdropFixture();
+            if (nativeBackdrop)
+            {
+#if PROJECTZ_WINDOWS_RUNTIME
+                nativeFixture = new NativeBackdropFixture(ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(this));
+#else
+                nativeFixture = new NativeBackdropFixture(Window.Handle);
+#endif
+                Window.Position = new Microsoft.Xna.Framework.Point(450, 350);
+            }
+            else manager.DesktopBackdrop.CaptureSourceFactory = () => new BackdropFixture();
             manager.DesktopBackdrop.Settings.Enabled = true;
             manager.DesktopBackdrop.Settings.NoiseOpacity = 0;
             manager.DesktopBackdrop.ShowSetupPrompt = false;
@@ -92,7 +122,10 @@ internal sealed class SmokeGame : Game
         scene = new SmokeScene(manager) { BackgroundColor = testBackdrop ? Color.Transparent : Color.Black };
         manager.AddScene("Smoke", scene);
         manager.ActiveScene = scene;
-        scene.AddElement(new RectangleElement(scene) { Position = new Vector2(20, 20), Size = new Vector2(180, 70), BackgroundColor = Color.LimeGreen, CornerRadius = 12 });
+#if PROJECTZ_WINDOWS_RUNTIME
+        manager.UseExternalInput = true;
+#endif
+        scene.AddElement(new RectangleElement(scene) { Position = new Vector2(20, 20), Size = new Vector2(180, 70), BackgroundColor = nativeBackdrop ? Color.Red : Color.LimeGreen, CornerRadius = 12 });
         scene.AddElement(new TextElement(scene) { Position = new Vector2(24, 110), Text = "Linux / macOS — ProjectZ Sans" });
         textbox = new Textbox(scene) { Position = new Vector2(20, 180), Size = new Vector2(300, 40), Text = "SDL clipboard ✓" };
         scene.AddElement(textbox);
@@ -124,7 +157,11 @@ internal sealed class SmokeGame : Game
         {
             scene.FocusElement(textbox);
             textbox.SelectAll();
+#if PROJECTZ_WINDOWS_RUNTIME
+            manager.InjectTextInput("é");
+#else
             Window.GetType().GetMethod("OnTextInput", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(Window, [new TextInputEventArgs('é', Keys.None)]);
+#endif
         }
         manager.Tick(gameTime);
         base.Update(gameTime);
@@ -142,13 +179,20 @@ internal sealed class SmokeGame : Game
             GraphicsDevice.GetBackBufferData(pixels);
             Program.Require(pixels.Any(p => p.G > 100 && p.G > p.R * 1.5f), "Scene did not render the green rectangle.");
             Program.Require(pixels.Any(p => p.R > 180 && p.G > 180 && p.B > 180), "Vector text was not rendered.");
-            if (testBackdrop)
+            if (testBackdrop && !nativeBackdrop)
             {
                 var width = GraphicsDevice.PresentationParameters.BackBufferWidth;
                 var left = pixels[290 * width + 30]; var center = pixels[290 * width + 240]; var right = pixels[290 * width + 450];
                 Program.Require(left.R > 220 && left.B < 30 && right.B > 220 && right.R < 30, "Desktop material lost its source colors.");
                 Program.Require(center.R > 40 && center.B > 40 && center.R < 215 && center.B < 215, "Gaussian desktop transition did not blur.");
                 Console.WriteLine("DESKTOP_BLUR_SHADER_OK");
+            }
+            if (nativeBackdrop)
+            {
+                var width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+                var sample = pixels[100 * width + 100];
+                Program.Require(sample.G > 225 && sample.R < 30 && sample.B < 30, "Desktop source included the red host or lost the controlled underlying window.");
+                Console.WriteLine($"NATIVE_DESKTOP_EXCLUSION_OK captureMs={manager.DesktopBackdrop.LastCaptureMilliseconds:F2}");
             }
             Completed = true;
             Console.WriteLine("DESKTOPGL_GRAPHICS_OK");
@@ -161,6 +205,7 @@ internal sealed class SmokeGame : Game
     protected override void UnloadContent()
     {
         manager?.Dispose();
+        nativeFixture?.Dispose();
         foreach (var font in content.VectorFonts.Values) font.Dispose();
         batch?.Dispose();
         base.UnloadContent();

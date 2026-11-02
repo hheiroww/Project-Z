@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using ProjectZ.Shared.Composition;
+using Rectangle = Microsoft.Xna.Framework.Rectangle;
 
 internal sealed class BackdropFixture : IDesktopCaptureSource
 {

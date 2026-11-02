@@ -11,6 +11,7 @@ on:
       - 'Native/DesktopCapture/**'
       - 'Resources/**'
       - 'tests/DesktopGL/**'
+      - 'tests/DesktopBlurWindows/**'
       - 'tools/*DesktopGL*'
       - 'Extensions/ProjectZ.Package.props'
       - 'Extensions/ProjectZ.DesktopCapture.Source.targets'
@@ -25,6 +26,7 @@ on:
       - 'Native/DesktopCapture/**'
       - 'Resources/**'
       - 'tests/DesktopGL/**'
+      - 'tests/DesktopBlurWindows/**'
       - 'tools/*DesktopGL*'
       - 'Extensions/ProjectZ.Package.props'
       - 'Extensions/ProjectZ.DesktopCapture.Source.targets'
@@ -58,9 +60,9 @@ jobs:
           dotnet-version: 8.0.x
       - name: Build both platform NuGet packages
         run: ./tools/Pack-DesktopGLPackages.ps1
-      - name: Build Windows runtime and native capture helper
+      - name: Build DX12, DX11 and OpenGL Windows capture consumers
         if: runner.os == 'Windows'
-        run: dotnet build 'Project Z Windows.vbproj' -c Release -p:GeneratePackageOnBuild=false
+        run: ./tests/DesktopBlurWindows/Verify.ps1 -SkipGraphics -WorkDirectory '${{ runner.temp }}/ProjectZ-Windows-backends'
       - name: Build desktop sample
         run: |
           dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release
@@ -80,7 +82,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libgl1-mesa-dri libopenal1 libxcomposite1 libxrender1
-          xvfb-run -a pwsh -NoProfile -File ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics -WorkDirectory '${{ runner.temp }}/ProjectZ-DesktopGL-verification'
+          xvfb-run -a pwsh -NoProfile -File ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics -RunNativeDesktop -WorkDirectory '${{ runner.temp }}/ProjectZ-DesktopGL-verification'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve validated NuGet packages
         uses: actions/upload-artifact@v4

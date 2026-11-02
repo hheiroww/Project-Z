@@ -42,4 +42,9 @@
       <None Include="$(PublishDir)ProjectZ.Diagnostics.exe" Pack="true" PackagePath="tools/diagnostics/" />
     </ItemGroup>
   </Target>
+  <Target Name="IncludeRepositoryCommit" BeforeTargets="GenerateNuspec" DependsOnTargets="InitializeSourceControlInformation">
+    <PropertyGroup>
+      <NuspecProperties>$(NuspecProperties);repositoryCommit=$(SourceRevisionId)</NuspecProperties>
+    </PropertyGroup>
+  </Target>
 </Project>

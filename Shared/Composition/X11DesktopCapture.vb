@@ -49,11 +49,14 @@ Namespace [Shared].Composition
                 window = New UIntPtr(CULng(nativeWindow.ToInt64()))
                 root = XDefaultRootWindow(display)
                 Dim eventBase, errorBase As Integer
-                If XCompositeQueryExtension(display, eventBase, errorBase) = 0 Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.DependenciesRequired, "The X server does not provide XComposite.")
-                If XRenderFindStandardFormat(display, 0) = IntPtr.Zero Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.DependenciesRequired, "The X server does not provide XRender ARGB32 support.")
+                If XCompositeQueryExtension(display, eventBase, errorBase) = 0 Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "The X server does not provide XComposite.")
+                If XRenderFindStandardFormat(display, 0) = IntPtr.Zero Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "The X server does not provide XRender ARGB32 support.")
                 Dim selection = XInternAtom(display, "_NET_WM_CM_S" & XDefaultScreen(display), False)
-                If XGetSelectionOwner(display, selection) = UIntPtr.Zero Then XCompositeRedirectSubwindows(display, root, 0)
-                overlay = XCompositeGetOverlayWindow(display, root)
+                If XGetSelectionOwner(display, selection) = UIntPtr.Zero Then
+                    XCompositeRedirectSubwindows(display, root, 0)
+                Else
+                    overlay = XCompositeGetOverlayWindow(display, root)
+                End If
                 XSync(display, False)
                 If RootAncestor(display, window) = UIntPtr.Zero Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "The host window is not in the X11 desktop tree.")
             Catch ex As DllNotFoundException

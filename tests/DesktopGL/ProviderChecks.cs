@@ -4,6 +4,7 @@ using ProjectZ.Shared.Content;
 using ProjectZ.Shared.Drawing.ThreeD;
 using ProjectZ.Shared.Drawing.UI.Input;
 using ProjectZ.Shared.Drawing;
+using Color = Microsoft.Xna.Framework.Color;
 
 internal static class ProviderChecks
 {

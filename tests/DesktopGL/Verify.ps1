@@ -4,6 +4,7 @@ param(
     [string]$PackageDirectory,
     [ValidateSet('linux-x64','linux-arm64','osx-x64','osx-arm64','win-x64')][string]$RuntimeIdentifier = [Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier,
     [switch]$RunGraphics,
+    [switch]$RunNativeDesktop,
     [string]$WorkDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -56,6 +57,10 @@ foreach ($platform in @('Linux', 'macOS')) {
     if ($RunGraphics) {
         dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur
         if ($LASTEXITCODE -ne 0) { throw "$platform native graphics smoke failed." }
+        if ($RunNativeDesktop) {
+            dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur --native-desktop
+            if ($LASTEXITCODE -ne 0) { throw "$platform desktop exclusion checks failed." }
+        }
     }
 }
 Write-Host "DesktopGL package consumers passed ($RuntimeIdentifier). Verification files: $temp"

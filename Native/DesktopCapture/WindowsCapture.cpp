@@ -55,10 +55,13 @@ struct Display {
     GraphicsCaptureItem item{nullptr};
     Direct3D11CaptureFramePool pool{nullptr};
     GraphicsCaptureSession session{nullptr};
+    Direct3D11CaptureFrame retained{nullptr};
     com_ptr<ID3D11Texture2D> staging;
     std::vector<unsigned char> pixels;
     int width = 0, height = 0;
-    ~Display() { try { if (session) session.Close(); if (pool) pool.Close(); } catch (...) {} }
+    RECT crop{};
+    int imageX = 0, imageY = 0;
+    ~Display() { try { if (retained) retained.Close(); if (session) session.Close(); if (pool) pool.Close(); } catch (...) {} }
 };
 struct Capture {
     HWND owner;
@@ -94,36 +97,57 @@ struct Capture {
         value->session.StartCapture();
         return *value;
     }
-    bool refresh(Display& value) {
+    bool refresh(Display& value, const RECT& request) {
         Direct3D11CaptureFrame newest{nullptr};
         while (auto frame = value.pool.TryGetNextFrame()) {
             if (newest) newest.Close();
             newest = std::move(frame);
         }
-        if (!newest) return !value.pixels.empty();
-        auto size = newest.ContentSize();
-        if (size.Width <= 0 || size.Height <= 0) { newest.Close(); return false; }
-        auto access = newest.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
+        bool changed = bool(newest);
+        if (newest) {
+            if (value.retained) value.retained.Close();
+            value.retained = std::move(newest);
+        }
+        if (!value.retained) return false;
+        auto size = value.retained.ContentSize();
+        if (size.Width <= 0 || size.Height <= 0) return false;
+        auto access = value.retained.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         com_ptr<ID3D11Texture2D> source;
         check_hresult(access->GetInterface(__uuidof(ID3D11Texture2D), source.put_void()));
         D3D11_TEXTURE2D_DESC desc{}; source->GetDesc(&desc);
-        if (!value.staging || value.width != int(desc.Width) || value.height != int(desc.Height)) {
+        const auto sourceWidth = desc.Width, sourceHeight = desc.Height;
+        RECT crop{
+            std::clamp(request.left - value.bounds.left, 0L, LONG(sourceWidth) - 1),
+            std::clamp(request.top - value.bounds.top, 0L, LONG(sourceHeight) - 1),
+            std::clamp(request.right - value.bounds.left, 1L, LONG(sourceWidth)),
+            std::clamp(request.bottom - value.bounds.top, 1L, LONG(sourceHeight))};
+        const int width = std::max(1L, crop.right - crop.left), height = std::max(1L, crop.bottom - crop.top);
+        changed = changed || !EqualRect(&crop, &value.crop);
+        value.crop = crop;
+        value.imageX = value.bounds.left + crop.left; value.imageY = value.bounds.top + crop.top;
+        if (!value.staging || value.width != width || value.height != height) {
             value.staging = nullptr;
-            value.width = desc.Width; value.height = desc.Height;
+            value.width = width; value.height = height;
+            desc.Width = width; desc.Height = height;
             desc.BindFlags = 0; desc.MiscFlags = 0; desc.Usage = D3D11_USAGE_STAGING; desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
             check_hresult(device->CreateTexture2D(&desc, nullptr, value.staging.put()));
             value.pixels.resize(size_t(value.width) * value.height * 4);
+            changed = true;
         }
-        context->CopyResource(value.staging.get(), source.get());
+        if (!changed) return true;
+        // Read only the padded host region, rather than transferring the complete monitor.
+        D3D11_BOX box{UINT(crop.left), UINT(crop.top), 0, UINT(crop.right), UINT(crop.bottom), 1};
+        context->CopySubresourceRegion(value.staging.get(), 0, 0, 0, 0, source.get(), 0, &box);
         D3D11_MAPPED_SUBRESOURCE mapped{};
         check_hresult(context->Map(value.staging.get(), 0, D3D11_MAP_READ, 0, &mapped));
         for (int y = 0; y < value.height; ++y)
             std::memcpy(value.pixels.data() + size_t(y) * value.width * 4,
                 static_cast<unsigned char*>(mapped.pData) + size_t(y) * mapped.RowPitch, size_t(value.width) * 4);
         context->Unmap(value.staging.get(), 0);
-        newest.Close();
-        if (size.Width != value.width || size.Height != value.height)
+        if (size.Width != int(sourceWidth) || size.Height != int(sourceHeight)) {
+            value.retained.Close(); value.retained = nullptr;
             value.pool.Recreate(projected, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size);
+        }
         return true;
     }
 };
@@ -164,7 +188,11 @@ extern "C" __declspec(dllexport) int pz_capture_read(void* capture, int x, int y
             if (std::find(monitors.begin(), monitors.end(), it->first) == monitors.end()) it = value.displays.erase(it); else ++it;
         }
         std::vector<Display*> ready;
-        for (auto monitor : monitors) { auto& display = value.display(monitor); if (value.refresh(display)) ready.push_back(&display); }
+        for (auto monitor : monitors) {
+            auto& display = value.display(monitor);
+            MONITORINFO info{sizeof(info)}; if (GetMonitorInfo(monitor, &info)) display.bounds = info.rcMonitor;
+            if (value.refresh(display, request)) ready.push_back(&display);
+        }
         if (ready.size() != monitors.size() || ready.empty()) return 0;
         for (int dy = 0; dy < oh; ++dy) for (int dx = 0; dx < ow; ++dx) {
             int sx = x + dx * downsample, sy = y + dy * downsample;
@@ -175,7 +203,7 @@ extern "C" __declspec(dllexport) int pz_capture_read(void* capture, int x, int y
                 long long d = (static_cast<long long>(sx) - cx) * (static_cast<long long>(sx) - cx) + (static_cast<long long>(sy) - cy) * (static_cast<long long>(sy) - cy);
                 if (d < distance) { distance = d; best = display; }
             }
-            int px = std::clamp(sx - int(best->bounds.left), 0, best->width - 1), py = std::clamp(sy - int(best->bounds.top), 0, best->height - 1);
+            int px = std::clamp(sx - best->imageX, 0, best->width - 1), py = std::clamp(sy - best->imageY, 0, best->height - 1);
             unsigned sums[3]{}; unsigned count = 0;
             for (int by = 0; by < downsample; ++by) for (int bx = 0; bx < downsample; ++bx) {
                 auto pixel = best->pixels.data() + (size_t(std::min(py + by, best->height - 1)) * best->width + std::min(px + bx, best->width - 1)) * 4;

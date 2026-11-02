@@ -218,7 +218,7 @@ Namespace [Shared].Composition
                     batch.End()
                 Else
                     batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque)
-                    batch.Draw(white, viewport.Bounds, Settings.FallbackColor)
+                    batch.Draw(white, viewport.Bounds, New Color(Settings.FallbackColor.R, Settings.FallbackColor.G, Settings.FallbackColor.B, CByte(255)))
                     batch.End()
                 End If
                 If overlay.A > 0 Then
@@ -244,6 +244,7 @@ Namespace [Shared].Composition
             If disposed Then Return
             disposed = True
             ReleaseCapture()
+            _State = DesktopBackdropState.Disabled
             DesktopBackdropRequests.Remove(NativeWindowHandle)
             input?.Dispose() : downsampled?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
             white?.Dispose() : shader?.Dispose() : batch?.Dispose()
