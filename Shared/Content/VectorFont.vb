@@ -2,14 +2,21 @@ Imports System.Globalization
 Imports LibTessDotNet
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
+#If WINDOWS Then
 Imports Media = System.Windows.Media
+#End If
 Imports ProjectZ.VectorText
 
 Namespace [Shared].Content
     ''' <summary>Compiled free vector outlines tessellated to GPU triangles, with optional host-font shaping.</summary>
     Public NotInheritable Class VectorFont
         Implements IDisposable
+        ''' <summary>Register at startup, before loading fonts. Existing faces keep their provider.</summary>
+        Public Shared Property Provider As IVectorFontProvider
+        Private customFace As IVectorFontFace
+#If WINDOWS Then
         Private ReadOnly face As Media.Typeface
+#End If
         Private ReadOnly emSize As Double
         Private ReadOnly compiled As CompiledFont
         Private ReadOnly meshes As New TextCache(Of TextMesh)(256)
@@ -87,6 +94,14 @@ Namespace [Shared].Content
             If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
             If weight < 1 OrElse weight > 999 Then Throw New ArgumentOutOfRangeException(NameOf(weight))
             emSize = pointSize * 96.0 / 72.0
+            customFace = Provider?.FromFamily(familyName, weight, pointSize)
+            If customFace IsNot Nothing Then
+                Me.FamilyName = customFace.FamilyName
+                FilePath = customFace.FilePath
+                LineSpacing = customFace.LineSpacing
+                Return
+            End If
+#If WINDOWS Then
             If String.Equals(familyName, CompiledFont.FamilyName, StringComparison.OrdinalIgnoreCase) OrElse
                String.Equals(familyName, "Segoe UI", StringComparison.OrdinalIgnoreCase) Then
                 compiled = CompiledFont.ForWeight(weight)
@@ -105,9 +120,26 @@ Namespace [Shared].Content
             emSize = pointSize * 96.0 / 72.0
             LineSpacing = CInt(Math.Ceiling(New Media.FormattedText("Mg", CultureInfo.CurrentUICulture,
                 System.Windows.FlowDirection.LeftToRight, face, emSize, Media.Brushes.White, 1.0).Height))
+#Else
+            compiled = CompiledFont.ForWeight(weight)
+            Me.FamilyName = CompiledFont.FamilyName
+            LineSpacing = CInt(Math.Ceiling(compiled.LineHeight * emSize))
+#End If
         End Sub
 
         Public Sub New(path As String, pointSize As Single)
+            If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
+            Dim provider = VectorFont.Provider
+            If provider IsNot Nothing Then
+                customFace = provider.FromFile(IO.Path.GetFullPath(path), pointSize)
+                If customFace IsNot Nothing Then
+                    FilePath = customFace.FilePath
+                    Me.FamilyName = customFace.FamilyName
+                    LineSpacing = customFace.LineSpacing
+                    Return
+                End If
+            End If
+#If WINDOWS Then
             If pointSize <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
             FilePath = IO.Path.GetFullPath(path)
             If Not IO.File.Exists(FilePath) Then Throw New IO.FileNotFoundException("Font file not found.", FilePath)
@@ -122,8 +154,12 @@ Namespace [Shared].Content
             End If
             emSize = pointSize * 96.0 / 72.0
             LineSpacing = CInt(Math.Ceiling(glyphFace.Height * emSize))
+#Else
+            Throw New PlatformNotSupportedException("Register VectorFont.Provider to load custom font files on DesktopGL, or use compiled ProjectZ Sans outlines.")
+#End If
         End Sub
 
+#If WINDOWS Then
         Private Function Format(text As String, Optional pixelPerfect As Boolean = False) As Media.FormattedText
             Dim formatted = New Media.FormattedText(text, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
                 face, emSize, Media.Brushes.White, Nothing, If(pixelPerfect, Media.TextFormattingMode.Display, Media.TextFormattingMode.Ideal), 1.0) With {.LineHeight = LineSpacing}
@@ -142,19 +178,28 @@ Namespace [Shared].Content
             Return formatted
         End Function
 
+#End If
+
         Public Function Measure(text As String, Optional pixelPerfect As Boolean? = Nothing) As Vector2
             If String.IsNullOrEmpty(text) Then Return Vector2.Zero
             text = CompiledFont.NormalizeText(text)
             Dim aligned = If(pixelPerfect, PpiPerfectText)
+            If customFace IsNot Nothing Then Return customFace.Measure(text, aligned)
             Dim key = If(aligned, "P:", "I:") & text
             Dim size As Vector2
             If Not measurements.TryGetValue(key, size) Then
+#If WINDOWS Then
                 If compiled IsNot Nothing AndAlso compiled.SupportsText(text) Then
+#Else
+                If compiled IsNot Nothing Then
+#End If
                     Dim measured = compiled.Measure(text, CSng(emSize), aligned)
                     size = New Vector2(measured.X, measured.Y)
+#If WINDOWS Then
                 Else
                     Dim formatted = Format(text, aligned)
                     size = New Vector2(CSng(formatted.WidthIncludingTrailingWhitespace), CSng(formatted.Height))
+#End If
                 End If
                 measurements.Add(key, size)
             End If
@@ -166,7 +211,11 @@ Namespace [Shared].Content
             Dim key = If(pixelPerfect, "P:", "I:") & text
             Dim result As TextMesh = Nothing
             If meshes.TryGetValue(key, result) Then Return result
+#If WINDOWS Then
             If compiled IsNot Nothing AndAlso compiled.SupportsText(text) Then
+#Else
+            If compiled IsNot Nothing Then
+#End If
                 Dim coordinates = compiled.GetTriangles(text, CSng(emSize), pixelPerfect)
                 Dim compiledVertices As New List(Of VertexPositionColor)(coordinates.Length \ 2)
                 Dim compiledForeground As New List(Of Boolean)(coordinates.Length \ 2)
@@ -178,6 +227,7 @@ Namespace [Shared].Content
                 meshes.Add(key, result)
                 Return result
             End If
+#If WINDOWS Then
             Dim formatted = Format(text, pixelPerfect)
             Dim visual As New Media.DrawingVisual
             Using context = visual.RenderOpen()
@@ -194,8 +244,12 @@ Namespace [Shared].Content
             result = New TextMesh(vertices, foreground)
             meshes.Add(key, result)
             Return result
+#Else
+            Throw New InvalidOperationException("No compiled font is available.")
+#End If
         End Function
 
+#If WINDOWS Then
         Private Shared Function HasColorGlyphs(drawing As Media.Drawing) As Boolean
             If TypeOf drawing Is Media.DrawingGroup Then Return DirectCast(drawing, Media.DrawingGroup).Children.Any(Function(child) HasColorGlyphs(child))
             Dim glyphDrawing = TryCast(drawing, Media.GlyphRunDrawing)
@@ -267,11 +321,17 @@ Namespace [Shared].Content
             Next
         End Sub
 
+#End If
+
         Public Sub Draw(device As GraphicsDevice, text As String, position As Vector2, color As Color, offset As Vector2, Optional textScale As Single = 1, Optional pixelPerfect As Boolean? = Nothing)
             If String.IsNullOrWhiteSpace(text) Then Return
             Dim quality = Drawing.GraphicsQuality.ForDevice(device)
             Dim aligned = If(pixelPerfect, PpiPerfectText OrElse quality.PpiPerfectText)
             If aligned Then position = AlignToPixelGrid(position)
+            If customFace IsNot Nothing Then
+                customFace.Draw(device, text, position, color, offset, textScale, aligned)
+                Return
+            End If
             Dim mesh = Triangles(text, aligned)
             Dim vertices = mesh.Vertices
             If vertices.Length = 0 Then Return
@@ -305,6 +365,9 @@ Namespace [Shared].Content
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
+            Dim faceToDispose = customFace
+            customFace = Nothing
+            faceToDispose?.Dispose()
             If ownerDevice IsNot Nothing AndAlso deviceDisposing IsNot Nothing Then RemoveHandler ownerDevice.Disposing, deviceDisposing
             ownerDevice = Nothing
             deviceDisposing = Nothing

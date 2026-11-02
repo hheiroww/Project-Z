@@ -1,0 +1,90 @@
+name: Build DesktopGL packages
+on:
+  pull_request:
+    paths:
+      - 'Shared/**'
+      - 'Project Z DesktopGL/**'
+      - 'Project Z Linux/**'
+      - 'Project Z macOS/**'
+      - 'Project Z Vector Text/**'
+      - 'Native/DesktopCapture/**'
+      - 'Resources/**'
+      - 'tests/DesktopGL/**'
+      - 'tests/DesktopBlurWindows/**'
+      - 'tools/*DesktopGL*'
+      - 'Extensions/ProjectZ.Package.props'
+      - 'Extensions/ProjectZ.DesktopCapture.Source.targets'
+      - '.github/workflows/desktopgl.yml'
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-15-intel
+            rid: osx-x64
+          - os: macos-15
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build both platform NuGet packages
+        run: ./tools/Pack-DesktopGLPackages.ps1
+      - name: Build DX12, DX11 and OpenGL Windows capture consumers
+        if: runner.os == 'Windows'
+        run: ./tests/DesktopBlurWindows/Verify.ps1 -SkipGraphics -WorkDirectory '${{ runner.temp }}/ProjectZ-Windows-backends'
+      - name: Build desktop sample
+        run: |
+          dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build 'Project Z Linux Test/Project Z Linux Test.vbproj' -c Release -p:ProjectZDesktopPlatform=macOS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify independent packages, native graphics and RID publishing
+        if: runner.os == 'macOS'
+        run: ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics -WorkDirectory '${{ runner.temp }}/ProjectZ-DesktopGL-verification'
+      - name: Verify Windows cross-build and RID publishing
+        if: runner.os == 'Windows'
+        # Hosted Windows runners have no suitable OpenGL framebuffer driver.
+        # Graphics checks run on the native Linux and macOS targets above/below.
+        run: ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -WorkDirectory '${{ runner.temp }}/ProjectZ-DesktopGL-verification'
+      - name: Verify Linux packages and graphics under Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri libopenal1 libxcomposite1 libxrender1
+          xvfb-run -a pwsh -NoProfile -File ./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -RunGraphics -RunNativeDesktop -WorkDirectory '${{ runner.temp }}/ProjectZ-DesktopGL-verification'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve validated NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-DesktopGL-${{ matrix.rid }}
+          path: artifacts/desktopgl-packages/*.nupkg
+          if-no-files-found: error
+      - name: Preserve native Linux release package
+        if: matrix.rid == 'linux-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-Linux-release
+          path: artifacts/desktopgl-packages/ProjectZ.Linux.*.nupkg
+          if-no-files-found: error
+      - name: Preserve universal macOS release package
+        if: matrix.rid == 'osx-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-macOS-release
+          path: artifacts/desktopgl-packages/ProjectZ.macOS.*.nupkg
+          if-no-files-found: error

@@ -35,6 +35,8 @@ Namespace [Shared].Drawing
         Private _UseHardwareInput As Boolean = False
         ''' <summary>Route this HWND's queued mouse messages through the scene event system.</summary>
         Public Property UseWindowMessagesInput As Boolean
+#Else
+        Private Const UseHardwareInput As Boolean = False
 #End If
 
         Public Property LimitFPS As Integer
@@ -51,6 +53,9 @@ Namespace [Shared].Drawing
         Private Property isDragging As Boolean = False
         Private Property Scenes As New Dictionary(Of String, Scene)
         Public Property ActiveScene As Scene
+        Public ReadOnly Property DesktopBackdrop As Global.ProjectZ.Shared.Composition.DesktopBackdrop
+        Private desktopPrompt As Global.ProjectZ.Shared.Composition.DesktopBackdropSetupPrompt
+        Private desktopPromptRequest As (State As Global.ProjectZ.Shared.Composition.DesktopBackdropState, Message As String)?
         Public Property Sender As Game
         ''' <summary>
         ''' Uses input injected by an embedding host's real child HWND instead
@@ -102,7 +107,7 @@ Namespace [Shared].Drawing
 #If WINDOWS Then
                 Return nativeKeyboard IsNot Nothing AndAlso Not UseExternalInput
 #Else
-                Return False
+                Return Not UseExternalInput AndAlso subscribedWindow IsNot Nothing
 #End If
             End Get
         End Property
@@ -1216,6 +1221,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub Tick(gameTime As GameTime)
+            DesktopBackdrop?.Update()
             If viewportResizePending Then
                 viewportResizePending = False
                 ApplyPendingViewportResize()
@@ -1232,17 +1238,26 @@ Namespace [Shared].Drawing
 #If WINDOWS Then
                     DrainKeyboardMessages()
 #Else
+                    ActiveScene.UsesNativeTextInput = UsesNativeTextInput
                     DetectKeyPress(gameTime)
+                    DrainTextInput()
 #End If
                 End If
 #If WINDOWS Then
                 If Not UseExternalInput AndAlso Not UseWindowMessagesInput Then
                     DetectMouseEvents(gameTime, UseHardwareInput)
                 End If
-#ElseIf LINUX Then
-                DetectMouseEvents(gameTime)
+#Else
+                If Not UseExternalInput Then DetectMouseEvents(gameTime)
 #End If
                 ActiveScene.Tick(gameTime)
+                If desktopPromptRequest.HasValue Then
+                    Dim request = desktopPromptRequest.Value
+                    desktopPromptRequest = Nothing
+                    desktopPrompt?.Dispose()
+                    desktopPrompt = New Global.ProjectZ.Shared.Composition.DesktopBackdropSetupPrompt(ActiveScene, DesktopBackdrop, request.State, request.Message)
+                End If
+                desktopPrompt?.Tick()
             End If
         End Sub
 
@@ -1280,17 +1295,41 @@ Namespace [Shared].Drawing
         End Sub
 
         Private Sub InitializeViewportResize()
+            If DesktopBackdrop Is Nothing Then _DesktopBackdrop = New Global.ProjectZ.Shared.Composition.DesktopBackdrop(Sender)
+            AddHandler DesktopBackdrop.Unavailable, Sub(state, message)
+                If DesktopBackdrop.ShowSetupPrompt AndAlso (state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.DependenciesRequired OrElse
+                    state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.PermissionRequired OrElse state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.SessionChangeRequired) Then desktopPromptRequest = (state, message)
+            End Sub
 #If WINDOWS Then
             Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize()
             Global.ProjectZ.RuntimeDiagnostics.GraphicsDiagnostics.Register(Sender.GraphicsDevice)
 #End If
             graphicsManager = TryCast(Sender.Services.GetService(GetType(IGraphicsDeviceManager)), GraphicsDeviceManager)
             subscribedWindow = Sender.Window
-            If subscribedWindow IsNot Nothing Then AddHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+            If subscribedWindow IsNot Nothing Then
+                AddHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+#If Not WINDOWS Then
+                AddHandler subscribedWindow.TextInput, AddressOf HandleTextInput
+#End If
+            End If
         End Sub
 
         ' Game.Run may release Game.Window before its owner's final Dispose.
         ' Unsubscribe from the window we attached to, rather than reacquiring it.
+#If Not WINDOWS Then
+        Private ReadOnly textInput As New System.Collections.Concurrent.ConcurrentQueue(Of Char)
+        Private Sub HandleTextInput(senderObject As Object, args As TextInputEventArgs)
+            If Not UseExternalInput AndAlso Not Char.IsControl(args.Character) Then textInput.Enqueue(args.Character)
+        End Sub
+        Private Sub DrainTextInput()
+            Dim value As Char
+            Dim text As New System.Text.StringBuilder()
+            While textInput.TryDequeue(value)
+                text.Append(value)
+            End While
+            If text.Length > 0 Then ActiveScene.InsertNativeText(text.ToString())
+        End Sub
+#End If
         Private subscribedWindow As GameWindow
         Private viewportResizePending As Boolean
 
@@ -1345,8 +1384,13 @@ Namespace [Shared].Drawing
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
                 If disposing Then
+                    DesktopBackdrop?.Dispose()
+                    desktopPrompt?.Dispose()
                     If subscribedWindow IsNot Nothing Then
                         RemoveHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
+#If Not WINDOWS Then
+                        RemoveHandler subscribedWindow.TextInput, AddressOf HandleTextInput
+#End If
                         subscribedWindow = Nothing
                     End If
                     ' Dispose all scenes

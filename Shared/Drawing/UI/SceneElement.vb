@@ -1,3 +1,4 @@
+Imports ProjectZ.Shared.Extensions
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Input
 Imports Microsoft.Xna.Framework.Graphics
@@ -31,6 +32,8 @@ Namespace [Shared].Drawing.UI
             If String.IsNullOrEmpty(text) Then Return
 #If WINDOWS Then
             System.Windows.Forms.Clipboard.SetText(text)
+#ElseIf PROJECTZ_DESKTOPGL Then
+            Global.ProjectZ.Shared.Input.DesktopClipboard.TrySetText(text)
 #End If
         End Sub
         ''' <summary>Optional compatibility routing before native input handlers. True consumes the event.</summary>
@@ -892,6 +895,8 @@ Namespace [Shared].Drawing.UI
                 RenderExceptionCount += 1
 #If WINDOWS Then
                 If RenderExceptionCount <= 10 Then Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Report("Render " & Me.GetType().FullName, ex)
+#Else
+                If RenderExceptionCount <= 10 Then System.Diagnostics.Trace.TraceError("Render " & Me.GetType().FullName & ": " & ex.ToString())
 #End If
                 If FirstRenderException Is Nothing Then FirstRenderException = ex.ToString()
             End Try

@@ -36,6 +36,7 @@ Namespace Windows.Composition
         Public Property BackdropEnabled As Boolean
         Public Property AccentBlurEnabled As Boolean
         Public Property BlurBehindEnabled As Boolean
+        Public Property ShaderBackdropRequested As Boolean
         Public Property LayeredStyleEnabled As Boolean
         Public Property LayeredWindowEnabled As Boolean
         Public Property LayeredWindowErrorCode As Integer
@@ -83,6 +84,14 @@ Namespace Windows.Composition
         Private Sub New()
         End Sub
 
+        Friend Shared Sub DisableNativeBackdrop(hwnd As IntPtr)
+            Dim blur As New DwmBlurBehind With {.Flags = 1UI, .Enable = False}
+            DwmEnableBlurBehindWindow(hwnd, blur)
+            Dim backdrop = 1
+            DwmSetWindowAttribute(hwnd, DwmwaSystemBackdropType, backdrop, Marshal.SizeOf(Of Integer)())
+            ApplyAccentBlur(hwnd, Color.Transparent, False)
+        End Sub
+
         Public Shared Function Apply(game As Game, options As WindowCompositionOptions) As WindowCompositionResult
             Return ApplyToHandle(ResolveHwnd(game), options)
         End Function
@@ -126,24 +135,16 @@ Namespace Windows.Composition
                     Dim margins As New Margins With {.Left = frameMargin, .Right = frameMargin, .Top = frameMargin, .Bottom = frameMargin}
                     result.FrameExtended = DwmExtendFrameIntoClientArea(result.Handle, margins) = 0 AndAlso options.ExtendFrameIntoClientArea
 
-                    Dim wantsBlur = options.Backdrop <> WindowBackdrop.None
-                    Dim blur As New DwmBlurBehind With {.Flags = 1UI, .Enable = wantsBlur}
-                    result.BlurBehindEnabled = DwmEnableBlurBehindWindow(result.Handle, blur) = 0 AndAlso wantsBlur
-
-                    Dim backdrop = CInt(options.Backdrop)
-                    Dim backdropApplied = DwmSetWindowAttribute(result.Handle, DwmwaSystemBackdropType, backdrop, Marshal.SizeOf(Of Integer)()) = 0
-                    result.BackdropEnabled = wantsBlur AndAlso backdropApplied
-
-                    ' DWM can accept DWMWA_SYSTEMBACKDROP_TYPE for a borderless
-                    ' flip-model window without actually painting a blurred client
-                    ' backdrop. Apply the accent policy as the visual fallback even
-                    ' when that attribute returned S_OK.
-                    If options.FallbackAccentBlur AndAlso wantsBlur Then
-                        result.AccentBlurEnabled = ApplyAccentBlur(result.Handle, options.Tint)
-                    Else
-                        ApplyAccentBlur(result.Handle, options.Tint, False)
-                    End If
+                    ' Legacy material requests now enable the cross-platform shader.
+                    ' Native DWM/accent blur stays disabled to avoid double blur.
+                    Dim blur As New DwmBlurBehind With {.Flags = 1UI, .Enable = False}
+                    DwmEnableBlurBehindWindow(result.Handle, blur)
+                    Dim backdrop = 1 ' DWMSBT_NONE
+                    DwmSetWindowAttribute(result.Handle, DwmwaSystemBackdropType, backdrop, Marshal.SizeOf(Of Integer)())
+                    ApplyAccentBlur(result.Handle, options.Tint, False)
                 End If
+                result.ShaderBackdropRequested = options.Backdrop <> WindowBackdrop.None
+                Global.ProjectZ.Shared.Composition.DesktopBackdropRequests.SetEnabled(hwnd, result.ShaderBackdropRequested, options.Tint)
 
                 If options.Opacity < Byte.MaxValue OrElse options.UseColorKeyTransparency Then
                     Dim exStyle = GetWindowLongPtr(result.Handle, GwlExStyle).ToInt64() Or WsExLayered

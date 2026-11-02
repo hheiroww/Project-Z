@@ -6,7 +6,7 @@
     <authors>Project-Z</authors>
     <readme>MODULAR-PACKAGES.md</readme>
     <projectUrl>https://github.com/hheiroww/Project-Z</projectUrl>
-    <repository type="git" url="https://github.com/hheiroww/Project-Z" />
+    <repository type="git" url="https://github.com/hheiroww/Project-Z" commit="$repositoryCommit$" />
     <description>Optional standalone native crash observer and dump capture for Project-Z applications.</description>
     <dependencies>
       <group targetFramework="net8.0-windows7.0">

@@ -27,7 +27,7 @@ Namespace [Shared].Drawing
             If effectCompositeBatch Is Nothing Then effectCompositeBatch = New SpriteBatch(device)
             Try
                 device.SetRenderTarget(effectCanvas)
-                device.Clear(BackgroundColor)
+                DrawSceneBackground()
                 device.ScissorRectangle = physicalViewport
                 DrawEffectRange(ordered, 0, ordered.Count, device, viewport, forceClip, Nothing)
             Finally

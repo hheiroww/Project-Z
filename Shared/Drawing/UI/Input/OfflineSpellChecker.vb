@@ -20,16 +20,47 @@ Namespace [Shared].Drawing.UI.Input
     End Class
 
     ''' <summary>Offline Windows spelling with an application-owned UTF-8 word list.
-    ''' No typed text is written to disk or sent over the network.</summary>
+    ''' The built-in engine does not write or transmit typed text. Application providers own their data policy.</summary>
     Public NotInheritable Class OfflineSpellChecker
+#If WINDOWS Then
         Private Shared ReadOnly jobs As New BlockingCollection(Of Action)
         Private Shared ReadOnly worker As Thread = StartWorker()
+#End If
+        Public Shared ReadOnly Property IsSupported As Boolean
+            Get
+#If WINDOWS Then
+                Return True
+#Else
+                Return False
+#End If
+            End Get
+        End Property
         Private Shared ReadOnly defaultInstance As New Lazy(Of OfflineSpellChecker)(
             Function() New OfflineSpellChecker(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ProjectZ", "Spelling", If(Assembly.GetEntryAssembly()?.GetName().Name, "Application"), "dictionary.txt")))
         Private ReadOnly gate As New Object
         Private words As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Private revisionValue As Integer
+        Private providerValue As Func(Of String, String, CancellationToken, Task(Of IReadOnlyList(Of SpellingIssue)))
+        ''' <summary>An optional application-owned spelling engine. UTF-16 ranges and cancellation are validated.</summary>
+        Public Property Provider As Func(Of String, String, CancellationToken, Task(Of IReadOnlyList(Of SpellingIssue)))
+            Get
+                SyncLock gate
+                    Return providerValue
+                End SyncLock
+            End Get
+            Set(value As Func(Of String, String, CancellationToken, Task(Of IReadOnlyList(Of SpellingIssue))))
+                SyncLock gate
+                    providerValue = value
+                    revisionValue += 1
+                End SyncLock
+            End Set
+        End Property
+        Public ReadOnly Property IsAvailable As Boolean
+            Get
+                Return Provider IsNot Nothing OrElse IsSupported
+            End Get
+        End Property
         Public Shared ReadOnly Property [Default] As OfflineSpellChecker
             Get
                 Return defaultInstance.Value
@@ -82,6 +113,7 @@ Namespace [Shared].Drawing.UI.Input
                 revisionValue += 1
             End SyncLock
         End Sub
+#If WINDOWS Then
         Private Shared Function StartWorker() As Thread
             Dim result As New Thread(Sub()
                                          For Each job In jobs.GetConsumingEnumerable()
@@ -92,8 +124,12 @@ Namespace [Shared].Drawing.UI.Input
             result.Start()
             Return result
         End Function
+#End If
         ''' <summary>Runs the local WPF/Windows spelling engine on a dedicated STA, away from rendering.</summary>
         Public Function CheckAsync(text As String, language As String, Optional cancellationToken As CancellationToken = Nothing) As Task(Of IReadOnlyList(Of SpellingIssue))
+            Dim currentProvider = Provider
+            If currentProvider IsNot Nothing Then Return CheckProviderAsync(text, language, currentProvider, cancellationToken)
+#If WINDOWS Then
             Dim completion As New TaskCompletionSource(Of IReadOnlyList(Of SpellingIssue))(TaskCreationOptions.RunContinuationsAsynchronously)
             jobs.Add(Sub()
                          Try
@@ -127,6 +163,26 @@ Namespace [Shared].Drawing.UI.Input
                          End Try
                      End Sub)
             Return completion.Task
+#Else
+            Return Task.FromException(Of IReadOnlyList(Of SpellingIssue))(New PlatformNotSupportedException("The built-in offline spelling engine requires Windows."))
+#End If
+        End Function
+
+        Private Async Function CheckProviderAsync(text As String, language As String,
+                provider As Func(Of String, String, CancellationToken, Task(Of IReadOnlyList(Of SpellingIssue))),
+                cancellationToken As CancellationToken) As Task(Of IReadOnlyList(Of SpellingIssue))
+            cancellationToken.ThrowIfCancellationRequested()
+            Dim issues = Await provider(text, language, cancellationToken).ConfigureAwait(False)
+            cancellationToken.ThrowIfCancellationRequested()
+            If issues Is Nothing Then Throw New InvalidDataException("The spelling provider returned no result.")
+            Dim result As New List(Of SpellingIssue)
+            For Each issue In issues
+                If issue Is Nothing OrElse issue.Start < 0 OrElse issue.Length <= 0 OrElse issue.Start > text.Length - issue.Length Then
+                    Throw New InvalidDataException("The spelling provider returned an invalid UTF-16 range.")
+                End If
+                If Not ContainsWord(issue.Word) Then result.Add(issue)
+            Next
+            Return result.AsReadOnly()
         End Function
     End Class
 End Namespace

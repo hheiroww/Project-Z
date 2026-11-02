@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="../Extensions/ProjectZ.DesktopCapture.Source.targets" />
+  <Import Project="Shaders/ShaderInputs.props" />
+  <Target Name="ValidateDesktopGLShaders" BeforeTargets="PrepareForBuild">
+    <GetFileHash Files="@(ProjectZShaderInput)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_ProjectZHashedShaderInput" />
+    </GetFileHash>
+    <Error Condition="'%(_ProjectZHashedShaderInput.FileHash)' != '%(_ProjectZHashedShaderInput.ExpectedHash)'" Text="DesktopGL shader inputs changed: %(_ProjectZHashedShaderInput.Identity). Regenerate using tools/Build-DesktopGLShaders.ps1 on Windows and commit the binaries and ShaderInputs.props together." />
+  </Target>
+  <Target Name="IncludeDesktopGLVectorText">
+    <ItemGroup>
+      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1155,8 +1155,31 @@ End Function
             End If
             If xmlElement.HasAttribute("FontFamily") Then text.FontFamily = xmlElement.GetAttribute("FontFamily")
             If xmlElement.HasAttribute("FontWeight") Then
+#If WINDOWS Then
                 Dim converter As New System.Windows.FontWeightConverter()
                 text.FontWeight = DirectCast(converter.ConvertFromInvariantString(xmlElement.GetAttribute("FontWeight")), System.Windows.FontWeight).ToOpenTypeWeight()
+#Else
+                Dim value = xmlElement.GetAttribute("FontWeight")
+                Dim weight As Integer
+                If Integer.TryParse(value, weight) Then
+                    text.FontWeight = weight
+                Else
+                    Select Case value.ToLowerInvariant()
+                        Case "thin" : weight = 100
+                        Case "extralight", "ultralight" : weight = 200
+                        Case "light" : weight = 300
+                        Case "normal", "regular" : weight = 400
+                        Case "medium" : weight = 500
+                        Case "demibold", "semibold" : weight = 600
+                        Case "bold" : weight = 700
+                        Case "extrabold", "ultrabold" : weight = 800
+                        Case "black", "heavy" : weight = 900
+                        Case "extrablack", "ultrablack" : weight = 950
+                        Case Else : Throw New FormatException("Unknown FontWeight: " & value)
+                    End Select
+                    text.FontWeight = weight
+                End If
+#End If
             End If
             If xmlElement.HasAttribute("FontSize") Then text.FontScale = GetAttributeSingle(xmlElement, "FontSize", 12) * 0.75F / 12
 

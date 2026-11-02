@@ -78,19 +78,17 @@ Namespace Windows.Composition
         Private Sub Apply(sender As Object, args As EventArgs)
             If disposed Then Return
             Dim settings = appearance.Settings
-            Dim material = If(settings.DwmBlurEnabled, WindowBackdrop.Acrylic, WindowBackdrop.None)
             _Composition = WindowsComposition.ApplyToHandle(owner, New WindowCompositionOptions With {
-                .Borderless = True, .Resizable = resizable, .Backdrop = If(perPixel, WindowBackdrop.None, material),
-                .FallbackAccentBlur = Not perPixel AndAlso settings.DwmBlurEnabled,
-                .Tint = Color.Transparent, .ExtendFrameIntoClientArea = Not perPixel AndAlso settings.DwmBlurEnabled,
-                .Opacity = If(perPixel, CByte(0), Byte.MaxValue)})
+                .Borderless = True, .Resizable = resizable, .Backdrop = WindowBackdrop.None,
+                .FallbackAccentBlur = False, .Tint = Color.Transparent, .ExtendFrameIntoClientArea = False,
+                .Opacity = Byte.MaxValue})
             If Backdrop IsNot Nothing Then
-                _BackdropComposition = WindowsComposition.ApplyToHandle(Backdrop.Handle, New WindowCompositionOptions With {
-                    .Borderless = True, .Resizable = False, .Backdrop = material, .Tint = Color.Transparent,
-                    .FallbackAccentBlur = settings.DwmBlurEnabled, .ExtendFrameIntoClientArea = settings.DwmBlurEnabled,
-                    .Opacity = If(settings.DwmBlurEnabled, Byte.MaxValue, CByte(0))})
+                Backdrop.SetMaterial(settings.DwmBlurEnabled, Color.Transparent)
+                _BackdropComposition = Backdrop.Composition
                 Backdrop.Tick()
             End If
+            Global.ProjectZ.Shared.Composition.DesktopBackdropRequests.SetEnabled(owner, settings.DwmBlurEnabled)
+            _Composition.ShaderBackdropRequested = settings.DwmBlurEnabled
             changed?.Invoke(settings)
         End Sub
 
@@ -102,6 +100,7 @@ Namespace Windows.Composition
             disposed = True
             RemoveHandler appearance.Changed, AddressOf Apply
             Backdrop?.Dispose()
+            Global.ProjectZ.Shared.Composition.DesktopBackdropRequests.SetEnabled(owner, False)
             chrome.Dispose()
         End Sub
     End Class

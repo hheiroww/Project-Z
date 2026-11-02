@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZCaptureRoot>$(MSBuildThisFileDirectory)../</ProjectZCaptureRoot>
+    <BuildProjectZDesktopCapture Condition="'$(BuildProjectZDesktopCapture)' == ''">true</BuildProjectZDesktopCapture>
+    <ProjectZCaptureLibrary Condition="$([MSBuild]::IsOSPlatform('Windows'))">ProjectZDesktopCapture.dll</ProjectZCaptureLibrary>
+    <ProjectZCaptureLibrary Condition="$([MSBuild]::IsOSPlatform('OSX'))">libProjectZDesktopCapture.dylib</ProjectZCaptureLibrary>
+  </PropertyGroup>
+  <Target Name="BuildProjectZDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles"
+          Condition="'$(BuildProjectZDesktopCapture)' == 'true' and (('$(MSBuildProjectName)' == 'Project Z Windows' and $([MSBuild]::IsOSPlatform('Windows'))) or ('$(ProjectZDesktopPlatform)' == 'macOS' and $([MSBuild]::IsOSPlatform('OSX'))))"
+          Inputs="$(ProjectZCaptureRoot)Native/DesktopCapture/WindowsCapture.cpp;$(ProjectZCaptureRoot)Native/DesktopCapture/MacCapture.swift;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1"
+          Outputs="$(IntermediateOutputPath)desktop-capture/$(ProjectZCaptureLibrary)">
+    <Exec Command="pwsh -NoProfile -File &quot;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1&quot; -OutputDirectory &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)desktop-capture', '$(MSBuildProjectDirectory)'))&quot;" Condition="'$(NoBuild)' != 'true'" />
+  </Target>
+  <Target Name="IncludeProjectZDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles" DependsOnTargets="BuildProjectZDesktopCapture">
+    <ItemGroup Condition="'$(MSBuildProjectName)' == 'Project Z Windows' and Exists('$(IntermediateOutputPath)desktop-capture/ProjectZDesktopCapture.dll')">
+      <Content Include="$(IntermediateOutputPath)desktop-capture/ProjectZDesktopCapture.dll" Link="ProjectZDesktopCapture.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="runtimes/win-x64/native/" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(ProjectZDesktopPlatform)' == 'macOS' and Exists('$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib')">
+      <Content Include="$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib" Link="libProjectZDesktopCapture.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="runtimes/osx/native/" />
+    </ItemGroup>
+  </Target>
+</Project>

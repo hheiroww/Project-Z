@@ -212,7 +212,11 @@ Namespace [Shared].Drawing.UI.Input
         Public Property Looping As Boolean
         Public Property DecodePixelSize As Integer = 640
         Public ReadOnly Property PresentedFrameCount As Long
+        ''' <summary>Attach before Open. The application owns this controller; Stop is called on disposal.</summary>
+        Public Property PlaybackController As IMediaPlaybackController
+#If WINDOWS Then
         Private session As Global.ProjectZ.Windows.Media.WindowsVideoSession
+#End If
         Private videoTexture As Texture2D
         Private pendingSeek As TimeSpan
         Private volumeValue As Double = 1
@@ -222,7 +226,10 @@ Namespace [Shared].Drawing.UI.Input
             End Get
             Set(value As Double)
                 volumeValue = Math.Clamp(value, 0, 1)
+                PlaybackController?.SetVolume(volumeValue)
+#If WINDOWS Then
                 session?.SetVolume(volumeValue)
+#End If
             End Set
         End Property
 
@@ -239,7 +246,16 @@ Namespace [Shared].Drawing.UI.Input
                     Load(path)
                     RaiseEvent MediaOpened()
                 Else
+                    If PlaybackController IsNot Nothing Then
+                        PlaybackController.SetVolume(Volume)
+                        PlaybackController.Open(path, DecodePixelSize)
+                        Return
+                    End If
+#If WINDOWS Then
                     session = New Global.ProjectZ.Windows.Media.WindowsVideoSession(path, Volume, DecodePixelSize)
+#Else
+                    Throw New PlatformNotSupportedException("Built-in video decoding requires Windows. Use PresentFrame for an application-provided decoder.")
+#End If
                 End If
             Catch ex As Exception
                 RaiseEvent MediaFailed(ex.Message)
@@ -247,13 +263,31 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Public Sub PresentFrame(frame As Texture2D, timestamp As TimeSpan)
+            If frame Is Nothing Then Throw New ArgumentNullException(NameOf(frame))
             Texture = frame
             InvalidateTexturePixels()
             PlaybackPosition = timestamp
-            If Not IsPlaying Then IsPlaying = True
+            _PresentedFrameCount += 1
+            If PlaybackController Is Nothing AndAlso Not IsPlaying Then IsPlaying = True
+        End Sub
+
+        Public Sub SignalOpened(duration As TimeSpan)
+            Me.Duration = duration
+            RaiseEvent MediaOpened()
+        End Sub
+
+        Public Sub SignalFailed(message As String)
+            IsPlaying = False
+            RaiseEvent MediaFailed(message)
         End Sub
 
         Public Sub Play()
+            If PlaybackController IsNot Nothing Then
+                PlaybackController.Play()
+                IsPlaying = True
+                Return
+            End If
+#If WINDOWS Then
             If session Is Nothing Then
                 If String.IsNullOrWhiteSpace(Source) Then Return
                 Dim position = PlaybackPosition
@@ -262,15 +296,24 @@ Namespace [Shared].Drawing.UI.Input
             End If
             IsPlaying = True
             session?.Play()
+#Else
+            RaiseEvent MediaFailed("Built-in video decoding requires Windows. Use PresentFrame for an application-provided decoder.")
+#End If
         End Sub
         Public Sub Pause()
             IsPlaying = False
+            PlaybackController?.Pause()
+#If WINDOWS Then
             session?.Pause()
+#End If
         End Sub
         Public Sub [Stop]()
             IsPlaying = False
+            PlaybackController?.Stop()
+#If WINDOWS Then
             session?.Dispose()
             session = Nothing
+#End If
             PlaybackPosition = TimeSpan.Zero
             pendingSeek = TimeSpan.Zero
         End Sub
@@ -279,11 +322,15 @@ Namespace [Shared].Drawing.UI.Input
             If Duration > TimeSpan.Zero AndAlso position > Duration Then position = Duration
             PlaybackPosition = position
             pendingSeek = position
+            PlaybackController?.Seek(position)
+#If WINDOWS Then
             session?.Seek(position)
+#End If
         End Sub
 
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
+#If WINDOWS Then
             Dim current = session
             If current Is Nothing Then Return
             Dim failure = current.TakeError()
@@ -323,6 +370,7 @@ Namespace [Shared].Drawing.UI.Input
                     Play()
                 End If
             End If
+#End If
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)

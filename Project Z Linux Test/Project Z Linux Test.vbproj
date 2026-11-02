@@ -1,46 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Test</RootNamespace>
-    <AssemblyName>Project Z Test</AssemblyName>
-    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>ProjectZ.DesktopSample</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <OptionStrict>On</OptionStrict>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <OptionStrict>On</OptionStrict>
     <StartupObject>Test.Program</StartupObject>
+    <ProjectZDesktopPlatform Condition="'$(ProjectZDesktopPlatform)' == ''">Linux</ProjectZDesktopPlatform>
   </PropertyGroup>
-  <PropertyGroup>
-     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
-   </PropertyGroup>
-   <PropertyGroup>
-     <SelfContained>true</SelfContained>
-     <OutputType>WinExe</OutputType>
-   </PropertyGroup>
   <ItemGroup>
-    <None Remove="My Project\**" />
+    <Compile Include="Program.vb;zWindow.vb;Scenes/MainScene.vb" />
+    <ProjectReference Include="../Project Z Linux/ProjectZ.Linux.vbproj" Condition="'$(ProjectZDesktopPlatform)' == 'Linux'" />
+    <ProjectReference Include="../Project Z macOS/ProjectZ.macOS.vbproj" Condition="'$(ProjectZDesktopPlatform)' == 'macOS'" />
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
-    <PackageReference Include="nkast.Xna.Framework.Graphics" Version="4.2.9001" />
-    <PackageReference Include="SocketJack" Version="1.6.7" />
-    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Scenes\MainScene.vb" />
-    <Compile Include="zWindow.vb" />
-    <Compile Include="Program.vb" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Icon.ico" />
-    <None Include="app.config" />
-
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="My Project\" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Project Z Linux\Project Z Linux.csproj" />
-  </ItemGroup>
+  <Target Name="ValidateDesktopPlatform" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(ProjectZDesktopPlatform)' != 'Linux' and '$(ProjectZDesktopPlatform)' != 'macOS'" Text="ProjectZDesktopPlatform must be Linux or macOS." />
+  </Target>
 </Project>
