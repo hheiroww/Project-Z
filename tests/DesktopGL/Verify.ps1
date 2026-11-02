@@ -53,6 +53,7 @@ foreach ($platform in @('Linux', 'macOS')) {
     }
     $sdl = if ($RuntimeIdentifier.StartsWith('osx')) { 'libSDL2-2.0.0.dylib' } elseif ($RuntimeIdentifier.StartsWith('linux')) { 'libSDL2-2.0.so.0' } else { 'SDL2.dll' }
     if (!(Test-Path (Join-Path $publish $sdl))) { throw "$RuntimeIdentifier SDL runtime missing." }
+    if ($platform -eq 'macOS' -and $RuntimeIdentifier.StartsWith('osx') -and !(Test-Path (Join-Path $publish 'libProjectZDesktopCapture.dylib'))) { throw 'macOS publish omitted the native desktop capture helper.' }
     if (Get-ChildItem $publish -Recurse -File | Where-Object Name -Match '^(PresentationFramework|PresentationCore|WindowsBase|System.Windows.Forms|SocketJack|WebView2Loader|mgruntime)\.') { throw 'Windows-only dependencies leaked into publish output.' }
     if ($RunGraphics) {
         dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur

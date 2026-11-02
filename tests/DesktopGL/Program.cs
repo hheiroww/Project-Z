@@ -26,6 +26,17 @@ internal static class Program
         ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(new ProjectZ.RuntimeDiagnostics.DiagnosticOptions { DirectoryPath = Path.Combine(AppContext.BaseDirectory, "diagnostics"), ShowErrorDialogs = false });
 #endif
         ProviderChecks.Run();
+        if (OperatingSystem.IsMacOS() && File.Exists(Path.Combine(AppContext.BaseDirectory, "libProjectZDesktopCapture.dylib")))
+        {
+            var native = System.Runtime.InteropServices.NativeLibrary.Load("libProjectZDesktopCapture.dylib", typeof(Scene).Assembly, null);
+            try
+            {
+                foreach (var export in new[] { "pz_capture_create", "pz_capture_bounds", "pz_capture_read", "pz_capture_destroy", "pz_capture_error", "pz_capture_request_permission" })
+                    System.Runtime.InteropServices.NativeLibrary.GetExport(native, export);
+                Console.WriteLine("NATIVE_MACOS_CAPTURE_LIBRARY_OK");
+            }
+            finally { System.Runtime.InteropServices.NativeLibrary.Free(native); }
+        }
 #if PROJECTZ_WINDOWS_RUNTIME
         var backend = args.FirstOrDefault(x => x.StartsWith("--backend="))?.Split('=')[1] ?? "DirectX12";
         Require(GraphicsBackendInfo.Current.ToString() == backend, "Wrong Windows graphics backend.");
