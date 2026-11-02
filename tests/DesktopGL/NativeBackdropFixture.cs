@@ -21,22 +21,29 @@ internal sealed class NativeBackdropFixture : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int Clear(IntPtr renderer);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void Present(IntPtr renderer);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void WindowAction(IntPtr window);
-    private readonly IntPtr library, window, renderer;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr GetContext();
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int MakeCurrent(IntPtr window, IntPtr context);
+    private readonly IntPtr library, window, renderer, host, context;
     private T Get<T>(string name) where T : Delegate => Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(library, name));
     internal NativeBackdropFixture(IntPtr host)
     {
         library = NativeLibrary.Load("libSDL2-2.0.so.0", typeof(Game).Assembly, null);
+        this.host = host;
+        context = Get<GetContext>("SDL_GL_GetCurrentContext")();
         window = Get<CreateWindow>("SDL_CreateWindow")("Project-Z controlled capture background", 350, 250, 900, 700, 4 | 16);
         renderer = Get<CreateRenderer>("SDL_CreateRenderer")(window, -1, 1);
         Program.Require(window != IntPtr.Zero && renderer != IntPtr.Zero, "Controlled X11 capture window could not be created.");
         Get<SetColor>("SDL_SetRenderDrawColor")(renderer, 0, 255, 0, 255);
         Get<Clear>("SDL_RenderClear")(renderer); Get<Present>("SDL_RenderPresent")(renderer);
         Get<WindowAction>("SDL_RaiseWindow")(host);
+        Program.Require(Get<MakeCurrent>("SDL_GL_MakeCurrent")(host, context) == 0, "The host OpenGL context could not be restored after drawing the fixture.");
+        Console.WriteLine("NATIVE_CAPTURE_FIXTURE_READY");
     }
     public void Dispose()
     {
         if (renderer != IntPtr.Zero) Get<WindowAction>("SDL_DestroyRenderer")(renderer);
         if (window != IntPtr.Zero) Get<WindowAction>("SDL_DestroyWindow")(window);
+        Get<MakeCurrent>("SDL_GL_MakeCurrent")(host, context);
         NativeLibrary.Free(library);
     }
 #endif

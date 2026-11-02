@@ -59,7 +59,7 @@ foreach ($platform in @('Linux', 'macOS')) {
         if ($LASTEXITCODE -ne 0) { throw "$platform native graphics smoke failed." }
         if ($RunNativeDesktop) {
             dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur --native-desktop
-            if ($LASTEXITCODE -ne 0) { throw "$platform desktop exclusion checks failed." }
+            if ($LASTEXITCODE -ne 0) { throw "$platform desktop exclusion checks failed (exit $LASTEXITCODE)." }
         }
     }
 }

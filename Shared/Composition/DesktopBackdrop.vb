@@ -154,6 +154,9 @@ Namespace [Shared].Composition
                 End If
             End If
             captureTask = Nothing
+            ' A released source can still be finishing on its worker. A retry must
+            ' get a separate buffer rather than race that source for the same pixels.
+            rgba = Nothing
             frameArea = Rectangle.Empty
             _State = DesktopBackdropState.Starting
         End Sub
