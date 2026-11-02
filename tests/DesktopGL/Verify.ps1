@@ -3,7 +3,8 @@
 param(
     [string]$PackageDirectory,
     [ValidateSet('linux-x64','linux-arm64','osx-x64','osx-arm64','win-x64')][string]$RuntimeIdentifier = [Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier,
-    [switch]$RunGraphics
+    [switch]$RunGraphics,
+    [string]$WorkDirectory
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -11,7 +12,7 @@ if (!$PackageDirectory) { $PackageDirectory = Join-Path $root 'artifacts/desktop
 $PackageDirectory = [IO.Path]::GetFullPath($PackageDirectory)
 [xml]$properties = Get-Content (Join-Path $root 'Extensions/ProjectZ.Package.props')
 $version = $properties.Project.PropertyGroup.Version
-$temp = Join-Path ([IO.Path]::GetTempPath()) ('ProjectZ-DesktopGL-' + [Guid]::NewGuid().ToString('N'))
+$temp = if ($WorkDirectory) { [IO.Path]::GetFullPath($WorkDirectory) } else { Join-Path ([IO.Path]::GetTempPath()) ('ProjectZ-DesktopGL-' + [Guid]::NewGuid().ToString('N')) }
 New-Item -ItemType Directory -Force $temp | Out-Null
 $feed = [Security.SecurityElement]::Escape($PackageDirectory)
 Set-Content (Join-Path $temp 'NuGet.Config') "<configuration><packageSources><clear/><add key=`"local`" value=`"$feed`"/><add key=`"nuget.org`" value=`"https://api.nuget.org/v3/index.json`"/></packageSources></configuration>"
@@ -33,7 +34,8 @@ foreach ($platform in @('Linux', 'macOS')) {
     } finally { $archive.Dispose() }
     $consumer = Join-Path $temp $platform
     New-Item -ItemType Directory -Force $consumer | Out-Null
-    Copy-Item (Join-Path $PSScriptRoot 'Consumer.csproj'),(Join-Path $PSScriptRoot 'Program.cs') $consumer
+    Copy-Item (Join-Path $PSScriptRoot 'Consumer.csproj') $consumer
+    Copy-Item (Join-Path $PSScriptRoot '*.cs') $consumer
     $project = Join-Path $consumer 'Consumer.csproj'
     $argsForBuild = @("-p:ProjectZPlatform=$platform", "-p:ProjectZVersion=$version", "-p:RestorePackagesPath=$temp/packages", '-p:UseSharedCompilation=false')
     dotnet restore $project --configfile (Join-Path $temp 'NuGet.Config') @argsForBuild --nologo
@@ -52,7 +54,7 @@ foreach ($platform in @('Linux', 'macOS')) {
     if (!(Test-Path (Join-Path $publish $sdl))) { throw "$RuntimeIdentifier SDL runtime missing." }
     if (Get-ChildItem $publish -Recurse -File | Where-Object Name -Match '^(PresentationFramework|PresentationCore|WindowsBase|System.Windows.Forms|SocketJack|WebView2Loader|mgruntime)\.') { throw 'Windows-only dependencies leaked into publish output.' }
     if ($RunGraphics) {
-        dotnet (Join-Path $publish 'Consumer.dll') --graphics
+        dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur
         if ($LASTEXITCODE -ne 0) { throw "$platform native graphics smoke failed." }
     }
 }

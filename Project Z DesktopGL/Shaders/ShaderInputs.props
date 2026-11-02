@@ -2,8 +2,10 @@
   <ItemGroup>
     <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Resources/XamlEffects.fx" ExpectedHash="38212F48681777ECA7BD7BB9A030C8095EAC4F7E3F3916C2307F198AC1DA6F4C" />
     <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Resources/FXAA.fx" ExpectedHash="B7ACDA92FA3DF34D23F199D15B2556EC595EDB14A939A00399589CB971F9D27F" />
+    <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Resources/DesktopBlur.fx" ExpectedHash="85A09BC7CC7FA914AD1246617DB6B026205F0162BA1E97B38FAE5D70FE016672" />
     <ProjectZShaderInput Include="$(ProjectZRepositoryRoot).config/dotnet-tools.json" ExpectedHash="7AD3D5091E7FD4C8A506E150A23A13FDF41C38411B4A5C08E6F357018D53B71C" />
     <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Project Z DesktopGL/Shaders/XamlEffects.mgfx" ExpectedHash="63C3BA3CFEBB4C3081D2AC922837B3A39B6DE5D01BA3A669064FB87EFEDD97D0" />
     <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Project Z DesktopGL/Shaders/FXAA.mgfx" ExpectedHash="83F8C6DB863DD801D6FAA862E69DB90B59D64BC2F7B11F16A396DEE0AEA432FA" />
+    <ProjectZShaderInput Include="$(ProjectZRepositoryRoot)Project Z DesktopGL/Shaders/DesktopBlur.mgfx" ExpectedHash="408D68E5A40818FBE825418D2C099863B43ADCEB537D8DB56A3925E95D736783" />
   </ItemGroup>
 </Project>

@@ -12,10 +12,14 @@ on:
         description: Publish validated Linux and macOS packages to NuGet
         type: boolean
         default: false
+      validate_only:
+        description: Run the complete release checks without publishing
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
-  publish:
+  windows:
     if: ${{ inputs.desktopgl_only != true }}
     runs-on: windows-latest
     permissions:
@@ -66,7 +70,44 @@ jobs:
           name: ProjectZ-runtime-packages
           path: artifacts/runtime-packages/*.nupkg
           if-no-files-found: error
-      - name: Publish validated packages on GitHub
+  desktopgl:
+    uses: ./.github/workflows/desktopgl.yml
+  release:
+    if: ${{ always() && !cancelled() && needs.desktopgl.result == 'success' && (needs.windows.result == 'success' || inputs.desktopgl_only == true) }}
+    needs: [windows, desktopgl]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Download Windows and optional runtime packages
+        if: inputs.desktopgl_only != true
+        uses: actions/download-artifact@v4
+        with:
+          name: ProjectZ-runtime-packages
+          path: release-packages
+      - name: Download native Linux package
+        uses: actions/download-artifact@v4
+        with:
+          name: ProjectZ-Linux-release
+          path: release-packages
+      - name: Download universal macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: ProjectZ-macOS-release
+          path: release-packages
+      - name: Verify complete versioned release set
+        shell: pwsh
+        env:
+          DESKTOPGL_ONLY: ${{ inputs.desktopgl_only }}
+        run: |
+          ./tools/Verify-ReleasePackages.ps1 -Directory release-packages -DesktopGLOnly:($env:DESKTOPGL_ONLY -eq 'true') -ExpectedCommit '${{ github.sha }}'
+      - name: Publish complete package set on GitHub
+        if: inputs.validate_only != true && (inputs.desktopgl_only != true || inputs.publish_desktopgl == true)
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,61 +115,32 @@ jobs:
           [xml]$properties = Get-Content Extensions/ProjectZ.Package.props
           $version = $properties.Project.PropertyGroup.Version
           $tag = "v$version"
-          gh release view $tag --json tagName 1>$null 2>$null
-          if ($LASTEXITCODE -eq 0) { exit 0 }
-          $packages = @(Get-ChildItem artifacts/runtime-packages/*.nupkg | ForEach-Object FullName)
-          if ($packages.Count -ne 5) { throw 'Expected the base runtime and four optional co-packages.' }
-          gh release create $tag @packages --target '${{ github.sha }}' --title "ProjectZ $version" --notes-file docs/MODULAR-PACKAGES.md
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: NuGet Trusted Publishing
-        uses: NuGet/login@v1
-        id: login
-        with:
-          user: Pathogenix
-      - name: Push base runtime and co-packages to NuGet
-        shell: pwsh
-        env:
-          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
-        run: |
-          # Publish optional features before the new base version is discoverable.
-          $packages = @(Get-ChildItem artifacts/runtime-packages/*.nupkg | Sort-Object @{Expression={ if ($_.Name -match '^ProjectZ\.\d') { 1 } else { 0 } }},Name)
-          if ($packages.Count -ne 5) { throw 'Expected the base runtime and four optional co-packages.' }
-          foreach ($package in $packages) {
-            dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          $packages = @(Get-ChildItem release-packages/*.nupkg)
+          $existing = gh release view $tag --json assets 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag @($packages.FullName) --target '${{ github.sha }}' --title "ProjectZ $version" --notes-file docs/RELEASE-NOTES.md
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            $names = @((ConvertFrom-Json $existing).assets.name)
+            $missing = @($packages | Where-Object Name -NotIn $names)
+            if ($missing.Count -gt 0) {
+              gh release upload $tag @($missing.FullName)
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
           }
-  desktopgl:
-    if: ${{ github.event_name == 'push' || inputs.desktopgl_only == true || inputs.publish_desktopgl == true }}
-    uses: ./.github/workflows/desktopgl.yml
-  publish-desktopgl:
-    if: ${{ github.event_name == 'push' || inputs.publish_desktopgl == true }}
-    needs: desktopgl
-    runs-on: windows-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - uses: actions/download-artifact@v4
-        with:
-          name: ProjectZ-DesktopGL-linux-x64
-          path: desktopgl-packages
       - name: NuGet Trusted Publishing
+        if: inputs.validate_only != true && (inputs.desktopgl_only != true || inputs.publish_desktopgl == true)
         uses: NuGet/login@v1
         id: login
         with:
           user: Pathogenix
-      - name: Push Linux and macOS packages to NuGet
+      - name: Push complete package set to NuGet
+        if: inputs.validate_only != true && (inputs.desktopgl_only != true || inputs.publish_desktopgl == true)
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
-          $packages = @(Get-ChildItem desktopgl-packages/*.nupkg)
-          if ($packages.Count -ne 2 -or @($packages | Where-Object Name -NotMatch '^ProjectZ\.(Linux|macOS)\.\d').Count -ne 0) {
-            throw 'Expected exactly the validated Linux and macOS packages.'
-          }
+          $packages = @(Get-ChildItem release-packages/*.nupkg | Sort-Object @{Expression={ if ($_.Name -match '^ProjectZ\.\d') { 1 } else { 0 } }},Name)
           foreach ($package in $packages) {
             dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

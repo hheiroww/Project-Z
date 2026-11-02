@@ -18,6 +18,8 @@ Namespace [Shared].Drawing
         Implements IDisposable
 
 #Region "Properties"
+        ''' <summary>Disable for projection/off-screen scenes that must not include the desktop material.</summary>
+        Public Property UseDesktopBackdrop As Boolean = True
 
         Friend renderTarget As RenderTarget2D
         Private renderRevisionValue As Long = 1
@@ -1098,7 +1100,7 @@ Namespace [Shared].Drawing
                 End If
 
                 graphicsDevice.SetRenderTarget(renderTarget)
-                graphicsDevice.Clear(BackgroundColor)
+                DrawSceneBackground()
 
                 RaiseEvent PreDraw(gameTime)
 
@@ -1154,7 +1156,7 @@ Namespace [Shared].Drawing
                 End If
                 Me.Texture = Texture
             Else
-                graphicsDevice.Clear(BackgroundColor)
+                DrawSceneBackground()
                 RaiseEvent PreDraw(gameTime)
                 If Not hasBegun Then
                     hasBegun = True
@@ -1173,6 +1175,12 @@ Namespace [Shared].Drawing
             End If
 
             RaiseEvent PostDraw(gameTime)
+        End Sub
+
+        Private Sub DrawSceneBackground()
+            If UseDesktopBackdrop AndAlso ownerManager IsNot Nothing AndAlso ownerManager.DesktopBackdrop IsNot Nothing AndAlso
+               ownerManager.DesktopBackdrop.Draw(graphicsDevice, BackgroundColor) Then Return
+            graphicsDevice.Clear(BackgroundColor)
         End Sub
 
         Friend CursorDefault As Vector2() = {New Vector2(1, 1), New Vector2(3, 10), New Vector2(5, 5), New Vector2(9, 5)}

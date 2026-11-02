@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="../Extensions/ProjectZ.DesktopCapture.Source.targets" />
   <Import Project="Shaders/ShaderInputs.props" />
   <Target Name="ValidateDesktopGLShaders" BeforeTargets="PrepareForBuild">
     <GetFileHash Files="@(ProjectZShaderInput)" Algorithm="SHA256">

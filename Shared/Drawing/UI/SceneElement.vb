@@ -895,6 +895,8 @@ Namespace [Shared].Drawing.UI
                 RenderExceptionCount += 1
 #If WINDOWS Then
                 If RenderExceptionCount <= 10 Then Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Report("Render " & Me.GetType().FullName, ex)
+#Else
+                If RenderExceptionCount <= 10 Then System.Diagnostics.Trace.TraceError("Render " & Me.GetType().FullName & ": " & ex.ToString())
 #End If
                 If FirstRenderException Is Nothing Then FirstRenderException = ex.ToString()
             End Try

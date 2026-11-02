@@ -1,6 +1,6 @@
 # Smaller Project-Z applications
 
-Starting with 2026.11.1.1, `ProjectZ` contains the scene graph, UI controls,
+Starting with 2026.11.2.1, `ProjectZ` contains the scene graph, UI controls,
 layout, input, text, rendering, runtime XAML loading, procedural 3D surfaces,
 Windows integration and managed error logging. Optional dependencies no longer
 flow into every application.
@@ -18,17 +18,17 @@ flow into every application.
 Use the same version for Project-Z co-packages:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.1.1
+dotnet add package ProjectZ --version 2026.11.2.1
 # Only for applications that load model files:
-dotnet add package ProjectZ.ModelImport --version 2026.11.1.1
+dotnet add package ProjectZ.ModelImport --version 2026.11.2.1
 # Only for applications that need native crash dumps:
-dotnet add package ProjectZ.Diagnostics --version 2026.11.1.1
+dotnet add package ProjectZ.Diagnostics --version 2026.11.2.1
 ```
 
 For native scene XAML compilation:
 
 ```xml
-<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.1.1" PrivateAssets="all" />
+<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.2.1" PrivateAssets="all" />
 ```
 
 ## Migrating an application
@@ -59,7 +59,7 @@ self-contained. WPF/WinForms trimming is not enabled by this change.
 
 ```powershell
 ./tools/Pack-RuntimePackages.ps1
-./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.1.1.nupkg
+./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.2.1.nupkg
 ```
 
 The packaging test builds consumers outside the source tree. It checks the base
@@ -67,3 +67,11 @@ dependency graph and publish output, verifies managed logging without optional
 features, imports a real OBJ through the optional importer, compiles HTML5 host
 usage and native XAML, and verifies deployment of the optional observer.
 Build output, temporary consumers and measurements are not source assets.
+
+## Normal releases
+
+Master pushes and default manual releases validate and publish all seven packages,
+including `ProjectZ.Linux` and `ProjectZ.macOS`. GitHub releases contain the same
+complete set. Platform packages use their native runner outputs; the macOS package
+contains a universal capture helper. `validate_only=true` runs the complete gate
+without publishing. [Release notes](RELEASE-NOTES.md) and [platform pathways](PLATFORM-PATHWAYS.md).

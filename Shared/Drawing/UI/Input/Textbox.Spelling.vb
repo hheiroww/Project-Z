@@ -52,6 +52,12 @@ Namespace [Shared].Drawing.UI.Input
             Dim checker As OfflineSpellChecker
             Try
                 checker = If(SpellChecker, OfflineSpellChecker.Default)
+                If Not checker.IsAvailable Then
+                    spellingCancellation?.Cancel()
+                    spellingIssues = Array.Empty(Of SpellingIssue)()
+                    spellingFailure = Nothing
+                    Return
+                End If
             Catch ex As Exception
                 spellingFailure = ex.Message
                 Return

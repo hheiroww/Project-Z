@@ -11,6 +11,9 @@ Namespace [Shared].Content
     ''' <summary>Compiled free vector outlines tessellated to GPU triangles, with optional host-font shaping.</summary>
     Public NotInheritable Class VectorFont
         Implements IDisposable
+        ''' <summary>Register at startup, before loading fonts. Existing faces keep their provider.</summary>
+        Public Shared Property Provider As IVectorFontProvider
+        Private customFace As IVectorFontFace
 #If WINDOWS Then
         Private ReadOnly face As Media.Typeface
 #End If
@@ -91,6 +94,13 @@ Namespace [Shared].Content
             If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
             If weight < 1 OrElse weight > 999 Then Throw New ArgumentOutOfRangeException(NameOf(weight))
             emSize = pointSize * 96.0 / 72.0
+            customFace = Provider?.FromFamily(familyName, weight, pointSize)
+            If customFace IsNot Nothing Then
+                Me.FamilyName = customFace.FamilyName
+                FilePath = customFace.FilePath
+                LineSpacing = customFace.LineSpacing
+                Return
+            End If
 #If WINDOWS Then
             If String.Equals(familyName, CompiledFont.FamilyName, StringComparison.OrdinalIgnoreCase) OrElse
                String.Equals(familyName, "Segoe UI", StringComparison.OrdinalIgnoreCase) Then
@@ -118,6 +128,17 @@ Namespace [Shared].Content
         End Sub
 
         Public Sub New(path As String, pointSize As Single)
+            If Not Single.IsFinite(pointSize) OrElse pointSize <= 0 OrElse pointSize > 512 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
+            Dim provider = VectorFont.Provider
+            If provider IsNot Nothing Then
+                customFace = provider.FromFile(IO.Path.GetFullPath(path), pointSize)
+                If customFace IsNot Nothing Then
+                    FilePath = customFace.FilePath
+                    Me.FamilyName = customFace.FamilyName
+                    LineSpacing = customFace.LineSpacing
+                    Return
+                End If
+            End If
 #If WINDOWS Then
             If pointSize <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(pointSize))
             FilePath = IO.Path.GetFullPath(path)
@@ -134,7 +155,7 @@ Namespace [Shared].Content
             emSize = pointSize * 96.0 / 72.0
             LineSpacing = CInt(Math.Ceiling(glyphFace.Height * emSize))
 #Else
-            Throw New PlatformNotSupportedException("Custom font files require the Windows text provider. DesktopGL uses compiled ProjectZ Sans outlines.")
+            Throw New PlatformNotSupportedException("Register VectorFont.Provider to load custom font files on DesktopGL, or use compiled ProjectZ Sans outlines.")
 #End If
         End Sub
 
@@ -163,6 +184,7 @@ Namespace [Shared].Content
             If String.IsNullOrEmpty(text) Then Return Vector2.Zero
             text = CompiledFont.NormalizeText(text)
             Dim aligned = If(pixelPerfect, PpiPerfectText)
+            If customFace IsNot Nothing Then Return customFace.Measure(text, aligned)
             Dim key = If(aligned, "P:", "I:") & text
             Dim size As Vector2
             If Not measurements.TryGetValue(key, size) Then
@@ -306,6 +328,10 @@ Namespace [Shared].Content
             Dim quality = Drawing.GraphicsQuality.ForDevice(device)
             Dim aligned = If(pixelPerfect, PpiPerfectText OrElse quality.PpiPerfectText)
             If aligned Then position = AlignToPixelGrid(position)
+            If customFace IsNot Nothing Then
+                customFace.Draw(device, text, position, color, offset, textScale, aligned)
+                Return
+            End If
             Dim mesh = Triangles(text, aligned)
             Dim vertices = mesh.Vertices
             If vertices.Length = 0 Then Return
@@ -339,6 +365,9 @@ Namespace [Shared].Content
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
+            Dim faceToDispose = customFace
+            customFace = Nothing
+            faceToDispose?.Dispose()
             If ownerDevice IsNot Nothing AndAlso deviceDisposing IsNot Nothing Then RemoveHandler ownerDevice.Disposing, deviceDisposing
             ownerDevice = Nothing
             deviceDisposing = Nothing

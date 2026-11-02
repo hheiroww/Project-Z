@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="Extensions/ProjectZ.Package.props" />
+  <Import Project="Extensions/ProjectZ.DesktopCapture.Source.targets" />
 
   <PropertyGroup>
 	<TargetFramework>net8.0-windows7.0</TargetFramework>
@@ -113,15 +114,17 @@
     <XamlShaderDefines>$(ProjectZGraphicsBackend.ToUpperInvariant())</XamlShaderDefines>
     <XamlShaderDefines Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'">PROJECTZ_OPENGL</XamlShaderDefines>
   </PropertyGroup>
-  <Target Name="CompileProjectZXamlShaders" BeforeTargets="PrepareResources" Inputs="Resources\XamlEffects.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx">
+  <Target Name="CompileProjectZXamlShaders" BeforeTargets="PrepareResources" Inputs="Resources\XamlEffects.fx;Resources\DesktopBlur.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx;$(IntermediateOutputPath)DesktopBlur.$(ProjectZGraphicsBackend).mgfx">
     <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" />
     <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\XamlEffects.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(XamlShaderDefines)" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)/Resources/DesktopBlur.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)DesktopBlur.$(ProjectZGraphicsBackend).mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:$(XamlShaderProfile) /Defines:$(XamlShaderDefines)" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
   <Target Name="CompileProjectZOpenGLFxaa" BeforeTargets="PrepareResources" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" DependsOnTargets="CompileProjectZXamlShaders" Inputs="Resources\FXAA.fx;.config\dotnet-tools.json" Outputs="$(IntermediateOutputPath)FXAA.OpenGL.mgfx">
     <Exec Command="dotnet tool run mgfxc -- &quot;$(MSBuildProjectDirectory)\Resources\FXAA.fx&quot; &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)FXAA.OpenGL.mgfx', '$(MSBuildProjectDirectory)'))&quot; /Profile:OpenGL" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
   <ItemGroup>
     <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)DesktopBlur.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.DesktopBlur.mgfx" />
     <EmbeddedResource Include="$(IntermediateOutputPath)FXAA.OpenGL.mgfx" LogicalName="ProjectZ.Resources.FXAA.mgfx" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" />
   </ItemGroup>
   <ItemGroup>

@@ -53,6 +53,9 @@ Namespace [Shared].Drawing
         Private Property isDragging As Boolean = False
         Private Property Scenes As New Dictionary(Of String, Scene)
         Public Property ActiveScene As Scene
+        Public ReadOnly Property DesktopBackdrop As Global.ProjectZ.Shared.Composition.DesktopBackdrop
+        Private desktopPrompt As Global.ProjectZ.Shared.Composition.DesktopBackdropSetupPrompt
+        Private desktopPromptRequest As (State As Global.ProjectZ.Shared.Composition.DesktopBackdropState, Message As String)?
         Public Property Sender As Game
         ''' <summary>
         ''' Uses input injected by an embedding host's real child HWND instead
@@ -1218,6 +1221,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub Tick(gameTime As GameTime)
+            DesktopBackdrop?.Update()
             If viewportResizePending Then
                 viewportResizePending = False
                 ApplyPendingViewportResize()
@@ -1247,6 +1251,13 @@ Namespace [Shared].Drawing
                 If Not UseExternalInput Then DetectMouseEvents(gameTime)
 #End If
                 ActiveScene.Tick(gameTime)
+                If desktopPromptRequest.HasValue Then
+                    Dim request = desktopPromptRequest.Value
+                    desktopPromptRequest = Nothing
+                    desktopPrompt?.Dispose()
+                    desktopPrompt = New Global.ProjectZ.Shared.Composition.DesktopBackdropSetupPrompt(ActiveScene, DesktopBackdrop, request.State, request.Message)
+                End If
+                desktopPrompt?.Tick()
             End If
         End Sub
 
@@ -1284,6 +1295,11 @@ Namespace [Shared].Drawing
         End Sub
 
         Private Sub InitializeViewportResize()
+            If DesktopBackdrop Is Nothing Then _DesktopBackdrop = New Global.ProjectZ.Shared.Composition.DesktopBackdrop(Sender)
+            AddHandler DesktopBackdrop.Unavailable, Sub(state, message)
+                If DesktopBackdrop.ShowSetupPrompt AndAlso (state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.DependenciesRequired OrElse
+                    state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.PermissionRequired OrElse state = Global.ProjectZ.Shared.Composition.DesktopBackdropState.SessionChangeRequired) Then desktopPromptRequest = (state, message)
+            End Sub
 #If WINDOWS Then
             Global.ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize()
             Global.ProjectZ.RuntimeDiagnostics.GraphicsDiagnostics.Register(Sender.GraphicsDevice)
@@ -1368,6 +1384,8 @@ Namespace [Shared].Drawing
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
                 If disposing Then
+                    DesktopBackdrop?.Dispose()
+                    desktopPrompt?.Dispose()
                     If subscribedWindow IsNot Nothing Then
                         RemoveHandler subscribedWindow.ClientSizeChanged, AddressOf HandleClientSizeChanged
 #If Not WINDOWS Then

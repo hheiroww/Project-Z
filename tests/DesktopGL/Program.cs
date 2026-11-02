@@ -19,10 +19,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        ProviderChecks.Run();
         Require(GraphicsBackendInfo.Current == ProjectZGraphicsBackend.OpenGL, "Wrong graphics backend.");
         var assembly = typeof(Scene).Assembly;
         Require(!assembly.GetReferencedAssemblies().Any(a => new[] { "PresentationCore", "PresentationFramework", "WindowsBase", "System.Windows.Forms", "SocketJack", "Microsoft.Web.WebView2.Core" }.Contains(a.Name)), "Windows/private dependencies leaked into DesktopGL.");
-        foreach (var name in new[] { "FXAA", "XamlEffects" })
+        foreach (var name in new[] { "FXAA", "XamlEffects", "DesktopBlur" })
         {
             using var stream = assembly.GetManifestResourceStream($"ProjectZ.Resources.{name}.mgfx")!;
             Require(stream != null && stream.ReadByte() == 'M' && stream.ReadByte() == 'G' && stream.ReadByte() == 'F' && stream.ReadByte() == 'X', "Embedded shader missing or invalid.");
@@ -38,7 +39,7 @@ internal static class Program
         Require(!OfflineSpellChecker.IsSupported, "Windows spelling advertised on DesktopGL.");
         if (args.Contains("--graphics"))
         {
-            using var game = new SmokeGame();
+            using var game = new SmokeGame(args.Contains("--desktop-blur"));
             game.Run();
             Require(game.Completed, "Graphics smoke did not complete.");
         }
@@ -57,10 +58,12 @@ internal sealed class SmokeGame : Game
     private SmokeScene scene = null!;
     private Textbox textbox = null!;
     private int frames;
+    private readonly bool testBackdrop;
     public bool Completed { get; private set; }
 
-    public SmokeGame()
+    public SmokeGame(bool testBackdrop = false)
     {
+        this.testBackdrop = testBackdrop;
         graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 480, PreferredBackBufferHeight = 320,
@@ -79,14 +82,22 @@ internal sealed class SmokeGame : Game
         Services.AddService(typeof(GraphicsDevice), GraphicsDevice);
         Services.AddService(typeof(ContentContainer), content);
         manager = new SceneManager(this, 60);
-        scene = new SmokeScene(manager) { BackgroundColor = Color.Black };
+        if (testBackdrop)
+        {
+            manager.DesktopBackdrop.CaptureSourceFactory = () => new BackdropFixture();
+            manager.DesktopBackdrop.Settings.Enabled = true;
+            manager.DesktopBackdrop.Settings.NoiseOpacity = 0;
+            manager.DesktopBackdrop.ShowSetupPrompt = false;
+        }
+        scene = new SmokeScene(manager) { BackgroundColor = testBackdrop ? Color.Transparent : Color.Black };
         manager.AddScene("Smoke", scene);
         manager.ActiveScene = scene;
         scene.AddElement(new RectangleElement(scene) { Position = new Vector2(20, 20), Size = new Vector2(180, 70), BackgroundColor = Color.LimeGreen, CornerRadius = 12 });
         scene.AddElement(new TextElement(scene) { Position = new Vector2(24, 110), Text = "Linux / macOS — ProjectZ Sans" });
         textbox = new Textbox(scene) { Position = new Vector2(20, 180), Size = new Vector2(300, 40), Text = "SDL clipboard ✓" };
         scene.AddElement(textbox);
-        foreach (var name in new[] { "FXAA", "XamlEffects" })
+        ProviderChecks.CheckMedia(scene, GraphicsDevice);
+        foreach (var name in new[] { "FXAA", "XamlEffects", "DesktopBlur" })
         {
             using var stream = typeof(Scene).Assembly.GetManifestResourceStream($"ProjectZ.Resources.{name}.mgfx")!;
             using var bytes = new MemoryStream();
@@ -108,6 +119,7 @@ internal sealed class SmokeGame : Game
 
     protected override void Update(GameTime gameTime)
     {
+        if (testBackdrop) Thread.Sleep(2);
         if (frames == 1)
         {
             scene.FocusElement(textbox);
@@ -121,7 +133,8 @@ internal sealed class SmokeGame : Game
     protected override void Draw(GameTime gameTime)
     {
         manager.Draw(gameTime);
-        if (++frames >= 4)
+        frames++;
+        if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active))
         {
             Program.Require(textbox.Text == "é", $"Unicode TextInput failed: {textbox.Text}");
             Program.Require(SceneElement.RenderExceptionCount == 0, SceneElement.FirstRenderException ?? "Scene rendering failed.");
@@ -129,10 +142,19 @@ internal sealed class SmokeGame : Game
             GraphicsDevice.GetBackBufferData(pixels);
             Program.Require(pixels.Any(p => p.G > 100 && p.G > p.R * 1.5f), "Scene did not render the green rectangle.");
             Program.Require(pixels.Any(p => p.R > 180 && p.G > 180 && p.B > 180), "Vector text was not rendered.");
+            if (testBackdrop)
+            {
+                var width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+                var left = pixels[290 * width + 30]; var center = pixels[290 * width + 240]; var right = pixels[290 * width + 450];
+                Program.Require(left.R > 220 && left.B < 30 && right.B > 220 && right.R < 30, "Desktop material lost its source colors.");
+                Program.Require(center.R > 40 && center.B > 40 && center.R < 215 && center.B < 215, "Gaussian desktop transition did not blur.");
+                Console.WriteLine("DESKTOP_BLUR_SHADER_OK");
+            }
             Completed = true;
             Console.WriteLine("DESKTOPGL_GRAPHICS_OK");
             Exit();
         }
+        if (frames > 300) throw new Exception("Desktop backdrop never became active: " + manager.DesktopBackdrop.StatusMessage);
         base.Draw(gameTime);
     }
 

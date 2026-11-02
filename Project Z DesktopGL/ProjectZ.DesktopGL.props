@@ -24,6 +24,7 @@
     <ProjectReference Include="$(ProjectZRepositoryRoot)Project Z Vector Text/ProjectZ.VectorText.csproj" PrivateAssets="all" />
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shaders/XamlEffects.mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shaders/FXAA.mgfx" LogicalName="ProjectZ.Resources.FXAA.mgfx" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shaders/DesktopBlur.mgfx" LogicalName="ProjectZ.Resources.DesktopBlur.mgfx" />
     <None Include="$(ProjectZRepositoryRoot)docs/DESKTOPGL.md;$(ProjectZRepositoryRoot)THIRD-PARTY-NOTICES.md;$(ProjectZRepositoryRoot)Images/branding/project-z-icon.png" Pack="true" PackagePath="/" />
     <None Include="$(ProjectZRepositoryRoot)ThirdParty/ProjectZSans/OFL.txt;$(ProjectZRepositoryRoot)ThirdParty/ProjectZSans/README.md" Pack="true" PackagePath="ThirdParty/ProjectZSans/" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="ThirdParty/ProjectZSans/%(Filename)%(Extension)" />
   </ItemGroup>

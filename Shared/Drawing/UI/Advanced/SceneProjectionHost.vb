@@ -51,6 +51,7 @@ Namespace [Shared].Drawing.UI.Advanced
             End Get
             Set(value As Scene)
                 _TargetScene = value
+                If value IsNot Nothing Then value.UseDesktopBackdrop = False
             End Set
         End Property
         Private _TargetScene As Scene
