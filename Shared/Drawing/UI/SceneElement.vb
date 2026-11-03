@@ -12,7 +12,7 @@ Imports ProjectZ.Shared.Drawing.UI.Input
 Namespace [Shared].Drawing.UI
 
     <Serializable>
-    Public MustInherit Class SceneElement
+    Public MustInherit Partial Class SceneElement
         Implements IDisposable
 
 #Region "Properties"
@@ -304,6 +304,7 @@ Namespace [Shared].Drawing.UI
         End Property
         Private _MouseDown As Boolean = False
         Friend Sub ReleasePointerPress()
+            EndFreeMove(True)
             _MouseDown = False
             OnUserInvalidated()
         End Sub
@@ -609,7 +610,7 @@ Namespace [Shared].Drawing.UI
 
         Protected Friend Sub OnMouseDrag(currentPoint As Point, startPoint As Point)
             RaiseEvent MouseDrag(currentPoint, startPoint)
-            If isMovable Then Position = _MouseDownPosition.Subtract(startPoint.Subtract(currentPoint))
+            If isMovable AndAlso Not FreeMove Then Position = _MouseDownPosition.Subtract(startPoint.Subtract(currentPoint))
         End Sub
 
         Protected Friend Sub OnMouseEnter()

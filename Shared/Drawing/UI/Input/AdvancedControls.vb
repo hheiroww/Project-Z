@@ -1320,12 +1320,12 @@ Namespace [Shared].Drawing.UI.Input
         Public Sub ApplyWheelImpulse(delta As Integer)
             If delta = 0 Then Return
             Dim notches As Single = delta / 120.0F
+            Dim impulse = If(Single.IsFinite(WheelScrollAmount), Math.Clamp(WheelScrollAmount, 0, 100000000), 900.0F) / CSng(Mass)
+            Dim maximum = If(Single.IsFinite(MaximumScrollVelocity), Math.Clamp(MaximumScrollVelocity, 0, 1000000), 3200.0F)
             If _canScrollVertically Then
-                _scrollVelocity.Y = Math.Max(-MaximumScrollVelocity,
-                                             Math.Min(MaximumScrollVelocity, _scrollVelocity.Y - notches * WheelScrollAmount))
+                _scrollVelocity.Y = Math.Clamp(_scrollVelocity.Y - notches * impulse, -maximum, maximum)
             ElseIf _canScrollHorizontally Then
-                _scrollVelocity.X = Math.Max(-MaximumScrollVelocity,
-                                             Math.Min(MaximumScrollVelocity, _scrollVelocity.X - notches * WheelScrollAmount))
+                _scrollVelocity.X = Math.Clamp(_scrollVelocity.X - notches * impulse, -maximum, maximum)
             End If
         End Sub
 
@@ -1336,19 +1336,22 @@ Namespace [Shared].Drawing.UI.Input
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
             Dim elapsed = CSng(gameTime.ElapsedGameTime.TotalSeconds)
-            If elapsed <= 0 OrElse _scrollVelocity = Vector2.Zero Then Return
+            If Not Single.IsFinite(elapsed) OrElse elapsed <= 0 OrElse _scrollVelocity = Vector2.Zero Then Return
 
             Dim before = _scrollOffset
-            Dim rate = Math.Max(0.0F, ScrollDeceleration)
+            If FrictionType = Global.ProjectZ.Shared.Physics.FrictionType.Geometry Then ReadPhysicsState()
+            Dim deceleration = If(Single.IsFinite(ScrollDeceleration), Math.Max(0.0F, ScrollDeceleration), 2600.0F)
+            Dim rate = CSng(Math.Clamp(CDbl(deceleration) * PhysicsBody.GetFriction() / 0.5 / Mass, 0, 10000000000))
             Dim nextVelocity As New Vector2(ApproachZero(_scrollVelocity.X, rate * elapsed), ApproachZero(_scrollVelocity.Y, rate * elapsed))
             ' Integrate deceleration over real frame time, including a slow image
             ' frame. Dropping long frames or using initial velocity for the whole
             ' interval makes wheel travel depend on rendering speed.
             Dim timeX = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.X) / rate), elapsed)
             Dim timeY = If(rate > 0, Math.Min(elapsed, Math.Abs(_scrollVelocity.Y) / rate), elapsed)
-            ScrollBy(New Vector2((_scrollVelocity.X + nextVelocity.X) * 0.5F * timeX, (_scrollVelocity.Y + nextVelocity.Y) * 0.5F * timeY))
-            If _scrollOffset.X = before.X Then nextVelocity.X = 0
-            If _scrollOffset.Y = before.Y Then nextVelocity.Y = 0
+            Dim travel As New Vector2((_scrollVelocity.X + nextVelocity.X) * 0.5F * timeX, (_scrollVelocity.Y + nextVelocity.Y) * 0.5F * timeY)
+            ScrollBy(travel)
+            If Math.Abs(_scrollOffset.X - before.X - travel.X) > 0.001F Then nextVelocity.X *= -CSng(Bounce)
+            If Math.Abs(_scrollOffset.Y - before.Y - travel.Y) > 0.001F Then nextVelocity.Y *= -CSng(Bounce)
             _scrollVelocity = nextVelocity
         End Sub
 

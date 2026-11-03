@@ -1,0 +1,55 @@
+name: Physics and particle regressions
+
+on:
+  pull_request:
+    paths:
+      - 'Shared/Physics/**'
+      - 'Shared/Drawing/Particles/**'
+      - 'Shared/Drawing/Scene*'
+      - 'Shared/Drawing/UI/SceneElement*'
+      - 'Shared/Drawing/UI/Advanced/Surface3DElement*'
+      - 'Shared/Drawing/UI/Advanced/ParticleEmitterElement*'
+      - 'Shared/Drawing/UI/Input/AdvancedControls.vb'
+      - 'Project Z XAML Codegen/NativeSceneCompiler.cs'
+      - 'tests/Physics/**'
+      - 'tests/Particles/**'
+      - 'tests/NativeSceneXaml/**'
+      - '.github/workflows/physics.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'Shared/Physics/**'
+      - 'Shared/Drawing/Particles/**'
+      - 'Shared/Drawing/Scene*'
+      - 'Shared/Drawing/UI/SceneElement*'
+      - 'Shared/Drawing/UI/Advanced/Surface3DElement*'
+      - 'Shared/Drawing/UI/Advanced/ParticleEmitterElement*'
+      - 'Shared/Drawing/UI/Input/AdvancedControls.vb'
+      - 'Project Z XAML Codegen/NativeSceneCompiler.cs'
+      - 'tests/Physics/**'
+      - 'tests/Particles/**'
+      - 'tests/NativeSceneXaml/**'
+      - '.github/workflows/physics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify collision and parameter stability without a graphics device
+        run: dotnet run --project tests/Physics/Physics.vbproj -c Release --artifacts-path "${{ runner.temp }}/ProjectZ-physics-tests"
+      - name: Verify particle movement and animated sprite decoding
+        run: dotnet run --project tests/Particles/Particles.vbproj -c Release --artifacts-path "${{ runner.temp }}/ProjectZ-particle-tests"
+      - name: Verify compiled physics markup
+        run: dotnet run --project tests/NativeSceneXaml/NativeSceneXaml.csproj -c Release --artifacts-path "${{ runner.temp }}/ProjectZ-physics-markup" -p:ProjectZNativeXamlTool="${{ runner.temp }}/ProjectZ-physics-markup/bin/ProjectZ.XamlCodegen/release/ProjectZ.XamlCodegen.dll"

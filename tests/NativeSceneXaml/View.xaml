@@ -1,5 +1,6 @@
 <SceneTemplates xmlns="urn:projectz:native-scene" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Class="Fixture.View">
   <Using>System</Using>
+  <Using>Microsoft.Xna.Framework</Using>
   <Resource x:Name="Heading" Type="string" Value="Native XAML" />
   <Factory x:Name="Button" Returns="Control" Attach="Attach">
     <Parameter Name="text" Attribute="Text" Type="string" />
@@ -15,6 +16,12 @@
     <Parameter Name="action" Type="Action" />
   </Button>
   <Button x:Name="CreateInheritedBlur" Factory="Button" Text="Inherited" BackgroundBlur="24" DropDownBackgroundBlur="{x:Null}" Click="{Parameter action}">
+    <Parameter Name="action" Type="Action" />
+  </Button>
+  <Button x:Name="CreatePhysics" Factory="Button" Text="Physics" Click="{Parameter action}" RigidBody="true" FreeMove="true" CollisionEnabled="true" Weight="4.5" Bounce="0.35" Friction="0.2" FrictionType="Ice" PhysicsMotion="RenderTranslation" Gravity="0, 980" Velocity="120, -15" Velocity3D="1, 2, 3" Gravity3D="0, -9.81, 0" Position3D="-1, 0, 2" PhysicsSize3D="2, 3, 4">
+    <Parameter Name="action" Type="Action" />
+  </Button>
+  <Button x:Name="CreatePhysicsAlias" Factory="Button" Text="Physics alias" Click="{Parameter action}" RidgidBody="true" Mass="2" PhysicsMotion="Position">
     <Parameter Name="action" Type="Action" />
   </Button>
   <ObjectFactory x:Name="CreateObject" Type="Control">

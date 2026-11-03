@@ -260,6 +260,7 @@ Namespace [Shared].Drawing.Designer
 #Region "Element Factory Registration"
 
         Private Sub RegisterElementFactories()
+            RegisterPhysicsFactories()
             ' Root elements
             _elementFactories("Scene") = Function(e) CreateSceneRoot(e)
             _elementFactories("Window") = Function(e) CreateSceneRoot(e)
@@ -949,6 +950,7 @@ End Function
         End Sub
 
         Private Sub ApplyCommonProperties(element As SceneElement, xmlElement As XmlElement)
+            ApplyPhysicsProperties(element, xmlElement)
             If TypeOf element Is RectangleElement Then ApplyRoundedSurface(DirectCast(element, RectangleElement), xmlElement)
             ' --- Position: Canvas.Left/Top take precedence over X/Y ---
             ' These values are incorporated into the element's Margin so the
