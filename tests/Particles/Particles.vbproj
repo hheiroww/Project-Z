@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <OptionStrict>On</OptionStrict>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ProjectZXamlConversion>false</ProjectZXamlConversion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.vb" />
+    <Compile Include="../../Shared/Drawing/Particles/*.vb" Link="%(Filename)%(Extension)" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+  </ItemGroup>
+</Project>

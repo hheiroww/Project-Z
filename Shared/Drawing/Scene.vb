@@ -423,6 +423,7 @@ Namespace [Shared].Drawing
         End Sub
 
         Protected Friend Sub CancelPointerInput()
+            LastElement?.EndFreeMove(True)
             CapturePointer(Nothing)
             KeyboardButton = Nothing
             RaiseEvent OnPointerCancelled()
@@ -1347,6 +1348,7 @@ Namespace [Shared].Drawing
             Next
             If tickStarted <> 0 Then _LastElementTickMilliseconds = Diagnostics.Stopwatch.GetElapsedTime(tickStarted).TotalMilliseconds
             RaiseEvent FrameUpdated(gameTime)
+            AdvancePhysics(gameTime.ElapsedGameTime.TotalSeconds)
 
             InternalFPS += 1
             Dim MS As Integer = gameTime.ElapsedGameTime.Milliseconds

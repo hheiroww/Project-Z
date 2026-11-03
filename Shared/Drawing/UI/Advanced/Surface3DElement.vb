@@ -44,6 +44,51 @@ Namespace [Shared].Drawing.UI.Advanced
         Public Property Wireframe As Boolean = False
         Public Property ShaderEffect As Effect
 
+        ''' <summary>Explicit world-space AABB dimensions; the collider is independent of model tessellation.</summary>
+        Public Property PhysicsSize3D As Vector3 = Vector3.One
+        Public Property Gravity3D As Vector3 = New Vector3(0, -9.81F, 0)
+        Public Property Velocity3D As Vector3
+            Get
+                Return PhysicsBody.Velocity
+            End Get
+            Set(value As Vector3)
+                PhysicsBody.Velocity = value
+            End Set
+        End Property
+
+        Public Overloads Sub ApplyPhysicsImpulse(impulse As Vector3)
+            If Not RigidBody Then Return
+            ReadPhysicsState()
+            PhysicsBody.AddImpulse(impulse)
+        End Sub
+
+        Friend Overrides Sub ReadPhysicsState()
+            MyBase.ReadPhysicsState()
+            PhysicsBody.Is3D = True
+            PhysicsBody.Position = Position3D
+            PhysicsBody.Size = PhysicsSize3D
+            PhysicsBody.Gravity = Gravity3D
+        End Sub
+
+        Friend Overrides Sub WritePhysicsState()
+            If Position3D = PhysicsBody.Position Then Return
+            Position3D = PhysicsBody.Position
+            Scene?.RequestRender()
+        End Sub
+
+        Protected Overrides Sub MoveFreePhysics(delta As Vector2, seconds As Double)
+            Dim forward = Camera.Target - Camera.Position
+            If forward.LengthSquared() < 0.000001F Then Return
+            forward.Normalize()
+            Dim right = Vector3.Cross(forward, Camera.Up)
+            If right.LengthSquared() < 0.000001F Then Return
+            right.Normalize()
+            Dim up = Vector3.Normalize(Vector3.Cross(right, forward))
+            Dim distance = Math.Max(Camera.NearPlane, Math.Abs(Vector3.Dot(Position3D - Camera.Position, forward)))
+            Dim unitsPerPixel = 2 * distance * CSng(Math.Tan(Camera.FieldOfView / 2)) / Math.Max(1, Size.Y)
+            Scene.MovePhysicsElement(Me, Position3D + (right * delta.X - up * delta.Y) * unitsPerPixel, seconds)
+        End Sub
+
         Public Event ConfigureShader(effect As Effect, surface As Surface3DElement)
         Public Event ModelChanged(model As Model3DAsset)
 

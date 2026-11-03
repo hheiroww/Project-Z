@@ -11,7 +11,7 @@ Imports System.Runtime.InteropServices
 
 Namespace [Shared].Drawing
 
-    Public Class SceneManager
+    Public Partial Class SceneManager
         Implements IDisposable
 
 #Region "Properties"
@@ -1033,13 +1033,15 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub CancelInjectedPointer()
+            Dim cancelledTouchScene = touchScene
+            CancelTouchInput()
             If ActiveScene Is Nothing Then Return
             ExternalLeftDown = False
             ExternalRightDown = False
             MouseDown = False
             isDragging = False
             ExternalLastPoint = New Point(-1, -1)
-            ActiveScene.CancelPointerInput()
+            If ActiveScene IsNot cancelledTouchScene Then ActiveScene.CancelPointerInput()
         End Sub
 
         Public Sub InjectMouseRightDown(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
@@ -1068,6 +1070,8 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub CancelExternalInput()
+            Dim cancelledTouchScene = touchScene
+            CancelTouchInput()
             ExternalLeftDown = False
             ExternalRightDown = False
             MouseDown = False
@@ -1078,7 +1082,7 @@ Namespace [Shared].Drawing
             If ActiveScene IsNot Nothing Then ActiveScene.CurrentKeyboardState = New KeyboardState()
             If ActiveScene IsNot Nothing Then
                 SetExternalMouseState(ExternalLastPoint)
-                ActiveScene.CancelPointerInput()
+                If ActiveScene IsNot cancelledTouchScene Then ActiveScene.CancelPointerInput()
             End If
         End Sub
 
@@ -1244,11 +1248,11 @@ Namespace [Shared].Drawing
 #End If
                 End If
 #If WINDOWS Then
-                If Not UseExternalInput AndAlso Not UseWindowMessagesInput Then
+                If Not UseExternalInput AndAlso Not UseWindowMessagesInput AndAlso Not ProcessTouchInput() Then
                     DetectMouseEvents(gameTime, UseHardwareInput)
                 End If
 #Else
-                If Not UseExternalInput Then DetectMouseEvents(gameTime)
+                If Not UseExternalInput AndAlso Not ProcessTouchInput() Then DetectMouseEvents(gameTime)
 #End If
                 ActiveScene.Tick(gameTime)
                 If desktopPromptRequest.HasValue Then
@@ -1384,6 +1388,7 @@ Namespace [Shared].Drawing
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
                 If disposing Then
+                    CancelTouchInput()
                     DesktopBackdrop?.Dispose()
                     desktopPrompt?.Dispose()
                     If subscribedWindow IsNot Nothing Then

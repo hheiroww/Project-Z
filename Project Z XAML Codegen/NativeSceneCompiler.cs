@@ -13,7 +13,11 @@ internal static class NativeSceneCompiler
         ["MouseOverBackgroundColor"] = "Color", ["MouseDownBackgroundColor"] = "Color", ["MaxWidth"] = "float", ["MaxHeight"] = "float",
         ["BackgroundBlur"] = "float", ["DropDownBackgroundBlur"] = "float?", ["MaxDropDownHeight"] = "float", ["ItemHeight"] = "float",
         ["DropDownBackgroundColor"] = "Color", ["DropDownHighlightColor"] = "Color", ["DropDownIndicatorColor"] = "Color",
-        ["Clip"] = "bool", ["IsOverlay"] = "bool", ["AutoSizeWidthOnTextOverflow"] = "bool", ["TextWrapping"] = "TextWrapping", ["TextTrimming"] = "TextTrimming"
+        ["Clip"] = "bool", ["IsOverlay"] = "bool", ["AutoSizeWidthOnTextOverflow"] = "bool", ["TextWrapping"] = "TextWrapping", ["TextTrimming"] = "TextTrimming",
+        ["RigidBody"] = "bool", ["RidgidBody"] = "bool", ["FreeMove"] = "bool", ["CollisionEnabled"] = "bool",
+        ["Mass"] = "double", ["Weight"] = "double", ["Bounce"] = "double", ["Friction"] = "double",
+        ["FrictionType"] = "ProjectZ.Shared.Physics.FrictionType", ["PhysicsMotion"] = "ProjectZ.Shared.Drawing.UI.PhysicsMotion",
+        ["Velocity"] = "Vector2", ["Gravity"] = "Vector2", ["PhysicsSize3D"] = "Vector3", ["Velocity3D"] = "Vector3", ["Gravity3D"] = "Vector3", ["Position3D"] = "Vector3"
     };
     internal static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
     internal static string Required(XElement e, string name) => (string?)e.Attribute(name) ?? throw Error(e, $"Missing {name}.");
@@ -31,6 +35,8 @@ internal static class NativeSceneCompiler
             "string" => Quote(value),
             "bool" => bool.Parse(value) ? "true" : "false",
             "Vector2" when !value.StartsWith('{') => "new Vector2(" + string.Join(", ", value.Split(',').Select(v => Expression(v.Trim(), "float"))) + ")",
+            "Vector3" when !value.StartsWith('{') => "new Vector3(" + string.Join(", ", value.Split(',').Select(v => Expression(v.Trim(), "float"))) + ")",
+            "ProjectZ.Shared.Physics.FrictionType" or "ProjectZ.Shared.Drawing.UI.PhysicsMotion" when !value.Contains('.') => type + "." + value,
             "Color" or "Color?" when value.StartsWith('#') => Color(value),
             "float" => float.Parse(value, System.Globalization.CultureInfo.InvariantCulture).ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "f",
             "double" => double.Parse(value, System.Globalization.CultureInfo.InvariantCulture).ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "d",
