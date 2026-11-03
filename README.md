@@ -69,7 +69,7 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:UseLocalSocketJack=false
 
 The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use `OpenGL` for the OpenGL backend. [Examples and solution projects](docs/GETTING-STARTED.md#explore-the-solution).
 
-For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) includes the VSIX, a [cross-platform .NET CLI template pack](ProjectTemplate/CrossPlatform/README.md), and standalone starter ZIPs, all pinned to **2026.11.2.1**.
+For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.2.1**.
 
 ## Documentation
 

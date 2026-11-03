@@ -1,6 +1,6 @@
 # Project-Z templates for Visual Studio 2026
 
-**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release and template checksums](https://github.com/hheiroww/Project-Z/releases/latest)
+**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release](https://github.com/hheiroww/Project-Z/releases/latest)
 
 Version **2026.11.2.1** installs seven templates in Visual Studio 2026 on Windows:
 
@@ -25,8 +25,9 @@ Linux/macOS use `ProjectZ.Linux`/`ProjectZ.macOS` and OpenGL. The native scene-X
 variant compiles `MainScene.xaml` during ordinary builds through the build-only
 `ProjectZ.XamlTools` package. It does not require WPF.
 
-The release also contains a [.NET CLI template pack and ready-to-build ZIPs](../CrossPlatform/README.md),
-usable without Visual Studio on every supported platform. Publish from any host:
+All seven templates are installed by the same VSIX. After creating a cross-platform
+project in Visual Studio, its source can also be built on Linux or macOS with the
+.NET SDK. Publish from any supported build host:
 
 ```sh
 dotnet publish MyApp.csproj -c Release -r linux-x64 --self-contained true
@@ -111,5 +112,5 @@ The template workflow checks both Windows languages/backends, XAML designers,
 saved edits and relocated converters. It creates every CLI variant on Windows,
 Linux, Intel macOS and Apple Silicon macOS, checks RID payloads, and verifies
 rendered starter text on native Linux/macOS. After all jobs pass it attaches the
-VSIX, CLI pack, three ZIPs and template checksums to the matching framework
+single combined VSIX to the matching framework
 release. Normal full framework releases call this workflow automatically.

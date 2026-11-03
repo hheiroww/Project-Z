@@ -1,51 +1,31 @@
-# Cross-platform Project-Z templates
+# Cross-platform templates in the combined VSIX
 
-Download **ProjectZ.Templates.2026.11.2.1.nupkg** from the
-[latest framework release](https://github.com/hheiroww/Project-Z/releases/latest).
-Install it with a .NET 8 or later SDK on Windows, Linux or macOS:
+Install **ProjectZ.VisualStudio2026.vsix** from the
+[latest Project-Z release](https://github.com/hheiroww/Project-Z/releases/latest).
+It installs all seven templates in Visual Studio 2026, including:
 
-```sh
-dotnet new install ./ProjectZ.Templates.2026.11.2.1.nupkg
-dotnet new projectz-desktop -n MyApp -lang C#
-dotnet new projectz-desktop -n MyVbApp -lang VB
-dotnet new projectz-scene -n MyXamlApp
-dotnet run --project MyApp
-```
+- **Project-Z Cross-Platform Desktop (C#)**
+- **Project-Z Cross-Platform Desktop (Visual Basic)**
+- **Project-Z Cross-Platform Scene XAML (C#)**
 
-The C# and VB desktop starters create their scene in code. The C# scene-XAML
-starter compiles native `MainScene.xaml` on each build using the optional
-`ProjectZ.XamlTools` build dependency. All three target .NET 8 and select exactly
-one runtime: `ProjectZ` for Windows, `ProjectZ.Linux` for Linux, or `ProjectZ.macOS`
-for macOS. A publish RID selects its target even when building on another OS:
+See the [VSIX installation and template guide](../VS2026/README.md).
+Create a project in Visual Studio, then keep its source in your own repository.
+The generated cross-platform project can build on Windows, Linux and macOS with
+.NET 8 or later. A publish RID selects the corresponding Project-Z runtime:
 
 ```sh
-dotnet publish MyApp -c Release -r linux-x64 --self-contained true
-dotnet publish MyApp -c Release -r osx-x64 --self-contained true
-dotnet publish MyApp -c Release -r osx-arm64 --self-contained true
-dotnet publish MyApp -c Release -r win-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r linux-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r osx-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r osx-arm64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r win-x64 --self-contained true
 ```
 
-The same release includes three ready-to-build `ProjectZ.CrossPlatform.*.zip`
-starters and SHA-256 checksums. Extract a ZIP and run `dotnet run` in its folder;
-rename the project/namespace if desired. Visual Studio 2026 users can install
-the [VSIX](../VS2026/README.md), which includes these three templates alongside
-the four Windows desktop and WPF-designer templates.
+Linux/macOS use OpenGL; Windows uses DX12. Native scene XAML compiles during
+ordinary builds through the build-only `ProjectZ.XamlTools` package. The native
+scene-XAML starter does not need WPF. The separate WPF designer templates in the
+same installer retain their Windows target.
 
-Linux/macOS use OpenGL; Windows uses DX12. The generated README describes native
-dependencies, platform overrides and desktop blur permissions. Read the
-[platform guide](../../docs/DESKTOPGL.md) before deployment. macOS signing,
-bundles and notarization remain application deployment steps. The WPF designer
-templates retain a Windows target; the native scene-XAML starter runs on all
-three desktop platforms.
-
-```powershell
-./ProjectTemplate/CrossPlatform/Build.ps1
-./tests/ProjectTemplates/Verify-CrossPlatform.ps1 -SkipRuntime
-```
-
-The template pack contains only explicit starter sources and configuration.
-No framework binaries, model libraries, source checkout paths, package feeds or
-credentials are bundled. Verification installs into an isolated .NET template
-hive, creates each language/variant, validates platform selection, publishes
-supported RIDs, and checks native assets and package graphs. Native CI runs the
-generated applications and verifies scene rendering on Linux and macOS.
+See [platform dependencies and deployment](../../docs/DESKTOPGL.md), including
+macOS desktop permissions, app bundles, signing and notarization. The template
+build creates internal CLI/ZIP fixtures to validate the same portable sources on
+native CI hosts; the public template download is the combined VSIX.

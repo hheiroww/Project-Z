@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Attach validated templates to the matching framework release
+        description: Replace the combined VSIX on the matching framework release
         type: boolean
         default: true
   workflow_call:
@@ -48,6 +48,9 @@ jobs:
       - name: Build DX11 and OpenGL runtimes and VSIX
         shell: pwsh
         run: ./ProjectTemplate/VS2026/Build.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE
+      - name: Verify the combined installable VSIX
+        shell: pwsh
+        run: ./tests/ProjectTemplates/Verify-Vsix.ps1 -VsixPath artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
       - name: Verify standalone CSharp and VB templates against exact package
         shell: pwsh
         run: ./tests/ProjectTemplates/Verify.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE -SkipRuntime
@@ -106,15 +109,6 @@ jobs:
           sudo apt-get install -y xvfb libgl1-mesa-dri libopenal1
           xvfb-run -a pwsh -NoProfile -File ./tests/ProjectTemplates/Verify-CrossPlatform.ps1 -PackageDirectory release-packages -RuntimeIdentifiers linux-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Preserve portable release assets
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ProjectZ-template-portable
-          path: |
-            artifacts/CrossPlatformTemplates/*.nupkg
-            artifacts/CrossPlatformTemplates/*.zip
-          if-no-files-found: error
   publish:
     if: inputs.publish == true || startsWith(github.ref, 'refs/tags/vs2026-')
     needs: [templates, portable]
@@ -125,10 +119,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: ProjectZ-template-*
-          merge-multiple: true
+          name: ProjectZ-template-vsix
           path: template-release
-      - name: Attach templates and checksums to the matching framework release
+      - name: Replace the single combined template VSIX
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,10 +131,18 @@ jobs:
           $tag = "v$version"
           gh release view $tag --repo '${{ github.repository }}'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = @(Get-ChildItem template-release -File | Sort-Object Name)
-          if ($assets.Count -ne 5) { throw 'Expected the VSIX, template pack and three starter ZIPs.' }
-          $assets | ForEach-Object {
-            (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name
-          } | Set-Content template-release/ProjectZ.Templates.SHA256SUMS.txt -Encoding ascii
-          gh release upload $tag @($assets.FullName) template-release/ProjectZ.Templates.SHA256SUMS.txt --clobber --repo '${{ github.repository }}'
+          $assets = @(Get-ChildItem template-release -File)
+          if ($assets.Count -ne 1 -or $assets[0].Name -ne 'ProjectZ.VisualStudio2026.vsix') { throw 'Expected exactly one combined template VSIX.' }
+          gh release upload $tag $assets[0].FullName --clobber --repo '${{ github.repository }}'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $existing = gh release view $tag --repo '${{ github.repository }}' --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Replace the earlier split template distribution. Runtime packages stay intact.
+          $obsolete = @("ProjectZ.Templates.$version.nupkg", 'ProjectZ.CrossPlatform.CSharp.zip', 'ProjectZ.CrossPlatform.VisualBasic.zip', 'ProjectZ.CrossPlatform.SceneXaml.zip', 'ProjectZ.Templates.SHA256SUMS.txt')
+          foreach ($name in $obsolete) {
+            if ($name -in $existing.assets.name) {
+              gh release delete-asset $tag $name --yes --repo '${{ github.repository }}'
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+          Get-FileHash -LiteralPath $assets[0].FullName -Algorithm SHA256
