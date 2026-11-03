@@ -45,6 +45,10 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
         var fontReport = Environment.GetEnvironmentVariable("PROJECTZ_TEMPLATE_FONT_VERIFICATION");
         if (fontReport != null)
         {
+            if (typeof(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("RigidBody") == null || typeof(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("FreeMove") == null)
+                throw new InvalidOperationException("The template renderer is missing the physics update.");
+            if (typeof(ProjectZ.Shared.Drawing.UI.Advanced.ParticleEmitterElement).Assembly != typeof(ProjectZ.Shared.Drawing.Scene).Assembly)
+                throw new InvalidOperationException("The template renderer is missing native particles.");
             using var font = new ProjectZ.Shared.Content.VectorFont(16);
             if (font.FilePath != null || font.FamilyName != "ProjectZ Sans" || font.Measure("AVATAR").X <= 0 || !float.IsFinite(font.Measure("\uD83D").X))
                 throw new InvalidOperationException("Compiled free vector font resolution failed.");
@@ -58,6 +62,12 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
         $fontProbe = @'
         Dim fontReport = Environment.GetEnvironmentVariable("PROJECTZ_TEMPLATE_FONT_VERIFICATION")
         If fontReport IsNot Nothing Then
+            If GetType(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("RigidBody") Is Nothing OrElse GetType(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("FreeMove") Is Nothing Then
+                Throw New InvalidOperationException("The template renderer is missing the physics update.")
+            End If
+            If GetType(ProjectZ.Shared.Drawing.UI.Advanced.ParticleEmitterElement).Assembly IsNot GetType(ProjectZ.Shared.Drawing.Scene).Assembly Then
+                Throw New InvalidOperationException("The template renderer is missing native particles.")
+            End If
             Using font As New ProjectZ.Shared.Content.VectorFont(16)
                 If font.FilePath IsNot Nothing OrElse font.FamilyName <> "ProjectZ Sans" OrElse font.Measure("AVATAR").X <= 0 OrElse Not Single.IsFinite(font.Measure(ChrW(&HD83D)).X) Then
                     Throw New InvalidOperationException("Compiled free vector font resolution failed.")

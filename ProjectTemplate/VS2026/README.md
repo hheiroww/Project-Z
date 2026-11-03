@@ -2,7 +2,7 @@
 
 **[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release](https://github.com/hheiroww/Project-Z/releases/latest)
 
-Version **2026.11.2.1** installs seven templates in Visual Studio 2026 on Windows:
+Version **2026.11.2.2** installs seven templates in Visual Studio 2026 on Windows:
 
 | Template | Languages | Application platforms |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ All four Windows templates include **Project Properties > Project-Z**, local
 build tools and a portable WPF converter. Code-first Desktop templates leave
 conversion disabled. Keep the complete `ProjectZ` directory and its notices in
 your application's source control. No Project-Z checkout is required to build.
-The framework is pinned to **2026.11.2.1**; native diagnostics, model import,
+The framework is pinned to **2026.11.2.2**; native diagnostics, model import,
 networking and browser integration are [optional packages](../../docs/MODULAR-PACKAGES.md).
 
 From an App directory, convert an existing WPF project into a separate native tree:
@@ -72,7 +72,7 @@ local tools and renderer assemblies so it can be relocated.
 
 | Configuration | Renderer |
 | --- | --- |
-| Debug / Release | DirectX 12, ProjectZ 2026.11.2.1 NuGet runtime |
+| Debug / Release | DirectX 12, ProjectZ 2026.11.2.2 NuGet runtime |
 | Debug-DX11 / Release-DX11 | DirectX 11, matching local framework assembly |
 | Debug-OpenGL / Release-OpenGL | OpenGL, matching local Windows framework assembly |
 
@@ -84,7 +84,7 @@ for Linux/macOS applications.
 
 **Project Properties > Project-Z > Rendering quality** applies the default 4x AA
 and 16x anisotropic filtering without code changes. Existing Windows apps can
-update `ProjectZFrameworkVersion` to **2026.11.2.1**; DX11/OpenGL apps also need the
+update `ProjectZFrameworkVersion` to **2026.11.2.2**; DX11/OpenGL apps also need the
 matching `ProjectZ/Runtime/<renderer>/ProjectZ.dll` from this template. Desktop
 blur uses the shared shader with native capture; see [setup](../../docs/DESKTOP-BLUR.md).
 
@@ -114,3 +114,6 @@ Linux, Intel macOS and Apple Silicon macOS, checks RID payloads, and verifies
 rendered starter text on native Linux/macOS. After all jobs pass it attaches the
 single combined VSIX to the matching framework
 release. Normal full framework releases call this workflow automatically.
+
+
+Physics is opt-in through properties such as `RigidBody`, `CollisionEnabled`, `FreeMove`, `Weight`, `Bounce` and `FrictionType`. It drives the existing scene/animation values. The matching runtime also includes 3D bodies and GPU-batched sprite particles. See the [physics guide](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md) for examples and solver limits.

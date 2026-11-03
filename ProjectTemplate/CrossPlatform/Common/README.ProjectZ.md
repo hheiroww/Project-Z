@@ -1,7 +1,7 @@
 # Your Project-Z desktop application
 
 Install the .NET 8 SDK or later, then run `dotnet run` from this directory.
-The first build restores the exact Project-Z 2026.11.2.1 package from NuGet.org.
+The first build restores the exact Project-Z 2026.11.2.2 package from NuGet.org.
 Edit `MainScene` to change the UI. This project works without a framework checkout.
 
 The build selects one runtime for the current host: `ProjectZ` on Windows x64
@@ -34,3 +34,6 @@ The C# and Visual Basic desktop variants construct their UI directly in code.
 Fonts and license notices flow from the selected runtime package. Optional
 model import, browser integration and native crash diagnostics remain opt-in;
 see [optional packages](https://github.com/hheiroww/Project-Z/blob/master/docs/MODULAR-PACKAGES.md).
+
+
+Physics is opt-in through properties such as `RigidBody`, `CollisionEnabled`, `FreeMove`, `Weight`, `Bounce` and `FrictionType`. It drives the existing scene/animation values. The matching runtime also includes 3D bodies and GPU-batched sprite particles. See the [physics guide](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md) for examples and solver limits.

@@ -32,3 +32,5 @@ and native crash diagnostics are separate runtime packages.
 [Installation and usage](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md)
 · [Platform guide](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOPGL.md)
 · [Source and issues](https://github.com/hheiroww/Project-Z)
+
+The matching physics runtime adds opt-in rigid bodies, parent-bound collisions, FreeMove dragging, weighted scrolling, friction presets, and 3D sprite/GIF particle emitters. Physics drives existing animation parameters; collision solving runs on the CPU and particle rendering uses GPU batching. See the [physics guide](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md).

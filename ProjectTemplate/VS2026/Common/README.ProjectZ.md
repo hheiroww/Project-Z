@@ -14,7 +14,7 @@ Choose a renderer using the configuration selector in Visual Studio:
 
 You can also set **Project Properties > Project-Z Graphics > Graphics renderer**, or pass `-p:ProjectZGraphicsBackend=OpenGL` to `dotnet build`. Rebuild after changing renderer. Each named configuration has its own output and intermediate folders. When using command-line overrides, use a separate output folder or clean before switching.
 
-DirectX 12 uses the public **ProjectZ 2026.11.2.1** NuGet runtime. The other configurations include matching framework assemblies compiled from the public Project-Z source, and restore the corresponding official MonoGame package. Keep the complete `ProjectZ` directory in source control with your application; it makes the renderers and build tools portable to other machines. The public package supplies compiled free vector fonts. Native crash diagnostics and other optional integrations can be added through the separate co-packages; template build tools stay on the developer machine. This is a Windows x64 template; OpenGL changes the renderer, not the desktop operating system.
+DirectX 12 uses the public **ProjectZ 2026.11.2.2** NuGet runtime. The other configurations include matching framework assemblies compiled from the public Project-Z source, and restore the corresponding official MonoGame package. Keep the complete `ProjectZ` directory in source control with your application; it makes the renderers and build tools portable to other machines. The public package supplies compiled free vector fonts. Native crash diagnostics and other optional integrations can be added through the separate co-packages; template build tools stay on the developer machine. This is a Windows x64 template; OpenGL changes the renderer, not the desktop operating system.
 
 Build-time XAML is available through **Project Properties > Project-Z**. It starts disabled in this code-first template. To use the Visual Studio XAML designer with automatic shared view/code-behind conversion, create a **Project-Z XAML Desktop** solution instead.
 
@@ -29,3 +29,6 @@ pwsh -File ./ProjectZ/Convert-Project.ps1 -SourceProject C:/Original/App.csproj 
 It preserves the original project and converts into a separate native tree with portable tools and renderer assemblies. Review its diagnostic reports; unsupported features block the generated build. No framework source checkout is required.
 
 Framework and template source: https://github.com/hheiroww/Project-Z
+
+
+Physics is opt-in through properties such as `RigidBody`, `CollisionEnabled`, `FreeMove`, `Weight`, `Bounce` and `FrictionType`. It drives the existing scene/animation values. The matching runtime also includes 3D bodies and GPU-batched sprite particles. See the [physics guide](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md) for examples and solver limits.

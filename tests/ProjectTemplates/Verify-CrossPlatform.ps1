@@ -85,6 +85,8 @@ try {
         if ($language -eq 'VB') {
             $probe = @'
         If gameTime.TotalGameTime.TotalSeconds > 1 Then
+            If GetType(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("RigidBody") Is Nothing OrElse GetType(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("FreeMove") Is Nothing Then Throw New Exception("Runtime physics update missing.")
+            If GetType(ProjectZ.Shared.Drawing.UI.Advanced.ParticleEmitterElement).Assembly IsNot GetType(ProjectZ.Shared.Drawing.Scene).Assembly Then Throw New Exception("Native particle runtime missing.")
             Using capture As New RenderTarget2D(GraphicsDevice, 960, 600)
                 GraphicsDevice.SetRenderTarget(capture)
                 scenes.ActiveScene.Draw(gameTime)
@@ -103,6 +105,8 @@ try {
             $probe = @'
         if (gameTime.TotalGameTime.TotalSeconds > 1)
         {
+            if (typeof(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("RigidBody") == null || typeof(ProjectZ.Shared.Drawing.UI.SceneElement).GetProperty("FreeMove") == null) throw new Exception("Runtime physics update missing.");
+            if (typeof(ProjectZ.Shared.Drawing.UI.Advanced.ParticleEmitterElement).Assembly != typeof(ProjectZ.Shared.Drawing.Scene).Assembly) throw new Exception("Native particle runtime missing.");
             using var capture = new RenderTarget2D(GraphicsDevice, 960, 600);
             GraphicsDevice.SetRenderTarget(capture);
             scenes!.ActiveScene.Draw(gameTime);

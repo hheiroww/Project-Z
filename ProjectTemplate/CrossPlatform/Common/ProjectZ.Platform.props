@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <ProjectZFrameworkVersion>2026.11.2.1</ProjectZFrameworkVersion>
+    <ProjectZFrameworkVersion>2026.11.2.2</ProjectZFrameworkVersion>
     <!-- An explicit publish RID takes precedence over the build host. -->
     <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('linux-'))">Linux</ProjectZPlatform>
     <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('osx-'))">macOS</ProjectZPlatform>
