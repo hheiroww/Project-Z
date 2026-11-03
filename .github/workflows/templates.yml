@@ -59,7 +59,6 @@ jobs:
           name: ProjectZ-template-vsix
           path: artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
           if-no-files-found: error
-          retention-days: 7
   portable:
     strategy:
       fail-fast: false
@@ -116,7 +115,6 @@ jobs:
             artifacts/CrossPlatformTemplates/*.nupkg
             artifacts/CrossPlatformTemplates/*.zip
           if-no-files-found: error
-          retention-days: 7
   publish:
     if: inputs.publish == true || startsWith(github.ref, 'refs/tags/vs2026-')
     needs: [templates, portable]
