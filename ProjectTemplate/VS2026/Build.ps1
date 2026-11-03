@@ -133,7 +133,7 @@ try {
 
         $xamlFolder = Join-Path $staging "XamlSources/$language"
         New-Item -ItemType Directory -Force -Path "$xamlFolder/App", "$xamlFolder/Designer" | Out-Null
-        Copy-Item -LiteralPath "$folder/ProjectZ" -Destination "$xamlFolder/App/ProjectZ" -Recurse
+        Copy-Item -LiteralPath "$folder/ProjectZ" -Destination "$xamlFolder/App" -Recurse -Force
         $suffix = if ($language -eq 'CSharp') { 'cs' } else { 'vb' }
         foreach ($part in @('App', 'Designer')) {
             Copy-Item -Path "$PSScriptRoot/Xaml/$language/$part/*" -Destination "$xamlFolder/$part"
