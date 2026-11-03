@@ -24,16 +24,21 @@ try {
     if ($identity.Id -ne 'ProjectZ.VisualStudio2026.Templates' -or $identity.Publisher -ne 'SocketJack') { throw 'The combined VSIX must retain its extension ID and use the established Marketplace publisher.' }
     if ($identity.Version -ne $ExpectedVersion) { throw 'VSIX version differs from the framework release.' }
     if (!$entries.ContainsKey([string]$manifest.PackageManifest.Metadata.Icon)) { throw 'Marketplace icon is missing from the VSIX.' }
+    foreach ($target in $manifest.PackageManifest.Installation.InstallationTarget) {
+        if ($target.Version -ne '[17.14,)') { throw 'Marketplace builds must use the stable 17.14 API lower bound, which also supports Visual Studio 2026.' }
+    }
     $expected = @('ProjectZ.Desktop.CSharp', 'ProjectZ.Desktop.VisualBasic', 'ProjectZ.Xaml.CSharp', 'ProjectZ.Xaml.VisualBasic', 'ProjectZ.CrossPlatform.CSharp', 'ProjectZ.CrossPlatform.VisualBasic', 'ProjectZ.CrossPlatform.SceneXaml')
     $observed = [Collections.Generic.List[string]]::new()
     foreach ($name in $entries.Keys) {
         if ($name -match '/ProjectZ/ProjectZ/|(^|/)(\.codex|\.git|obj|bin|package-feed)/|\.(pdb|log|binlog|nupkg|zip)$') { throw "Unexpected staged payload in combined VSIX: $name" }
         if ($name.EndsWith('.vstemplate')) {
             [xml]$template = Read-Entry $name
+            $parent = $name.Substring(0, $name.LastIndexOf('/') + 1)
+            $icon = [string]$template.VSTemplate.TemplateData.Icon
+            if (!$icon -or !$entries.ContainsKey($parent + $icon.Replace('\', '/'))) { throw "Template icon is missing: $name" }
             if ($template.VSTemplate.TemplateData.Hidden -ne 'true') { $observed.Add([string]$template.VSTemplate.TemplateData.TemplateID) }
             $project = $template.VSTemplate.TemplateContent.Project
             if ($project) {
-                $parent = $name.Substring(0, $name.LastIndexOf('/') + 1)
                 $files = @([string]$project.File) + @($project.ProjectItem | ForEach-Object InnerText)
                 foreach ($file in $files) {
                     if (!$entries.ContainsKey($parent + $file.Replace('\', '/'))) { throw "Template manifest references a missing file: $file" }

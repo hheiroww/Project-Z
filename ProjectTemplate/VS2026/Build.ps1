@@ -110,12 +110,14 @@ try {
         New-Item -ItemType Directory -Force -Path $fontLicense | Out-Null
         Copy-Item -LiteralPath "$repo/ThirdParty/ProjectZSans/OFL.txt" -Destination "$fontLicense/OFL.txt" -Force
         Copy-XamlTooling "$folder/ProjectZ"
+        Copy-Item -LiteralPath "$PSScriptRoot/project-z-icon.png" -Destination "$folder/__TemplateIcon.png" -Force
 
         $template = [xml]@"
 <VSTemplate Version="3.0.0" Type="Project" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
     <Name>Project-Z Desktop ($display)</Name>
     <Description>Project-Z desktop with DX12, DX11 and OpenGL, build-time XAML and a portable project converter.</Description>
+    <Icon>__TemplateIcon.png</Icon>
     <ProjectType>$language</ProjectType><SortOrder>100</SortOrder><DefaultName>ProjectZApp</DefaultName>
     <CreateNewFolder>true</CreateNewFolder><ProvideDefaultName>true</ProvideDefaultName><CreateInPlace>true</CreateInPlace>
     <LanguageTag>$language</LanguageTag><PlatformTag>Windows</PlatformTag><ProjectTypeTag>Desktop</ProjectTypeTag>
@@ -149,6 +151,7 @@ try {
         Copy-Item -LiteralPath "$PSScriptRoot/Xaml/MainWindow.xaml" -Destination "$xamlFolder/Designer"
         Copy-Item -LiteralPath "$PSScriptRoot/Xaml/README.ProjectZ.md" -Destination "$xamlFolder/App"
         foreach ($part in @('App', 'Designer')) {
+            Copy-Item -LiteralPath "$PSScriptRoot/project-z-icon.png" -Destination "$xamlFolder/$part/__TemplateIcon.png" -Force
             [xml]$child = $template.CloneNode($true)
             $child.VSTemplate.TemplateData.Name = $part
             $child.VSTemplate.TemplateData.TemplateID = "ProjectZ.Xaml.$part.$language"
@@ -164,6 +167,7 @@ try {
   <TemplateData>
     <Name>Project-Z XAML Desktop (__DISPLAY__)</Name>
     <Description>Native Project-Z app plus a Visual Studio XAML designer project, automatic build-time conversion and portable project converter.</Description>
+    <Icon>__TemplateIcon.png</Icon>
     <ProjectType>__LANGUAGE__</ProjectType><DefaultName>ProjectZXamlApp</DefaultName><SortOrder>90</SortOrder>
     <CreateNewFolder>true</CreateNewFolder><ProvideDefaultName>true</ProvideDefaultName>
     <LanguageTag>__LANGUAGE__</LanguageTag><PlatformTag>Windows</PlatformTag><ProjectTypeTag>Desktop</ProjectTypeTag>
@@ -175,6 +179,7 @@ try {
   </ProjectCollection></TemplateContent>
 </VSTemplate>
 '@
+        Copy-Item -LiteralPath "$PSScriptRoot/project-z-icon.png" -Destination "$xamlFolder/__TemplateIcon.png" -Force
         $group.Replace('__DISPLAY__', $display).Replace('__LANGUAGE__', $language) | Set-Content -LiteralPath "$xamlFolder/ProjectZ.Xaml.vstemplate"
         $xamlZip = Join-Path $zipFolder "ProjectZ.Xaml.$language.zip"
         Write-ProjectZTemplateZip $xamlFolder $xamlZip

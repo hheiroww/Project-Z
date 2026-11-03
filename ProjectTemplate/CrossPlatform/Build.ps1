@@ -55,12 +55,14 @@ foreach ($variant in @('CSharp', 'VisualBasic', 'SceneXaml')) {
         $text = [IO.File]::ReadAllText($file.FullName).Replace('ProjectZStarter', '$safeprojectname$')
         [IO.File]::WriteAllText("$vsFolder/$relative", $text)
     }
+    Copy-Item -LiteralPath "$repo/ProjectTemplate/VS2026/project-z-icon.png" -Destination "$vsFolder/__TemplateIcon.png" -Force
     $display = if ($variant -eq 'VisualBasic') { 'Desktop (Visual Basic)' } elseif ($variant -eq 'SceneXaml') { 'Scene XAML (C#)' } else { 'Desktop (C#)' }
     $manifest = [xml]@"
 <VSTemplate Version="3.0.0" Type="Project" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
     <Name>Project-Z Cross-Platform $display</Name>
     <Description>Native desktop UI for Windows, Linux and macOS using the matching Project-Z runtime package.</Description>
+    <Icon>__TemplateIcon.png</Icon>
     <ProjectType>$language</ProjectType><DefaultName>ProjectZApp</DefaultName><SortOrder>80</SortOrder>
     <CreateNewFolder>true</CreateNewFolder><ProvideDefaultName>true</ProvideDefaultName><CreateInPlace>true</CreateInPlace>
     <LanguageTag>$language</LanguageTag><PlatformTag>Windows</PlatformTag><PlatformTag>Linux</PlatformTag><PlatformTag>macOS</PlatformTag><ProjectTypeTag>Desktop</ProjectTypeTag>
@@ -73,7 +75,7 @@ foreach ($variant in @('CSharp', 'VisualBasic', 'SceneXaml')) {
         if ($file.Extension -eq '.vstemplate') { continue }
         if ($file.Extension -eq ".$extension") { continue }
         $item = $manifest.CreateElement('ProjectItem', $manifest.DocumentElement.NamespaceURI)
-        $item.SetAttribute('ReplaceParameters', 'true')
+        $item.SetAttribute('ReplaceParameters', ($file.Extension -ne '.png').ToString().ToLowerInvariant())
         if ($file.BaseName -eq 'MainScene') { $item.SetAttribute('OpenInEditor', 'true') }
         $item.InnerText = [IO.Path]::GetRelativePath($vsFolder, $file.FullName).Replace('\', '/')
         [void]$manifest.VSTemplate.TemplateContent.Project.AppendChild($item)
