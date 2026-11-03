@@ -22,7 +22,7 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.26.1
+dotnet add package ProjectZ --version 2026.11.2.2
 ```
 
 For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File â†’ New â†’ Project**.
