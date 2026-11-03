@@ -1,6 +1,6 @@
 # Project-Z templates for Visual Studio 2026
 
-**[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release](https://github.com/hheiroww/Project-Z/releases/latest)
+**[Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026)** · **[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release](https://github.com/hheiroww/Project-Z/releases/latest)
 
 Version **2026.11.2.2** installs seven templates in Visual Studio 2026 on Windows:
 
@@ -117,3 +117,6 @@ release. Normal full framework releases call this workflow automatically.
 
 
 Physics is opt-in through properties such as `RigidBody`, `CollisionEnabled`, `FreeMove`, `Weight`, `Bounce` and `FrictionType`. It drives the existing scene/animation values. The matching runtime also includes 3D bodies and GPU-batched sprite particles. See the [physics guide](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md) for examples and solver limits.
+
+
+The Marketplace package uses the stable Visual Studio 17.14 API compatibility target. Visual Studio 2026 supports this API family; the .NET 10 Windows templates still require Visual Studio 2026 and the documented SDKs. [Microsoft compatibility guidance](https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility).

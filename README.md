@@ -27,6 +27,8 @@ dotnet add package ProjectZ --version 2026.10.26.1
 
 For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File â†’ New â†’ Project**.
 
+Install the single template extension from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026).
+
 For Windows, choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
 
 Desktop blur now uses a shared Gaussian shader on DX12, DX11 and OpenGL, with native host-window exclusion and managed X11 setup. [Desktop blur](docs/DESKTOP-BLUR.md) · [Platform integration pathways](docs/PLATFORM-PATHWAYS.md).

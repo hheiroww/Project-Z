@@ -1,5 +1,7 @@
 # Project-Z for Visual Studio 2026
 
+[Public Marketplace listing](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026) · VSIX 2026.11.2.2
+
 One installer adds seven C# and Visual Basic project templates to **File > New > Project**.
 Search for **Project-Z** after installing the extension and restarting Visual Studio.
 

@@ -28,3 +28,5 @@ x64, Intel macOS and Apple Silicon macOS. No framework checkout is required.
 · [Physics APIs and limits](https://github.com/hheiroww/Project-Z/blob/master/docs/PHYSICS.md)
 · [Desktop blur and permissions](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOP-BLUR.md)
 · [Platform integration](https://github.com/hheiroww/Project-Z/blob/master/docs/PLATFORM-PATHWAYS.md)
+
+[Install the combined VSIX from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026). Every project template has its own bundled icon; the package targets stable 17.14 APIs supported by Visual Studio 2026.
