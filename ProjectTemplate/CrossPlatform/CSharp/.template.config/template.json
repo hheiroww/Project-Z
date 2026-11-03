@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Project-Z",
+  "classifications": ["Desktop", "UI", "Windows", "Linux", "macOS"],
+  "identity": "ProjectZ.CrossPlatform.CSharp",
+  "groupIdentity": "ProjectZ.CrossPlatform",
+  "name": "Project-Z Cross-Platform Desktop (C#)",
+  "shortName": "projectz-desktop",
+  "sourceName": "ProjectZStarter",
+  "preferNameDirectory": true,
+  "tags": { "language": "C#", "type": "project" }
+}

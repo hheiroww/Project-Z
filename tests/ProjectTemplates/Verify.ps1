@@ -51,7 +51,6 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
             System.IO.File.WriteAllText(fontReport, "PASS compiled free vectors and emoji caret metrics; no font files or graphics device.");
             return;
         }
-        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(new ProjectZ.RuntimeDiagnostics.DiagnosticOptions { ShowErrorDialogs = false });
         using var game
 '@
         $program = $program.Replace('        using var game', $fontProbe)
@@ -67,7 +66,6 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
             System.IO.File.WriteAllText(fontReport, "PASS compiled free vectors and emoji caret metrics; no font files or graphics device.")
             Return
         End If
-        ProjectZ.RuntimeDiagnostics.ApplicationDiagnostics.Initialize(New ProjectZ.RuntimeDiagnostics.DiagnosticOptions With {.ShowErrorDialogs = False})
         Using game
 '@
         $program = $program.Replace('        Using game', $fontProbe)
@@ -133,7 +131,8 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
         if ($assets.Contains('ProjectReference')) { throw 'A standalone template acquired a source dependency.' }
         if (!(Test-Path -LiteralPath "$output/ProjectZ.VectorText.dll") -or !(Test-Path -LiteralPath "$output/ThirdParty/ProjectZSans/OFL.txt")) { throw 'Compiled free vector font or OFL notice missing.' }
         if (@(Get-ChildItem -LiteralPath $output -File -Recurse | Where-Object { $_.Extension -in @('.ttf','.otf','.woff','.woff2','.spritefont') -or $_.Name -match '^SegoeUI_.*\.xnb$' }).Count) { throw 'Retired font containers or Segoe atlases were bundled.' }
-        if (!(Test-Path -LiteralPath "$output/ProjectZ.Diagnostics.exe")) { throw 'Diagnostics observer missing.' }
+        if (Test-Path -LiteralPath "$output/ProjectZ.Diagnostics.exe") { throw 'The base template unexpectedly includes optional native diagnostics.' }
+        if (!(Get-ChildItem -LiteralPath $output -Recurse -Filter ProjectZDesktopCapture.dll)) { throw 'Desktop blur capture helper missing.' }
         $fontReport = Join-Path $verification "$language-$backend.font.txt"
         $fontStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $output "Template$language.exe"))
         $fontStart.WorkingDirectory = $output
@@ -161,7 +160,7 @@ foreach ($language in @('CSharp', 'VisualBasic')) {
             $observed = (Get-Content -LiteralPath $report)[0]
             if ($observed -ne $backend) { throw "Selected $backend but runtime reports $observed." }
         }
-        $results.Add("PASS $language $backend standalone restore from $($restoreConfiguration.Mode), build, fonts, diagnostics" + $(if (!$SkipRuntime) { ', native window and rendered pixels' }))
+        $results.Add("PASS $language $backend standalone restore from $($restoreConfiguration.Mode), build, fonts, capture helper and optional diagnostics boundary" + $(if (!$SkipRuntime) { ', native window and rendered pixels' }))
         Write-Host $results[$results.Count - 1]
     }
     & dotnet build $projectPath -p:ProjectZGraphicsBackend=Invalid --nologo -v:quiet *> "$verification/$language-invalid.txt"

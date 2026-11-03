@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZFrameworkVersion>2026.11.2.1</ProjectZFrameworkVersion>
+    <!-- An explicit publish RID takes precedence over the build host. -->
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('linux-'))">Linux</ProjectZPlatform>
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('osx-'))">macOS</ProjectZPlatform>
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('win-'))">Windows</ProjectZPlatform>
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">Windows</ProjectZPlatform>
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">Linux</ProjectZPlatform>
+    <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">macOS</ProjectZPlatform>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition="'$(ProjectZPlatform)' == 'Windows'">net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting Condition="'$(ProjectZPlatform)' == 'Windows'">true</EnableWindowsTargeting>
+    <OutputType>Exe</OutputType>
+    <OutputType Condition="'$(ProjectZPlatform)' == 'Windows'">WinExe</OutputType>
+    <PlatformTarget Condition="'$(ProjectZPlatform)' == 'Windows'">x64</PlatformTarget>
+    <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'Windows'">ProjectZ</ProjectZRuntimePackage>
+    <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'Linux'">ProjectZ.Linux</ProjectZRuntimePackage>
+    <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'macOS'">ProjectZ.macOS</ProjectZRuntimePackage>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ProjectZRuntimePackage)' != ''">
+    <PackageReference Include="$(ProjectZRuntimePackage)" Version="[$(ProjectZFrameworkVersion)]" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="ThirdParty/ProjectZSans/*" Condition="'$(ProjectZPlatform)' != 'Windows'" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

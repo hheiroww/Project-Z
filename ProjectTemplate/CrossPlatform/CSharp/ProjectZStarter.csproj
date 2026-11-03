@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="ProjectZ.Platform.props" />
+  <PropertyGroup>
+    <RootNamespace>ProjectZStarter</RootNamespace>
+    <AssemblyName>ProjectZStarter</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <Import Project="ProjectZ.Platform.targets" />
+</Project>

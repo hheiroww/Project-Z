@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="ProjectZ.Platform.props" />
+  <PropertyGroup>
+    <RootNamespace>ProjectZStarter</RootNamespace>
+    <AssemblyName>ProjectZStarter</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ProjectZ.XamlTools" Version="[$(ProjectZFrameworkVersion)]" PrivateAssets="all" />
+    <ProjectZSceneXaml Include="MainScene.xaml" />
+  </ItemGroup>
+  <Import Project="ProjectZ.Platform.targets" />
+</Project>

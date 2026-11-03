@@ -1,5 +1,7 @@
 # Project Z Application — Visual Studio Project Template
 
+> **Current release:** use the [cross-platform CLI pack and starter ZIPs](./CrossPlatform/README.md) for Windows, Linux or macOS. The older source-checkout template below remains historical; do not zip this entire directory for a new application.
+
 > **Visual Studio 2026:** use the new [VSIX installer and graphics configuration guide](./VS2026/README.md). It installs standalone C# and VB templates with DX12, DX11 and OpenGL configurations. The manually zipped VB template described below is the older source-checkout template.
 
 A Visual Studio project template for creating new MonoGame game applications using the **Project Z** shared framework (SceneManager, Scene, ContentContainer, etc.).

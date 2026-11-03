@@ -25,9 +25,9 @@ Add the framework to a Windows .NET 8 or .NET 10 project:
 dotnet add package ProjectZ --version 2026.10.26.1
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.28.1/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File â†’ New â†’ Project**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File â†’ New â†’ Project**.
 
-Choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
+For Windows, choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](ProjectTemplate/VS2026/README.md).
 
 Desktop blur now uses a shared Gaussian shader on DX12, DX11 and OpenGL, with native host-window exclusion and managed X11 setup. [Desktop blur](docs/DESKTOP-BLUR.md) · [Platform integration pathways](docs/PLATFORM-PATHWAYS.md).
 
@@ -68,6 +68,8 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:UseLocalSocketJack=false
 ```
 
 The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use `OpenGL` for the OpenGL backend. [Examples and solution projects](docs/GETTING-STARTED.md#explore-the-solution).
+
+For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) includes the VSIX, a [cross-platform .NET CLI template pack](ProjectTemplate/CrossPlatform/README.md), and standalone starter ZIPs, all pinned to **2026.11.2.1**.
 
 ## Documentation
 

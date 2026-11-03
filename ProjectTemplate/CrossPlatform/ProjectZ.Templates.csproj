@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>ProjectZ.Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <Title>Project-Z cross-platform project templates</Title>
+    <Authors>Project-Z</Authors>
+    <Description>C# and Visual Basic desktop starters and a C# native scene-XAML starter for Windows, Linux and macOS.</Description>
+    <RepositoryUrl>https://github.com/hheiroww/Project-Z</RepositoryUrl>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <NoBuild>true</NoBuild>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="$(TemplateContentRoot)/**/*" Pack="true" PackagePath="content/%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="README.md" Pack="true" PackagePath="README.md" />
+  </ItemGroup>
+</Project>

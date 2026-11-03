@@ -24,3 +24,9 @@ base UI package. Existing Windows defaults remain available for text, spelling
 and media. DWM material requests now use the shader and no companion window.
 
 [Desktop blur and setup](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOP-BLUR.md) · [Platform integration pathways](https://github.com/hheiroww/Project-Z/blob/master/docs/PLATFORM-PATHWAYS.md)
+
+## Updated project templates
+
+This release includes an updated Visual Studio 2026 VSIX with seven templates, a .NET CLI template pack, and three standalone starter ZIPs. C# and Visual Basic cross-platform desktop starters select the exact Windows, Linux or macOS runtime. The C# native scene-XAML starter compiles saved markup on each build. Existing Windows desktop and WPF-designer templates are updated to 2026.11.2.1 with optional diagnostics kept opt-in. Template publishing follows native validation and is included in normal full framework releases.
+
+[Template downloads and instructions](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md).

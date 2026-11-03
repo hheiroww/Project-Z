@@ -145,3 +145,11 @@ jobs:
             dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+  templates:
+    if: inputs.validate_only != true && inputs.desktopgl_only != true
+    needs: release
+    uses: ./.github/workflows/templates.yml
+    permissions:
+      contents: write
+    with:
+      publish: true

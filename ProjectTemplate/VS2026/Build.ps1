@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $repo 'artifacts/VS2026' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
-$staging = Join-Path $OutputDirectory ('Staging/' + [Guid]::NewGuid().ToString('N'))
+$staging = Join-Path $OutputDirectory 'Staging'
 New-Item -ItemType Directory -Force -Path "$OutputDirectory/Templates" | Out-Null
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -17,10 +17,21 @@ $frameworkVersion = [string]$graphics.Project.PropertyGroup.ProjectZFrameworkVer
 $restoreArguments = @()
 if ($PackagePath) {
     . "$PSScriptRoot/PackageFeed.ps1"
-    $restoreRoot = Join-Path $OutputDirectory ('Restore/' + [Guid]::NewGuid().ToString('N'))
+    $restoreRoot = Join-Path $OutputDirectory 'Restore'
     $restoreConfiguration = New-ProjectZRestoreConfiguration -ConfigPath "$restoreRoot/NuGet.Config" -PackagesPath "$restoreRoot/Packages" -PackagePath $PackagePath -ExpectedVersion $frameworkVersion
     $restoreArguments = @("-p:RestoreConfigFile=$($restoreConfiguration.ConfigPath)", "-p:RestorePackagesPath=$($restoreConfiguration.PackagesPath)", '-p:RestoreFallbackFolders=')
     Write-Host "Building templates with exact local ProjectZ $frameworkVersion; public NuGet indexing is not required."
+}
+
+function Write-ProjectZTemplateZip([string]$Folder, [string]$Destination) {
+    $stream = [IO.File]::Open($Destination, [IO.FileMode]::Create)
+    $zip = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($file in Get-ChildItem -LiteralPath $Folder -File -Recurse | Sort-Object FullName) {
+            $relative = [IO.Path]::GetRelativePath($Folder, $file.FullName).Replace('\', '/')
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, $relative)
+        }
+    } finally { $zip.Dispose(); $stream.Dispose() }
 }
 
 function Copy-XamlTooling([string]$Payload) {
@@ -73,9 +84,9 @@ try {
         if (!(Test-Path -LiteralPath $dll)) { throw "Missing backend assembly: $dll" }
     }
 
-    & dotnet publish 'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj' -c Release -o "$OutputDirectory/Build/XamlTools" -p:DebugType=None -p:DebugSymbols=false -p:GeneratePackageOnBuild=false --nologo @restoreArguments
+    & dotnet publish 'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj' -c Release -o "$OutputDirectory/Build/XamlTools" --artifacts-path "$OutputDirectory/Build/ToolBuild" -p:DebugType=None -p:DebugSymbols=false -p:GeneratePackageOnBuild=false --nologo @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'XAML tooling publish failed.' }
-    & dotnet build 'Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj' -c Release "-p:ProjectZFrameworkPackageVersion=$frameworkVersion" -o "$OutputDirectory/Build/Compatibility" -p:GeneratePackageOnBuild=false --nologo @restoreArguments
+    & dotnet build 'Project Z WPF Compatibility/ProjectZ.WpfCompatibility.csproj' -c Release "-p:ProjectZFrameworkPackageVersion=$frameworkVersion" -o "$OutputDirectory/Build/Compatibility" --artifacts-path "$OutputDirectory/Build/CompatibilityBuild" -p:GeneratePackageOnBuild=false --nologo @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'Portable compatibility build failed.' }
     if ($PackagePath) { Assert-ProjectZRestoredPackage -RestoreConfiguration $restoreConfiguration }
 
@@ -117,8 +128,7 @@ try {
         $zipFolder = Join-Path $staging "ProjectTemplates/$language/ProjectZ"
         New-Item -ItemType Directory -Force -Path $zipFolder | Out-Null
         $zipPath = Join-Path $zipFolder "ProjectZ.$language.zip"
-        if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath }
-        [IO.Compression.ZipFile]::CreateFromDirectory($folder, $zipPath)
+        Write-ProjectZTemplateZip $folder $zipPath
         Copy-Item -LiteralPath $zipPath -Destination "$OutputDirectory/Templates/ProjectZ.$language.zip" -Force
 
         $xamlFolder = Join-Path $staging "XamlSources/$language"
@@ -167,9 +177,13 @@ try {
 '@
         $group.Replace('__DISPLAY__', $display).Replace('__LANGUAGE__', $language) | Set-Content -LiteralPath "$xamlFolder/ProjectZ.Xaml.vstemplate"
         $xamlZip = Join-Path $zipFolder "ProjectZ.Xaml.$language.zip"
-        [IO.Compression.ZipFile]::CreateFromDirectory($xamlFolder, $xamlZip)
+        Write-ProjectZTemplateZip $xamlFolder $xamlZip
         Copy-Item -LiteralPath $xamlZip -Destination "$OutputDirectory/Templates/ProjectZ.Xaml.$language.zip" -Force
     }
+
+    & "$repo/ProjectTemplate/CrossPlatform/Build.ps1" -OutputDirectory "$OutputDirectory/Portable"
+    if ($LASTEXITCODE -ne 0) { throw 'Cross-platform template build failed.' }
+    Copy-Item -Path "$OutputDirectory/Portable/VisualStudio/*" -Destination "$staging/ProjectTemplates" -Recurse -Force
 
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     if (!(Test-Path -LiteralPath $vswhere)) { throw 'Install Visual Studio or Build Tools 2022 or later.' }
@@ -177,10 +191,10 @@ try {
     if (!$msbuild) { throw 'Visual Studio MSBuild 17 or later was not found.' }
     # VSSDK's .NET Framework ZIP extractor still enforces MAX_PATH. Keep the
     # extraction root short enough for Roslyn's nested MSBuild host filenames.
-    $packaging = Join-Path ([IO.Path]::GetTempPath()) ('pzv-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-    & $msbuild "$PSScriptRoot/ProjectZ.Templates.csproj" /restore /t:Build /p:Configuration=Release "/p:ProjectZTemplateStaging=$staging" "/p:BaseIntermediateOutputPath=$packaging/" /nologo /v:minimal @restoreArguments
+    $packaging = Join-Path $OutputDirectory 'VsixObj'
+    & $msbuild "$PSScriptRoot/ProjectZ.Templates.csproj" /restore /t:Build /p:Configuration=Release "/p:ProjectZTemplateStaging=$staging" "/p:BaseIntermediateOutputPath=$packaging/" "/p:OutputPath=$OutputDirectory/VSIX/" /nologo /v:minimal @restoreArguments
     if ($LASTEXITCODE -ne 0) { throw 'VSIX packaging failed.' }
-    Copy-Item -LiteralPath "$PSScriptRoot/bin/Release/net472/ProjectZ.Templates.vsix" -Destination "$OutputDirectory/ProjectZ.VisualStudio2026.vsix" -Force
+    Copy-Item -LiteralPath "$OutputDirectory/VSIX/ProjectZ.Templates.vsix" -Destination "$OutputDirectory/ProjectZ.VisualStudio2026.vsix" -Force
     Set-Content -LiteralPath "$OutputDirectory/LatestStaging.txt" -Value $staging
     $hash = Get-FileHash -LiteralPath "$OutputDirectory/ProjectZ.VisualStudio2026.vsix" -Algorithm SHA256
     ($hash.Hash.ToLowerInvariant() + '  ProjectZ.VisualStudio2026.vsix') | Set-Content -LiteralPath "$OutputDirectory/SHA256SUMS.txt" -Encoding ascii

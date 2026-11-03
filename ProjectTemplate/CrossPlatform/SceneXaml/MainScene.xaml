@@ -1,0 +1,20 @@
+<SceneTemplates xmlns="urn:projectz:native-scene"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                Class="ProjectZStarter.MainScene">
+  <Using>Microsoft.Xna.Framework</Using>
+  <Using>ProjectZ.Shared.Drawing.UI.Primitives</Using>
+  <Factory x:Name="Label" Returns="TextElement" Attach="Attach">
+    <Parameter Name="text" Attribute="Text" Type="string" />
+    <Parameter Name="position" Attribute="Position" Type="Vector2" />
+    <Parameter Name="size" Attribute="Size" Type="Vector2" />
+    <Parameter Name="font" Attribute="Font" Type="string" Default="ProjectZSans_24" />
+    <Element Type="TextElement">
+      <Set Property="Text" Type="string" Value="{Parameter text}" />
+      <Set Property="Position" Type="Vector2" Value="{Parameter position}" />
+      <Set Property="Size" Type="Vector2" Value="{Parameter size}" />
+      <Set Property="Font" Type="string" Value="{Parameter font}" />
+    </Element>
+  </Factory>
+  <Label x:Name="CreateHeading" Factory="Label" Text="Welcome to Project-Z" Position="48,56" Size="820,60" />
+  <Label x:Name="CreateDescription" Factory="Label" Text="Edit MainScene.xaml and rebuild to change this native UI." Position="48,130" Size="850,60" Font="ProjectZSans_14" />
+</SceneTemplates>

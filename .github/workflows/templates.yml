@@ -1,6 +1,16 @@
-name: Build Visual Studio 2026 templates
+name: Build and publish project templates
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Attach validated templates to the matching framework release
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: true
   push:
     tags: ['vs2026-*']
 permissions:
@@ -18,8 +28,10 @@ jobs:
       - name: Verify isolated package feed setup
         shell: pwsh
         run: ./tests/ProjectTemplates/Verify-PackageFeed.ps1
-      - name: Build exact framework package for template validation
+      - name: Download the exact released Windows runtime
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           [xml]$graphics = Get-Content 'ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props'
           [xml]$framework = Get-Content 'Extensions/ProjectZ.Package.props'
@@ -28,10 +40,9 @@ jobs:
           if ($version -ne $sourceVersion) {
             throw 'The template package pin must match the framework source version.'
           }
-          ./tools/Pack-RuntimePackages.ps1
-          $package = (Resolve-Path "artifacts/runtime-packages/ProjectZ.$version.nupkg").Path
-          ./tests/Packaging/Verify.ps1 -PackagePath $package
+          gh release download "v$version" --repo '${{ github.repository }}' --pattern "ProjectZ.$version.nupkg" --dir release-packages
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = (Resolve-Path "release-packages/ProjectZ.$version.nupkg").Path
           "PROJECTZ_TEMPLATE_PACKAGE=$package" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Get-FileHash -LiteralPath $package -Algorithm SHA256
       - name: Build DX11 and OpenGL runtimes and VSIX
@@ -45,8 +56,94 @@ jobs:
         run: ./tests/ProjectTemplates/Verify-Xaml.ps1 -PackagePath $env:PROJECTZ_TEMPLATE_PACKAGE -SkipRuntime
       - uses: actions/upload-artifact@v4
         with:
-          name: ProjectZ-VisualStudio2026
-          path: |
-            artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
-            artifacts/VS2026/SHA256SUMS.txt
+          name: ProjectZ-template-vsix
+          path: artifacts/VS2026/ProjectZ.VisualStudio2026.vsix
           if-no-files-found: error
+          retention-days: 7
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-15-intel
+            rid: osx-x64
+          - os: macos-15
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build portable template pack and standalone starters
+        run: ./ProjectTemplate/CrossPlatform/Build.ps1
+      - name: Download exact runtime and XAML packages from the framework release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [xml]$props = Get-Content Extensions/ProjectZ.Package.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          foreach ($id in @('ProjectZ', 'ProjectZ.Linux', 'ProjectZ.macOS', 'ProjectZ.XamlTools')) {
+            gh release download "v$version" --repo '${{ github.repository }}' --pattern "$id.$version.nupkg" --dir release-packages
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Verify Windows and all cross-published RIDs
+        if: runner.os == 'Windows'
+        run: ./tests/ProjectTemplates/Verify-CrossPlatform.ps1 -PackageDirectory release-packages -SkipRuntime
+      - name: Verify native macOS starters and rendered text
+        if: runner.os == 'macOS'
+        run: ./tests/ProjectTemplates/Verify-CrossPlatform.ps1 -PackageDirectory release-packages -RuntimeIdentifiers '${{ matrix.rid }}'
+      - name: Verify native Linux starters and rendered text
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri libopenal1
+          xvfb-run -a pwsh -NoProfile -File ./tests/ProjectTemplates/Verify-CrossPlatform.ps1 -PackageDirectory release-packages -RuntimeIdentifiers linux-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve portable release assets
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-template-portable
+          path: |
+            artifacts/CrossPlatformTemplates/*.nupkg
+            artifacts/CrossPlatformTemplates/*.zip
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    if: inputs.publish == true || startsWith(github.ref, 'refs/tags/vs2026-')
+    needs: [templates, portable]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ProjectZ-template-*
+          merge-multiple: true
+          path: template-release
+      - name: Attach templates and checksums to the matching framework release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [xml]$props = Get-Content Extensions/ProjectZ.Package.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          $tag = "v$version"
+          gh release view $tag --repo '${{ github.repository }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $assets = @(Get-ChildItem template-release -File | Sort-Object Name)
+          if ($assets.Count -ne 5) { throw 'Expected the VSIX, template pack and three starter ZIPs.' }
+          $assets | ForEach-Object {
+            (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name
+          } | Set-Content template-release/ProjectZ.Templates.SHA256SUMS.txt -Encoding ascii
+          gh release upload $tag @($assets.FullName) template-release/ProjectZ.Templates.SHA256SUMS.txt --clobber --repo '${{ github.repository }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

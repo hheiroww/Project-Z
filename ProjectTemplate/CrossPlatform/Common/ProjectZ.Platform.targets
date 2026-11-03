@@ -1,0 +1,7 @@
+<Project>
+  <Target Name="ValidateProjectZPlatform" BeforeTargets="CollectPackageReferences;PrepareForBuild">
+    <Error Condition="'$(ProjectZPlatform)' != 'Windows' and '$(ProjectZPlatform)' != 'Linux' and '$(ProjectZPlatform)' != 'macOS'" Text="ProjectZPlatform must be Windows, Linux or macOS." />
+    <Error Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64' and '$(RuntimeIdentifier)' != 'linux-x64' and '$(RuntimeIdentifier)' != 'osx-x64' and '$(RuntimeIdentifier)' != 'osx-arm64'" Text="This starter supports win-x64, linux-x64, osx-x64 and osx-arm64." />
+    <Error Condition="('$(ProjectZPlatform)' != 'Windows' and $(RuntimeIdentifier.StartsWith('win-'))) or ('$(ProjectZPlatform)' != 'Linux' and $(RuntimeIdentifier.StartsWith('linux-'))) or ('$(ProjectZPlatform)' != 'macOS' and $(RuntimeIdentifier.StartsWith('osx-')))" Text="ProjectZPlatform conflicts with RuntimeIdentifier. Remove the platform override or select a matching RID." />
+  </Target>
+</Project>
