@@ -38,7 +38,9 @@ Namespace Windows.Composition
                     inSizeMove = True
                     ' WindowsDX already pumps its own Game.Window. A separate
                     ' native presentation HWND still needs this timer on DX11.
-                    If Not useExistingFramePump AndAlso isEnabled() Then
+                    ' Arm even if the app is temporarily busy at entry. The
+                    ' callback checks readiness again on every timer message.
+                    If Not useExistingFramePump Then
                         timerStarted = SetTimer(Handle, timerId, 16UI, IntPtr.Zero) <> UIntPtr.Zero
                     End If
                 Case &H232, &H82 ' WM_EXITSIZEMOVE / WM_NCDESTROY

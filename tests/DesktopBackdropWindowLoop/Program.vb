@@ -41,13 +41,16 @@ Module Program
                 Require(count = firstCount, "Exiting the modal loop must stop its timer.")
                 enabled = False
                 SendMessage(hwnd, &H231, IntPtr.Zero, IntPtr.Zero)
+                SendMessage(hwnd, &H113, timer, IntPtr.Zero)
+                Require(count = firstCount, "Entering while temporarily busy must not render a frame.")
                 enabled = True
                 SendMessage(hwnd, &H113, timer, IntPtr.Zero)
-                Require(count = firstCount, "Entering with blur disabled must not allocate a timer.")
+                Require(count = firstCount + 1, "A transient entry guard must recover during the same modal loop.")
+                firstCount = count
                 SendMessage(hwnd, &H232, IntPtr.Zero, IntPtr.Zero)
                 SendMessage(hwnd, &H231, IntPtr.Zero, IntPtr.Zero)
                 SendMessage(hwnd, &H113, timer, IntPtr.Zero)
-                Require(count = 2, "A later modal loop must restart its frame timer.")
+                Require(count = firstCount + 1, "A later modal loop must restart its frame timer.")
                 firstCount = count
                 loopHost.Dispose()
                 SendMessage(hwnd, &H113, timer, IntPtr.Zero)

@@ -54,6 +54,10 @@ rendering or device-state critical sections can set
 `SceneManager.CanRunModalFrame` to a UI-thread predicate that rejects a nested
 frame during those sections; the library cannot detect arbitrary application
 code outside its own calls.
+When a separate input/owner window receives the native drag messages, set
+`SceneManager.ModalWindowHandle` to that HWND. Leave
+`DesktopBackdrop.NativeWindowHandle` set to the visible surface that capture must
+exclude. The default modal HWND is the backdrop HWND when no override is set.
 
 ## Platform behavior
 

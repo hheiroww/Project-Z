@@ -79,6 +79,9 @@ Namespace [Shared].Drawing
         ''' <summary>Optional UI-thread guard for hosts that cannot accept a modal Game.Tick
         ''' while their own update, drawing or presentation code is in progress.</summary>
         Public Property CanRunModalFrame As Func(Of Boolean)
+        ''' <summary>Optional HWND receiving native move/resize messages when the input owner
+        ''' differs from DesktopBackdrop.NativeWindowHandle, such as a layered presentation surface.</summary>
+        Public Property ModalWindowHandle As IntPtr
         Public Property MinimumViewportSize As New Point(320, 200)
 
         Public ReadOnly Property ViewportScale As Vector2
@@ -1235,7 +1238,8 @@ Namespace [Shared].Drawing
         Public Sub Tick(gameTime As GameTime)
             DesktopBackdrop?.Update()
 #If WINDOWS Then
-            Dim backdropHandle = If(DesktopBackdrop Is Nothing, IntPtr.Zero, DesktopBackdrop.NativeWindowHandle)
+            Dim backdropHandle = If(ModalWindowHandle <> IntPtr.Zero, ModalWindowHandle,
+                If(DesktopBackdrop Is Nothing, IntPtr.Zero, DesktopBackdrop.NativeWindowHandle))
             If backdropHandle <> desktopWindowLoopHandle Then
                 desktopWindowLoop?.Dispose()
                 desktopWindowLoop = Nothing

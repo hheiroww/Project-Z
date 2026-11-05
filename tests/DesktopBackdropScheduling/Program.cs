@@ -305,14 +305,25 @@ internal sealed class HiddenProbe : Game
         try
         {
             using var provider = new ControlledSource(returnPixels: false);
+            // These HWNDs belong only to this test and are never shown. The
+            // owner receives move/resize messages; the surface is the separate
+            // native window that capture exclusion must continue to protect.
+            using var inputOwner = new System.Windows.Forms.Form { ShowInTaskbar = false };
+            using var presentationSurface = new System.Windows.Forms.Form { ShowInTaskbar = false };
             using var manager = new SceneManager(this, 60) { UseExternalInput = true, AutoResizeViewport = false };
             using var scene = new RevisionScene(manager) { EnableDesignTimeControls = false };
             manager.AddScene("revision", scene);
             manager.ActiveScene = scene;
             manager.DesktopBackdrop.CaptureSourceFactory = () => provider;
             manager.DesktopBackdrop.ShowSetupPrompt = false;
+            manager.DesktopBackdrop.NativeWindowHandle = presentationSurface.Handle;
+            manager.ModalWindowHandle = inputOwner.Handle;
             var time = new GameTime(TimeSpan.Zero, TimeSpan.FromMilliseconds(16));
             manager.Tick(time);
+            var hookHandle = typeof(SceneManager).GetField("desktopWindowLoopHandle", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            Program.Require(inputOwner.Handle != presentationSurface.Handle, "owner and presentation fixture use distinct HWNDs");
+            Program.Require((IntPtr)hookHandle.GetValue(manager)! == inputOwner.Handle && manager.DesktopBackdrop.NativeWindowHandle == presentationSurface.Handle,
+                "modal pumping follows the input owner while capture exclusion keeps the presentation surface");
             var stable = scene.RenderRevision;
             manager.Tick(time);
             Program.Require(scene.RenderRevision == stable, "stable disabled backdrop ticks leave scene presentation idle");
@@ -331,6 +342,12 @@ internal sealed class HiddenProbe : Game
             scene.UseDesktopBackdrop = true;
             manager.Tick(time);
             Program.Require(scene.RenderRevision > stable, "restoring desktop material observes its pending invalidation");
+
+            manager.ModalWindowHandle = IntPtr.Zero;
+            manager.Tick(time);
+            Program.Require((IntPtr)hookHandle.GetValue(manager)! == presentationSurface.Handle && manager.DesktopBackdrop.NativeWindowHandle == presentationSurface.Handle,
+                "clearing the modal owner restores surface pumping without changing capture exclusion");
+            Program.Require(provider.Requests.IsEmpty, "disabled ownership checks never start native or synthetic capture");
         }
         finally
         {
