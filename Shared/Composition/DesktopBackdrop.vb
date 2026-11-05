@@ -17,12 +17,24 @@ Namespace [Shared].Composition
         Public ReadOnly Property StatusMessage As String = String.Empty
         Public ReadOnly Property CapturedFrameCount As Long
         Public ReadOnly Property LastCaptureMilliseconds As Double
+        ''' <summary>Changes when desktop pixels, host geometry or material settings need presentation.
+        ''' Hosts that throttle idle drawing should compare this after SceneManager.Tick.</summary>
+        Public ReadOnly Property RenderRevision As Long
+            Get
+                Return Threading.Interlocked.Read(renderRevisionValue)
+            End Get
+        End Property
         Public Event Unavailable(state As DesktopBackdropState, message As String)
         Private source As IDesktopCaptureSource
         Private captureTask As Task(Of Boolean)
         Private captureArea, frameArea, windowArea As Rectangle
+        Private requestedWindow As Rectangle
         Private captureScale As Integer = 2
+        Private frameScale As Integer = 2
         Private dpi As Single = 1
+        Private requestedDpi, requestedRadius As Single
+        Private renderRevisionValue As Long = 1
+        Private observedSettings As (Enabled As Boolean, Radius As Single, Saturation As Single, Noise As Single, Tint As Color, Fallback As Color)
         Private rgba As Byte()
         Private nextCaptureAt As Long
         Private stopped As Boolean
@@ -37,6 +49,9 @@ Namespace [Shared].Composition
         Private white As Texture2D
         Private dirty As Boolean
         Private renderedRadius As Single = -1
+        Private Sub Invalidate()
+            Threading.Interlocked.Increment(renderRevisionValue)
+        End Sub
         Friend Sub New(game As Game)
             Me.game = game
         End Sub
@@ -44,6 +59,7 @@ Namespace [Shared].Composition
             ReleaseCapture()
             failed = False
             _StatusMessage = String.Empty
+            Invalidate()
         End Sub
         Public Function RequestCapturePermission() As Boolean
             If Not OperatingSystem.IsMacOS() Then Return False
@@ -72,6 +88,11 @@ Namespace [Shared].Composition
                 Settings.Tint = requested.Tint
                 lastRequest = requested
             End If
+            Dim material = (Settings.Enabled, Settings.BlurRadius, Settings.Saturation, Settings.NoiseOpacity, Settings.Tint, Settings.FallbackColor)
+            If Not material.Equals(observedSettings) Then
+                observedSettings = material
+                Invalidate()
+            End If
             If Not Settings.Enabled Then
                 If Not stopped Then ReleaseCapture()
                 failed = False : stopped = True : _State = DesktopBackdropState.Disabled
@@ -85,8 +106,12 @@ Namespace [Shared].Composition
                     If source Is Nothing OrElse Not source.ExcludesHostWindow Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "The capture provider must exclude the host window without returning a black placeholder.")
                     _State = DesktopBackdropState.Starting
                 End If
-                windowArea = source.WindowBounds
-                dpi = Math.Clamp(source.DpiScale, 0.5F, 4)
+                Dim bounds = source.WindowBounds
+                Dim scaleDpi = Math.Clamp(source.DpiScale, 0.5F, 4)
+                If bounds <> windowArea OrElse scaleDpi <> dpi Then
+                    windowArea = bounds : dpi = scaleDpi
+                    Invalidate()
+                End If
                 If captureTask IsNot Nothing Then
                     If Not captureTask.IsCompleted Then Return
                     Dim available = captureTask.GetAwaiter().GetResult()
@@ -100,15 +125,27 @@ Namespace [Shared].Composition
                         End If
                         input.SetData(rgba)
                         frameArea = captureArea
+                        frameScale = captureScale
                         dirty = True
                         _CapturedFrameCount += 1
                         _State = DesktopBackdropState.Active
+                        Invalidate()
                     End If
                 End If
-                If windowArea.Width <= 0 OrElse windowArea.Height <= 0 OrElse Environment.TickCount64 < nextCaptureAt Then Return
+                Dim geometryChanged = windowArea <> requestedWindow OrElse dpi <> requestedDpi OrElse Settings.BlurRadius <> requestedRadius
+                If windowArea.Width <= 0 OrElse windowArea.Height <= 0 OrElse
+                    (Not geometryChanged AndAlso Environment.TickCount64 < nextCaptureAt) Then Return
                 Dim padding = CInt(Math.Ceiling(Math.Clamp(Settings.BlurRadius, 0, 100) * dpi * 3)) + 4
-                captureArea = windowArea
-                captureArea.Inflate(padding, padding)
+                Dim required = windowArea
+                required.Inflate(padding, padding)
+                If Not captureArea.Contains(required) OrElse captureArea.Width > required.Width + 512 OrElse captureArea.Height > required.Height + 512 Then
+                    ' Overscan keeps the desktop anchored during an outstanding read.
+                    ' Quantized dimensions reuse CPU/GPU buffers through small resizes.
+                    captureArea = required
+                    captureArea.Inflate(64, 64)
+                    captureArea.Width = ((captureArea.Width + 127) \ 128) * 128
+                    captureArea.Height = ((captureArea.Height + 127) \ 128) * 128
+                End If
                 captureScale = If(Settings.BlurRadius >= 10, 2, 1)
                 While (CLng(captureArea.Width) * captureArea.Height \ (captureScale * captureScale) > 8L * 1024 * 1024 OrElse
                        captureArea.Width \ captureScale > 8192 OrElse captureArea.Height \ captureScale > 8192) AndAlso captureScale < 8
@@ -117,6 +154,7 @@ Namespace [Shared].Composition
                 Dim length = CInt(CLng((captureArea.Width + captureScale - 1) \ captureScale) * ((captureArea.Height + captureScale - 1) \ captureScale) * 4)
                 If rgba Is Nothing OrElse rgba.Length <> length Then ReDim rgba(length - 1)
                 Dim current = source, area = captureArea, scale = captureScale, buffer = rgba
+                requestedWindow = windowArea : requestedDpi = dpi : requestedRadius = Settings.BlurRadius
                 nextCaptureAt = Environment.TickCount64 + 1000 \ Math.Clamp(Settings.CaptureFramesPerSecond, 1, 60)
                 captureTask = Task.Run(Function()
                                            Dim started = Diagnostics.Stopwatch.GetTimestamp()
@@ -136,6 +174,7 @@ Namespace [Shared].Composition
             ReleaseCapture()
             failed = True
             _State = state : _StatusMessage = message
+            Invalidate()
             RaiseEvent Unavailable(state, message)
         End Sub
         Private Sub ReleaseCapture()
@@ -159,9 +198,14 @@ Namespace [Shared].Composition
             ' get a separate buffer rather than race that source for the same pixels.
             rgba = Nothing
             frameArea = Rectangle.Empty
+            captureArea = Rectangle.Empty : requestedWindow = Rectangle.Empty
+            nextCaptureAt = 0
             _State = DesktopBackdropState.Starting
         End Sub
         Friend Function Draw(device As GraphicsDevice, overlay As Color) As Boolean
+            ' Sample geometry and upload completed work at the last possible moment,
+            ' including hosts that update and present on different schedules.
+            Update()
             If Not Settings.Enabled OrElse disposed Then Return False
             If batch Is Nothing Then
                 batch = New SpriteBatch(device)
@@ -175,7 +219,7 @@ Namespace [Shared].Composition
             Dim blend = device.BlendState
             Dim depth = device.DepthStencilState
             Try
-                Dim valid = input IsNot Nothing AndAlso frameArea.Contains(windowArea) AndAlso windowArea.Width > 0
+                Dim valid = input IsNot Nothing AndAlso frameArea.Width > 0 AndAlso frameArea.Height > 0 AndAlso windowArea.Width > 0 AndAlso windowArea.Height > 0
                 If valid Then
                     If shader Is Nothing Then
                         Using stream = GetType(DesktopBackdrop).Assembly.GetManifestResourceStream("ProjectZ.Resources.DesktopBlur.mgfx")
@@ -189,7 +233,7 @@ Namespace [Shared].Composition
                     ' Paired bilinear taps represent adjacent Gaussian texels.
                     ' Scaling their spacing above one texel creates gaps and visible
                     ' bands, so match the working resolution to the requested sigma.
-                    Dim workingScale = Math.Max(captureScale, radius / 2.94F)
+                    Dim workingScale = Math.Max(frameScale, radius / 2.94F)
                     Dim width = Math.Max(1, CInt(Math.Floor(frameArea.Width / workingScale)))
                     Dim height = Math.Max(1, CInt(Math.Floor(frameArea.Height / workingScale)))
                     If blurred Is Nothing OrElse blurred.Width <> width OrElse blurred.Height <> height Then

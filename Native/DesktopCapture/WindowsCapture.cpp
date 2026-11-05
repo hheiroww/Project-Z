@@ -59,6 +59,7 @@ struct Display {
     com_ptr<ID3D11Texture2D> staging;
     std::vector<unsigned char> pixels;
     int width = 0, height = 0;
+    int stagingWidth = 0, stagingHeight = 0;
     RECT crop{};
     int imageX = 0, imageY = 0;
     ~Display() { try { if (retained) retained.Close(); if (session) session.Close(); if (pool) pool.Close(); } catch (...) {} }
@@ -125,15 +126,19 @@ struct Capture {
         changed = changed || !EqualRect(&crop, &value.crop);
         value.crop = crop;
         value.imageX = value.bounds.left + crop.left; value.imageY = value.bounds.top + crop.top;
-        if (!value.staging || value.width != width || value.height != height) {
+        if (!value.staging || value.stagingWidth < width || value.stagingHeight < height) {
             value.staging = nullptr;
-            value.width = width; value.height = height;
-            desc.Width = width; desc.Height = height;
+            // Retain bounded capacity while the client changes a few pixels at
+            // a time. The copied/read region still uses the exact current crop.
+            value.stagingWidth = std::max(value.stagingWidth, std::min(int(sourceWidth), (width + 127) / 128 * 128));
+            value.stagingHeight = std::max(value.stagingHeight, std::min(int(sourceHeight), (height + 127) / 128 * 128));
+            desc.Width = value.stagingWidth; desc.Height = value.stagingHeight;
             desc.BindFlags = 0; desc.MiscFlags = 0; desc.Usage = D3D11_USAGE_STAGING; desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
             check_hresult(device->CreateTexture2D(&desc, nullptr, value.staging.put()));
-            value.pixels.resize(size_t(value.width) * value.height * 4);
             changed = true;
         }
+        value.width = width; value.height = height;
+        value.pixels.resize(size_t(width) * height * 4);
         if (!changed) return true;
         // Read only the padded host region, rather than transferring the complete monitor.
         D3D11_BOX box{UINT(crop.left), UINT(crop.top), 0, UINT(crop.right), UINT(crop.bottom), 1};
@@ -151,6 +156,54 @@ struct Capture {
         return true;
     }
 };
+
+void copy_pixels(const std::vector<Display*>& ready, int x, int y, int width, int height,
+                 int downsample, unsigned char* rgba) {
+    // The usual request intersects one display. Avoid repeating nearest-monitor
+    // distance calculations for every output pixel in that case.
+    Display* best = ready.front();
+    for (int dy = 0; dy < height; ++dy) for (int dx = 0; dx < width; ++dx) {
+        const int sx = x + dx * downsample, sy = y + dy * downsample;
+        if (ready.size() > 1) {
+            long long distance = LLONG_MAX;
+            for (auto display : ready) {
+                const int cx = std::clamp(sx, int(display->bounds.left), int(display->bounds.right) - 1);
+                const int cy = std::clamp(sy, int(display->bounds.top), int(display->bounds.bottom) - 1);
+                const long long d = (static_cast<long long>(sx) - cx) * (static_cast<long long>(sx) - cx) +
+                    (static_cast<long long>(sy) - cy) * (static_cast<long long>(sy) - cy);
+                if (d < distance) { distance = d; best = display; }
+            }
+        }
+        const int px = std::clamp(sx - best->imageX, 0, best->width - 1);
+        const int py = std::clamp(sy - best->imageY, 0, best->height - 1);
+        const auto first = best->pixels.data() + (size_t(py) * best->width + px) * 4;
+        auto dest = rgba + (size_t(dy) * width + dx) * 4;
+        if (downsample == 1) {
+            dest[0] = first[2]; dest[1] = first[1]; dest[2] = first[0];
+        } else if (downsample == 2) {
+            // Preserve box filtering and edge replication, with no inner loops
+            // or per-channel indexing for the default capture resolution.
+            const auto right = first + (px + 1 < best->width ? 4 : 0);
+            const auto below = first + (py + 1 < best->height ? size_t(best->width) * 4 : 0);
+            const auto diagonal = below + (px + 1 < best->width ? 4 : 0);
+            dest[0] = (unsigned(first[2]) + right[2] + below[2] + diagonal[2]) / 4;
+            dest[1] = (unsigned(first[1]) + right[1] + below[1] + diagonal[1]) / 4;
+            dest[2] = (unsigned(first[0]) + right[0] + below[0] + diagonal[0]) / 4;
+        } else {
+            unsigned red = 0, green = 0, blue = 0;
+            for (int by = 0; by < downsample; ++by) {
+                const auto row = best->pixels.data() + size_t(std::min(py + by, best->height - 1)) * best->width * 4;
+                for (int bx = 0; bx < downsample; ++bx) {
+                    const auto pixel = row + size_t(std::min(px + bx, best->width - 1)) * 4;
+                    red += pixel[2]; green += pixel[1]; blue += pixel[0];
+                }
+            }
+            const unsigned count = downsample * downsample;
+            dest[0] = red / count; dest[1] = green / count; dest[2] = blue / count;
+        }
+        dest[3] = 255;
+    }
+}
 }
 extern "C" __declspec(dllexport) const char* pz_capture_error() { return error.c_str(); }
 extern "C" __declspec(dllexport) void* pz_capture_create(void* owner) {
@@ -194,25 +247,7 @@ extern "C" __declspec(dllexport) int pz_capture_read(void* capture, int x, int y
             if (value.refresh(display, request)) ready.push_back(&display);
         }
         if (ready.size() != monitors.size() || ready.empty()) return 0;
-        for (int dy = 0; dy < oh; ++dy) for (int dx = 0; dx < ow; ++dx) {
-            int sx = x + dx * downsample, sy = y + dy * downsample;
-            Display* best = nullptr; long long distance = LLONG_MAX;
-            for (auto display : ready) {
-                int cx = std::clamp(sx, int(display->bounds.left), int(display->bounds.right) - 1);
-                int cy = std::clamp(sy, int(display->bounds.top), int(display->bounds.bottom) - 1);
-                long long d = (static_cast<long long>(sx) - cx) * (static_cast<long long>(sx) - cx) + (static_cast<long long>(sy) - cy) * (static_cast<long long>(sy) - cy);
-                if (d < distance) { distance = d; best = display; }
-            }
-            int px = std::clamp(sx - best->imageX, 0, best->width - 1), py = std::clamp(sy - best->imageY, 0, best->height - 1);
-            unsigned sums[3]{}; unsigned count = 0;
-            for (int by = 0; by < downsample; ++by) for (int bx = 0; bx < downsample; ++bx) {
-                auto pixel = best->pixels.data() + (size_t(std::min(py + by, best->height - 1)) * best->width + std::min(px + bx, best->width - 1)) * 4;
-                for (int c = 0; c < 3; ++c) sums[c] += pixel[2 - c]; ++count;
-            }
-            auto dest = rgba + (size_t(dy) * ow + dx) * 4;
-            for (int c = 0; c < 3; ++c) dest[c] = static_cast<unsigned char>(sums[c] / count);
-            dest[3] = 255;
-        }
+        copy_pixels(ready, x, y, ow, oh, downsample, rgba);
         return 1;
     } catch (hresult_error const& e) { error = to_string(e.message()); return -1; }
       catch (std::exception const& e) { error = e.what(); return -1; }

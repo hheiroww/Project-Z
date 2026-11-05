@@ -22,12 +22,18 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.10.26.1
+dotnet add package ProjectZ --version 2026.11.4.1
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/download/vs2026-2026.10.28.1/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 10 SDK**, install the VSIX, then choose **File → New → Project → Project-Z Desktop**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
 
-The templates offer **DirectX 12**, **DirectX 11** and **OpenGL** configurations. The framework defaults to native DX12. [Template setup and renderer selection](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md).
+Install the single template extension from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026).
+
+For Windows, choose **Project-Z Desktop** for a code-first app, or **Project-Z XAML Desktop** for a native app paired with a **Visual Studio XAML designer project**. Save the shared XAML and code-behind, then build: conversion runs automatically. Both languages include the **portable WPF project converter**, build-time settings, and **DirectX 12**, **DirectX 11** and **OpenGL** configurations. [Template setup, designer workflow and conversion utility](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md).
+
+Desktop blur now uses a shared Gaussian shader on DX12, DX11 and OpenGL, with native host-window exclusion and managed X11 setup. [Desktop blur](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOP-BLUR.md) · [Platform integration pathways](https://github.com/hheiroww/Project-Z/blob/master/docs/PLATFORM-PATHWAYS.md).
+
+Linux and macOS applications use the new `ProjectZ.Linux` and `ProjectZ.macOS` packages with MonoGame DesktopGL. [Platform features, source builds and packaging](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOPGL.md).
 
 ## heirowSnap built with Project Z
 
@@ -65,6 +71,8 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:UseLocalSocketJack=false
 
 The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use `OpenGL` for the OpenGL backend. [Examples and solution projects](https://github.com/hheiroww/Project-Z/blob/master/docs/GETTING-STARTED.md#explore-the-solution).
 
+For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](https://github.com/hheiroww/Project-Z/blob/master/ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.4.1**.
+
 ## Documentation
 
 - [Feature reference](https://github.com/hheiroww/Project-Z/blob/master/docs/FEATURES.md)
@@ -75,6 +83,10 @@ The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use 
 - [Third-party notices](https://github.com/hheiroww/Project-Z/blob/master/THIRD-PARTY-NOTICES.md)
 
 ## Current release
+
+**2026.11.4.1** keeps the desktop backdrop responsive while windows move and resize, reuses capture buffers, and exposes `DesktopBackdrop.RenderRevision` for applications that throttle idle drawing. [Desktop blur and host integration](https://github.com/hheiroww/Project-Z/blob/master/docs/DESKTOP-BLUR.md).
+
+**2026.10.26.1** preserves antialiasing when reactive native effects activate, and fixes shutdown after the game host releases its window. The shared scene manager detaches from its original window safely, including repeated disposal. Applications receive the shutdown fix when rebuilt with this framework; no application-specific exception suppression is required. DX11 and DX12 GPU checks cover hover transitions and cleanup after the run loop.
 
 **2026.10.28.1** makes native dropdowns reuse their row tree, batch layout and update only changed highlights. Configure popup-only blur with `DropDownBackgroundBlur` (unset inherits `BackgroundBlur`; zero disables it), including native XAML style setters. Foreground text stays sharp. The DX11 offscreen probe passed 34 behavior/pixel checks; a 160-entry warm reopen measured 27.43 ms to 3.72 ms p50 at unchanged effective AA/AF. [API and measurement details](https://github.com/hheiroww/Project-Z/blob/master/tests/FloatingControls/README.md).
 

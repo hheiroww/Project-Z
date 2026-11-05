@@ -56,6 +56,11 @@ Namespace [Shared].Drawing
         Public ReadOnly Property DesktopBackdrop As Global.ProjectZ.Shared.Composition.DesktopBackdrop
         Private desktopPrompt As Global.ProjectZ.Shared.Composition.DesktopBackdropSetupPrompt
         Private desktopPromptRequest As (State As Global.ProjectZ.Shared.Composition.DesktopBackdropState, Message As String)?
+        Private lastBackdropRevision As Long
+#If WINDOWS Then
+        Private desktopWindowLoop As Global.ProjectZ.Windows.Composition.DesktopBackdropWindowLoop
+        Private desktopWindowLoopHandle As IntPtr
+#End If
         Public Property Sender As Game
         ''' <summary>
         ''' Uses input injected by an embedding host's real child HWND instead
@@ -71,6 +76,9 @@ Namespace [Shared].Drawing
 
         ''' <summary>Keeps the DX backbuffer/viewport matched to the native client area.</summary>
         Public Property AutoResizeViewport As Boolean = True
+        ''' <summary>Optional UI-thread guard for hosts that cannot accept a modal Game.Tick
+        ''' while their own update, drawing or presentation code is in progress.</summary>
+        Public Property CanRunModalFrame As Func(Of Boolean)
         Public Property MinimumViewportSize As New Point(320, 200)
 
         Public ReadOnly Property ViewportScale As Vector2
@@ -1226,6 +1234,31 @@ Namespace [Shared].Drawing
 
         Public Sub Tick(gameTime As GameTime)
             DesktopBackdrop?.Update()
+#If WINDOWS Then
+            Dim backdropHandle = If(DesktopBackdrop Is Nothing, IntPtr.Zero, DesktopBackdrop.NativeWindowHandle)
+            If backdropHandle <> desktopWindowLoopHandle Then
+                desktopWindowLoop?.Dispose()
+                desktopWindowLoop = Nothing
+                desktopWindowLoopHandle = backdropHandle
+                If backdropHandle <> IntPtr.Zero Then
+                    Dim existingFramePump As Boolean = False
+#If PROJECTZ_DIRECTX11 Then
+                    ' MonoGame pumps only its own WinForms HWND. A separate
+                    ' layered/embedded host still needs its own modal timer.
+                    existingFramePump = backdropHandle = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+#End If
+                    desktopWindowLoop = New Global.ProjectZ.Windows.Composition.DesktopBackdropWindowLoop(backdropHandle,
+                        Function() Not disposedValue AndAlso DesktopBackdrop.Settings.Enabled AndAlso ActiveScene IsNot Nothing AndAlso ActiveScene.UseDesktopBackdrop AndAlso
+                            (CanRunModalFrame Is Nothing OrElse CanRunModalFrame.Invoke()),
+                        Sub() Sender.Tick(), existingFramePump, frameOwner:=Sender)
+                End If
+            End If
+#End If
+            If ActiveScene IsNot Nothing AndAlso ActiveScene.UseDesktopBackdrop AndAlso DesktopBackdrop IsNot Nothing AndAlso
+                DesktopBackdrop.RenderRevision <> lastBackdropRevision Then
+                lastBackdropRevision = DesktopBackdrop.RenderRevision
+                ActiveScene.RequestRender()
+            End If
             If viewportResizePending Then
                 viewportResizePending = False
                 ApplyPendingViewportResize()
@@ -1389,6 +1422,10 @@ Namespace [Shared].Drawing
             If Not disposedValue Then
                 If disposing Then
                     CancelTouchInput()
+#If WINDOWS Then
+                    desktopWindowLoop?.Dispose()
+                    desktopWindowLoop = Nothing
+#End If
                     DesktopBackdrop?.Dispose()
                     desktopPrompt?.Dispose()
                     If subscribedWindow IsNot Nothing Then

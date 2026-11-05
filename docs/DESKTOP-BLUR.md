@@ -8,7 +8,7 @@ window are disabled. Window chrome still uses the operating system.
 var backdrop = sceneManager.DesktopBackdrop;
 backdrop.Settings.Enabled = true;
 backdrop.Settings.BlurRadius = 20; // Gaussian standard deviation in desktop logical pixels
-backdrop.Settings.CaptureFramesPerSecond = 30;
+backdrop.Settings.CaptureFramesPerSecond = 60; // Default stationary cadence
 backdrop.Settings.Saturation = 1.05f;
 backdrop.Settings.NoiseOpacity = 0.006f;
 scene.BackgroundColor = new Color(12, 16, 20) * 0.45f; // Background-only tint; controls stay sharp
@@ -28,6 +28,32 @@ Captured desktop pixels remain in bounded memory buffers. Project-Z neither
 writes screenshots nor transmits them. Capture runs away from rendering, with
 one outstanding capture operation per host. `State`, `StatusMessage`,
 `CapturedFrameCount` and `LastCaptureMilliseconds` expose readiness and timing.
+
+Movement, resizing and DPI changes bypass the stationary capture interval. A
+bounded overscan region keeps the cached desktop anchored while the next read
+finishes, and quantized buffers avoid reallocating every pixel of a resize.
+Completed reads are also consumed immediately before drawing. Each host retains
+at most one pending read; repeated movement coalesces to the latest bounds.
+
+`DesktopBackdrop.RenderRevision` changes when an uploaded frame, host geometry or
+material setting needs presentation. `SceneManager.Tick` forwards those changes
+to the active scene's `RenderRevision` when `UseDesktopBackdrop` is enabled.
+Applications with their own idle rendering or native alpha-surface presentation
+gates must observe these revisions for both drawing and presenting. Record the
+revision before drawing/presenting so a newer change remains pending. Continue
+ticking the manager while idle; the shader cannot refresh a frame the host does
+not present.
+
+On Windows, native caption and edge dragging keep the full game tick and
+presentation path running on the owning UI thread. DX11 retains MonoGame's
+existing resize-loop timer; the DX12 and Windows OpenGL hosts use a guarded
+timer for the duration of the native move/resize loop.
+Separate native presentation HWNDs receive this pump on all Windows backends.
+Hosts sharing a game share its modal dispatch guard. Applications with their own
+rendering or device-state critical sections can set
+`SceneManager.CanRunModalFrame` to a UI-thread predicate that rejects a nested
+frame during those sections; the library cannot detect arbitrary application
+code outside its own calls.
 
 ## Platform behavior
 

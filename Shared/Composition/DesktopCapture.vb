@@ -26,7 +26,8 @@ Namespace [Shared].Composition
         Public Property Enabled As Boolean
         ''' <summary>Gaussian standard deviation in desktop logical pixels.</summary>
         Public Property BlurRadius As Single = 20
-        Public Property CaptureFramesPerSecond As Integer = 30
+        ''' <summary>Stationary capture cadence. Host movement and resizing request a frame immediately.</summary>
+        Public Property CaptureFramesPerSecond As Integer = 60
         Public Property Saturation As Single = 1.05F
         Public Property NoiseOpacity As Single = 0.006F
         Public Property Tint As Color = Color.Transparent

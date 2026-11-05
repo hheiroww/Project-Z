@@ -75,6 +75,7 @@ public sealed class NativeWindowSurface : IDisposable
         int profiledTicks;
         bool forceFrame;
         long renderedRevision;
+        long renderedBackdropRevision;
         long nextIdleFrame;
         public Scene SurfaceScene { get; private set; } = null!;
         public int FrameCount { get; private set; }
@@ -123,18 +124,25 @@ public sealed class NativeWindowSurface : IDisposable
             // frame while imported UI is unchanged. Periodic refresh preserves
             // native carets and controls that draw from elapsed time.
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (!forceFrame && FrameCount > 0 && SurfaceScene.RenderRevision == renderedRevision && now < nextIdleFrame) return false;
+            bool backdropChanged = SurfaceScene.UseDesktopBackdrop && manager.DesktopBackdrop.Settings.Enabled &&
+                manager.DesktopBackdrop.RenderRevision != renderedBackdropRevision;
+            if (!forceFrame && !backdropChanged && FrameCount > 0 && SurfaceScene.RenderRevision == renderedRevision && now < nextIdleFrame) return false;
             return base.BeginDraw();
         }
         protected override void Draw(GameTime time)
         {
             var started = profilePath == null ? 0 : System.Diagnostics.Stopwatch.GetTimestamp();
+            var sceneRevision = SurfaceScene.RenderRevision;
+            var backdropRevision = manager.DesktopBackdrop.RenderRevision;
             var size = GraphicsDevice.PresentationParameters;
             if (frame == null || frame.Width != size.BackBufferWidth || frame.Height != size.BackBufferHeight) { frame?.Dispose(); frame = new(GraphicsDevice, size.BackBufferWidth, size.BackBufferHeight, false, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents); }
             GraphicsDevice.SetRenderTarget(frame); SurfaceScene.Draw(time); GraphicsDevice.SetRenderTarget(null);
             presentation.Begin(SpriteSortMode.Immediate, BlendState.Opaque); presentation.Draw(frame, new Rectangle(0, 0, frame.Width, frame.Height), Color.White); presentation.End();
             FrameCount++; base.Draw(time);
-            renderedRevision = SurfaceScene.RenderRevision;
+            // Draw can consume another capture or otherwise invalidate the scene.
+            // Acknowledge only the revision this presentation started with.
+            renderedRevision = sceneRevision;
+            renderedBackdropRevision = backdropRevision;
             nextIdleFrame = System.Diagnostics.Stopwatch.GetTimestamp() + System.Diagnostics.Stopwatch.Frequency / 4;
             if (started != 0) lastDrawMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
         }

@@ -11,7 +11,7 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 [![NuGet](https://img.shields.io/nuget/v/ProjectZ?color=21c982&logo=nuget)](https://www.nuget.org/packages/ProjectZ)
 [![Build](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml/badge.svg)](https://github.com/hheiroww/Project-Z/actions/workflows/dotnet.yml)
 
-[Get started](#get-started) Â· [See it in action](#heirowsnap-built-with-project-z) Â· [Documentation](#documentation) Â· [Visual Studio templates](ProjectTemplate/VS2026/README.md)
+[Get started](#get-started) · [See it in action](#heirowsnap-built-with-project-z) · [Documentation](#documentation) · [Visual Studio templates](ProjectTemplate/VS2026/README.md)
 
 ![Current heirowSnap gallery and Graphics settings with vibrant native DWM blur over a colorful desktop](Images/showcase/heirowsnap-glass.png)
 
@@ -22,10 +22,10 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.2.2
+dotnet add package ProjectZ --version 2026.11.4.1
 ```
 
-For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File â†’ New â†’ Project**.
+For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
 
 Install the single template extension from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026).
 
@@ -41,7 +41,7 @@ A native file gallery and Graphics panel share the same transparent theme. Watch
 
 ![heirowSnap in action: gallery scrolling, native Graphics settings and colorful DWM glass](Images/showcase/heirowsnap-in-action.gif)
 
-Captured from the installed **26.10.64** app with an offline profile, staged sample images, **16x SSAA** and **anisotropic 16x** filtering. [Full-size gallery](Images/showcase/heirowsnap-gallery.png) Â· [Capture details](Images/showcase/README.md).
+Captured from the installed **26.10.64** app with an offline profile, staged sample images, **16x SSAA** and **anisotropic 16x** filtering. [Full-size gallery](Images/showcase/heirowsnap-gallery.png) · [Capture details](Images/showcase/README.md).
 
 ## What you can build
 
@@ -60,7 +60,7 @@ The framework package includes native XAML code generation, the internal model i
 
 Keep your markup, resources and C# or VB code together. Generate native scenes during the build, or import supported views explicitly. Existing manual ports can keep conversion disabled; original sources remain editable.
 
-[Native scene setup and examples](docs/BUILD-TIME-XAML.md) Â· [Build-time XAML conversion](docs/BUILD-TIME-XAML.md) Â· [Implementation guide](docs/GETTING-STARTED.md)
+[Native scene setup and examples](docs/BUILD-TIME-XAML.md) · [Build-time XAML conversion](docs/BUILD-TIME-XAML.md) · [Implementation guide](docs/GETTING-STARTED.md)
 
 ## Build from source
 
@@ -71,7 +71,7 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:UseLocalSocketJack=false
 
 The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use `OpenGL` for the OpenGL backend. [Examples and solution projects](docs/GETTING-STARTED.md#explore-the-solution).
 
-For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.2.2**.
+For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.4.1**.
 
 ## Documentation
 
@@ -84,11 +84,13 @@ For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templ
 
 ## Current release
 
+**2026.11.4.1** keeps the desktop backdrop responsive while windows move and resize, reuses capture buffers, and exposes `DesktopBackdrop.RenderRevision` for applications that throttle idle drawing. [Desktop blur and host integration](docs/DESKTOP-BLUR.md).
+
 **2026.10.26.1** preserves antialiasing when reactive native effects activate, and fixes shutdown after the game host releases its window. The shared scene manager detaches from its original window safely, including repeated disposal. Applications receive the shutdown fix when rebuilt with this framework; no application-specific exception suppression is required. DX11 and DX12 GPU checks cover hover transitions and cleanup after the run loop.
 
 **2026.10.28.1** makes native dropdowns reuse their row tree, batch layout and update only changed highlights. Configure popup-only blur with `DropDownBackgroundBlur` (unset inherits `BackgroundBlur`; zero disables it), including native XAML style setters. Foreground text stays sharp. The DX11 offscreen probe passed 34 behavior/pixel checks; a 160-entry warm reopen measured 27.43 ms to 3.72 ms p50 at unchanged effective AA/AF. [API and measurement details](https://github.com/hheiroww/Project-Z/blob/master/tests/FloatingControls/README.md).
 
-**2026.10.25.2** makes **Project Properties â†’ Project-Z â†’ Rendering quality** apply to native `Game`/`SceneManager` applications, including both desktop and XAML templates. The default **4x AA** and **16x anisotropic filtering** take effect without quality assignments in application code or generated WPF startup. Explicit runtime quality changes remain supported. Existing DX12 apps can update their `ProjectZFrameworkVersion` pin; DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime` assemblies from the new template. [Graphics quality](docs/GRAPHICS_QUALITY.md) Â· [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
+**2026.10.25.2** makes **Project Properties → Project-Z → Rendering quality** apply to native `Game`/`SceneManager` applications, including both desktop and XAML templates. The default **4x AA** and **16x anisotropic filtering** take effect without quality assignments in application code or generated WPF startup. Explicit runtime quality changes remain supported. Existing DX12 apps can update their `ProjectZFrameworkVersion` pin; DX11/OpenGL apps also need the matching updated `ProjectZ/Runtime` assemblies from the new template. [Graphics quality](docs/GRAPHICS_QUALITY.md) · [Package versions](https://www.nuget.org/packages/ProjectZ#versions-body-tab).
 
 ## Support
 
