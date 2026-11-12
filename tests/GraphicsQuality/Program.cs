@@ -160,8 +160,9 @@ sealed class QualityProbe : Game
                 Require(pixels[clip.Center.Y * 640 + clip.Right - 5].R > 240 && pixels[clip.Center.Y * 640 + clip.Right + 5].R == 0, "scaled clipping retains logical bounds");
                 results.Add($"PASS {samples}x AA: effect placement, blur halo, parent clipping");
             }
-            HoverQualityChecks.Run(this, time, output, results);
             CheckMediaComposition(manager, time);
+            CheckMediaOpacity(manager, time);
+            HoverQualityChecks.Run(this, time, output, results);
             Require(SceneElement.RenderExceptionCount == 0, "no swallowed rendering errors");
             results.Add("PASS compiled free vector font at 10–48pt, fractional bold, AA 16x / AF 16x; zero font atlases or render errors");
             File.WriteAllLines(Path.Combine(output, "result.txt"), results);
@@ -243,5 +244,49 @@ sealed class QualityProbe : Game
                 results.Add($"PASS media composition effects={effects}, scale={scale}, target={useTarget}, samples={samples}");
             }
         }
+    }
+
+    void CheckMediaOpacity(SceneManager manager, GameTime time)
+    {
+        using var scene = new ProbeScene(manager) { EnableDesignTimeControls = false };
+        scene.Initialize(time);
+        var parser = new SceneXamlParser(scene);
+        scene.AddElement(parser.Parse("""
+            <Canvas xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="640" Height="300">
+              <Image x:Name="Still" Canvas.Left="10" Canvas.Top="10" Width="30" Height="30" Stretch="Fill"/>
+              <Canvas Canvas.Left="50" Canvas.Top="10" Width="30" Height="30" Opacity="0.5">
+                <MediaElement x:Name="Video" Width="30" Height="30" Stretch="Fill"/>
+              </Canvas>
+            </Canvas>
+            """));
+        using var png = new MemoryStream();
+        using var bitmap = new System.Drawing.Bitmap(1, 1);
+        bitmap.SetPixel(0, 0, System.Drawing.Color.FromArgb(128, 255, 0, 0));
+        bitmap.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+        png.Position = 0;
+        parser.FindName<ImageElement>("Still").Load(png);
+        using var frame = new Texture2D(GraphicsDevice, 1, 1);
+        frame.SetData(new[] { Color.Blue });
+        parser.FindName<MediaElement>("Video").PresentFrame(frame, TimeSpan.Zero);
+        scene.Tick(time);
+        using var target = new RenderTarget2D(GraphicsDevice, 640, 300);
+        GraphicsQuality.ForDevice(GraphicsDevice).AntiAliasingSamples = 0;
+        foreach (var background in new[] { Color.Black, Color.White })
+        {
+            scene.BackgroundColor = background;
+            GraphicsDevice.SetRenderTarget(target);
+            scene.Draw(time);
+            GraphicsDevice.SetRenderTarget(null);
+            var pixels = new Color[target.Width * target.Height];
+            target.GetData(pixels);
+            var still = pixels[20 * target.Width + 20];
+            var video = pixels[20 * target.Width + 60];
+            var foreground = background == Color.Black ? 128 : 255;
+            var other = background == Color.Black ? 0 : 127;
+            bool Near(int actual, int expected) => Math.Abs(actual - expected) <= 2;
+            Require(Near(still.R, foreground) && Near(still.G, other) && Near(still.B, other), $"translucent PNG blends over {background}: {still}");
+            Require(Near(video.B, foreground) && Near(video.R, other) && Near(video.G, other), $"video inherits opacity over {background}: {video}");
+        }
+        results.Add("PASS PNG alpha and inherited video opacity over dark and light backgrounds");
     }
 }

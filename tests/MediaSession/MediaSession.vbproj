@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <OptionStrict>On</OptionStrict>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Windows\Media\WindowsVideoSession.vb" Link="WindowsVideoSession.vb" />
+  </ItemGroup>
+</Project>

@@ -19,12 +19,44 @@ Namespace [Shared].Drawing.UI.Advanced
 
         Private _texture As Texture2D
         Private _ownsTexture As Boolean
+        Private stretchValue As ImageStretch = ImageStretch.Uniform
+        Private sourceRectangleValue As Rectangle?
+        Private tintValue As Color = Color.White
+        Private opacityMaskValue As Primitives.XamlGradientBrush
         Public Property Source As String = String.Empty
-        Public Property Stretch As ImageStretch = ImageStretch.Uniform
+        Public Property Stretch As ImageStretch
+            Get
+                Return stretchValue
+            End Get
+            Set(value As ImageStretch)
+                UpdateAppearance(stretchValue, value)
+            End Set
+        End Property
         ''' <summary>Optional pixel region for native sprite sheets and ImageBrush viewboxes.</summary>
         Public Property SourceRectangle As Rectangle?
-        Public Property Tint As Color = Color.White
+            Get
+                Return sourceRectangleValue
+            End Get
+            Set(value As Rectangle?)
+                UpdateAppearance(sourceRectangleValue, value)
+            End Set
+        End Property
+        Public Property Tint As Color
+            Get
+                Return tintValue
+            End Get
+            Set(value As Color)
+                UpdateAppearance(tintValue, value)
+            End Set
+        End Property
         Public Property OpacityMaskBrush As Primitives.XamlGradientBrush
+            Get
+                Return opacityMaskValue
+            End Get
+            Set(value As Primitives.XamlGradientBrush)
+                UpdateAppearance(opacityMaskValue, value)
+            End Set
+        End Property
         Public Property MaskCornerRadius As Func(Of Single)
         Public Property MaskCornerRadii As Func(Of Primitives.CornerRadii)
         Public Property MaskBackgroundColor As Func(Of Color)
@@ -41,6 +73,21 @@ Namespace [Shared].Drawing.UI.Advanced
         Protected Sub InvalidateTexturePixels()
             sourcePixelsDirty = True
             maskRevision = -1
+            Scene?.RequestRender()
+        End Sub
+
+        Private Sub UpdateAppearance(Of T)(ByRef field As T, value As T)
+            If EqualityComparer(Of T).Default.Equals(field, value) Then Return
+            field = value
+            Scene?.RequestRender()
+        End Sub
+
+        Private Sub ReplaceTexture(value As Texture2D, ownsTexture As Boolean)
+            If value Is _texture Then Return
+            If _ownsTexture Then _texture?.Dispose()
+            _texture = value
+            _ownsTexture = ownsTexture
+            InvalidateTexturePixels()
         End Sub
 
         Public Property Texture As Texture2D
@@ -48,9 +95,7 @@ Namespace [Shared].Drawing.UI.Advanced
                 Return _texture
             End Get
             Set(value As Texture2D)
-                If _ownsTexture AndAlso _texture IsNot Nothing Then _texture.Dispose()
-                _texture = value
-                _ownsTexture = False
+                ReplaceTexture(value, False)
             End Set
         End Property
 
@@ -69,11 +114,8 @@ Namespace [Shared].Drawing.UI.Advanced
         Public Sub Load(stream As Stream)
             ' Preserve the usable image if decode/upload fails. Disposing it
             ' first left a disposed texture installed after a failed reload.
-            Dim replacement = Texture2D.FromStream(Scene.graphicsDevice, stream)
-            If _ownsTexture AndAlso _texture IsNot Nothing Then _texture.Dispose()
-            _texture = replacement
-            _ownsTexture = True
-            InvalidateTexturePixels()
+            Dim replacement = Texture2D.FromStream(Scene.graphicsDevice, stream, DefaultColorProcessors.PremultiplyAlpha)
+            ReplaceTexture(replacement, True)
             If Size = Vector2.Zero Then Size = New Vector2(_texture.Width, _texture.Height)
         End Sub
 
@@ -85,13 +127,12 @@ Namespace [Shared].Drawing.UI.Advanced
             Catch
                 replacement.Dispose() : Throw
             End Try
-            If _ownsTexture AndAlso _texture IsNot Nothing Then _texture.Dispose()
-            _texture = replacement : _ownsTexture = True : InvalidateTexturePixels()
+            ReplaceTexture(replacement, True)
             If Size = Vector2.Zero Then Size = New Vector2(width, height)
         End Sub
 
         Protected Friend Overrides Sub Draw(gameTime As GameTime)
-            If _texture Is Nothing Then Return
+            If _texture Is Nothing OrElse _texture.IsDisposed OrElse Rectangle.Width <= 0 OrElse Rectangle.Height <= 0 Then Return
             Dim drawTexture = _texture
             Dim destination = Rectangle
             Dim sourceBounds = If(SourceRectangle, New Rectangle(0, 0, _texture.Width, _texture.Height))
@@ -130,6 +171,8 @@ Namespace [Shared].Drawing.UI.Advanced
                         source = New Rectangle(sourceBounds.X, sourceBounds.Y + (sourceBounds.Height - cropHeight) \ 2, sourceBounds.Width, cropHeight)
                     End If
             End Select
+
+            If destination.Width <= 0 OrElse destination.Height <= 0 Then Return
 
             If OpacityMaskBrush IsNot Nothing OrElse MaskBackgroundColor IsNot Nothing Then
                 If maskBrush Is Nothing Then
@@ -196,7 +239,7 @@ Namespace [Shared].Drawing.UI.Advanced
                 End If
                 drawTexture = maskedTexture
             End If
-            spriteBatch.Draw(drawTexture, destination, source, ApplyOpacity(Tint))
+            spriteBatch.Draw(drawTexture, destination, source, Color.FromNonPremultiplied(ApplyOpacity(Tint).ToVector4()))
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)

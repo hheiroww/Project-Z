@@ -216,9 +216,8 @@ Namespace [Shared].Drawing.UI.Input
         Public Property PlaybackController As IMediaPlaybackController
 #If WINDOWS Then
         Private session As Global.ProjectZ.Windows.Media.WindowsVideoSession
-#End If
         Private videoTexture As Texture2D
-        Private pendingSeek As TimeSpan
+#End If
         Private volumeValue As Double = 1
         Public Property Volume As Double
             Get
@@ -239,6 +238,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Sub Open(path As String)
             [Stop]()
+            Duration = TimeSpan.Zero
             Source = path
             Try
                 Dim extension = IO.Path.GetExtension(path).ToLowerInvariant()
@@ -247,12 +247,14 @@ Namespace [Shared].Drawing.UI.Input
                     RaiseEvent MediaOpened()
                 Else
                     If PlaybackController IsNot Nothing Then
+                        Texture = Nothing
                         PlaybackController.SetVolume(Volume)
                         PlaybackController.Open(path, DecodePixelSize)
                         Return
                     End If
 #If WINDOWS Then
                     session = New Global.ProjectZ.Windows.Media.WindowsVideoSession(path, Volume, DecodePixelSize)
+                    Texture = Nothing
 #Else
                     Throw New PlatformNotSupportedException("Built-in video decoding requires Windows. Use PresentFrame for an application-provided decoder.")
 #End If
@@ -264,11 +266,18 @@ Namespace [Shared].Drawing.UI.Input
 
         Public Sub PresentFrame(frame As Texture2D, timestamp As TimeSpan)
             If frame Is Nothing Then Throw New ArgumentNullException(NameOf(frame))
-            Texture = frame
-            InvalidateTexturePixels()
+            PublishFrame(frame)
             PlaybackPosition = timestamp
-            _PresentedFrameCount += 1
             If PlaybackController Is Nothing AndAlso Not IsPlaying Then IsPlaying = True
+        End Sub
+
+        Private Sub PublishFrame(frame As Texture2D)
+            If Texture Is frame Then
+                InvalidateTexturePixels()
+            Else
+                Texture = frame
+            End If
+            _PresentedFrameCount += 1
         End Sub
 
         Public Sub SignalOpened(duration As TimeSpan)
@@ -292,10 +301,11 @@ Namespace [Shared].Drawing.UI.Input
                 If String.IsNullOrWhiteSpace(Source) Then Return
                 Dim position = PlaybackPosition
                 Open(Source)
-                pendingSeek = position
+                If session Is Nothing Then Return
+                If position > TimeSpan.Zero Then Seek(position)
             End If
             IsPlaying = True
-            session?.Play()
+            session.Play()
 #Else
             RaiseEvent MediaFailed("Built-in video decoding requires Windows. Use PresentFrame for an application-provided decoder.")
 #End If
@@ -315,13 +325,11 @@ Namespace [Shared].Drawing.UI.Input
             session = Nothing
 #End If
             PlaybackPosition = TimeSpan.Zero
-            pendingSeek = TimeSpan.Zero
         End Sub
         Public Sub Seek(position As TimeSpan)
             position = TimeSpan.FromTicks(Math.Max(0, position.Ticks))
             If Duration > TimeSpan.Zero AndAlso position > Duration Then position = Duration
             PlaybackPosition = position
-            pendingSeek = position
             PlaybackController?.Seek(position)
 #If WINDOWS Then
             session?.Seek(position)
@@ -341,22 +349,33 @@ Namespace [Shared].Drawing.UI.Input
             End If
             If current.TakeOpened() Then
                 Duration = current.Duration
-                If pendingSeek > TimeSpan.Zero Then current.Seek(pendingSeek)
-                pendingSeek = TimeSpan.Zero
                 RaiseEvent MediaOpened()
+                If session IsNot current Then Return
             End If
             Dim frame = current.TakeFrame()
             If frame IsNot Nothing Then
                 Try
-                    If videoTexture Is Nothing OrElse videoTexture.Width <> frame.Width OrElse videoTexture.Height <> frame.Height Then
-                        Texture = Nothing
-                        videoTexture?.Dispose()
-                        videoTexture = New Texture2D(Scene.graphicsDevice, frame.Width, frame.Height)
+                    If videoTexture Is Nothing OrElse videoTexture.IsDisposed OrElse
+                       videoTexture.Width <> frame.Width OrElse videoTexture.Height <> frame.Height Then
+                        Dim replacement As New Texture2D(Scene.graphicsDevice, frame.Width, frame.Height)
+                        Try
+                            replacement.SetData(frame.Pixels)
+                        Catch
+                            replacement.Dispose()
+                            Throw
+                        End Try
+                        Dim prior = videoTexture
+                        videoTexture = replacement
+                        PublishFrame(replacement)
+                        prior?.Dispose()
+                    Else
+                        videoTexture.SetData(frame.Pixels)
+                        PublishFrame(videoTexture)
                     End If
-                    videoTexture.SetData(frame.Pixels)
-                    Texture = videoTexture
-                    InvalidateTexturePixels()
-                    _PresentedFrameCount += 1
+                Catch ex As Exception
+                    [Stop]()
+                    RaiseEvent MediaFailed(ex.Message)
+                    Return
                 Finally
                     current.ReturnFrame(frame)
                 End Try
@@ -377,7 +396,9 @@ Namespace [Shared].Drawing.UI.Input
             If disposing Then
                 [Stop]()
                 Texture = Nothing
+#If WINDOWS Then
                 videoTexture?.Dispose()
+#End If
             End If
             MyBase.Dispose(disposing)
         End Sub
