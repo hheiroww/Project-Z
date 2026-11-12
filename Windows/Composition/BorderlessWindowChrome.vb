@@ -7,6 +7,9 @@ Namespace Windows.Composition
         Inherits NativeWindow
         Implements IDisposable
 
+        Private Const NearestMonitor As UInteger = 2UI
+        Private Const NoSize As UInteger = 1UI
+        Private Const NoMove As UInteger = 2UI
         Private ReadOnly resizable As Boolean
         Private disposed As Boolean
 
@@ -44,6 +47,27 @@ Namespace Windows.Composition
 
         Protected Overrides Sub WndProc(ByRef message As Message)
             Select Case message.Msg
+                Case &H24 ' WM_GETMINMAXINFO: preserve the host's tracking limits.
+                    MyBase.WndProc(message)
+                    If resizable AndAlso message.LParam <> IntPtr.Zero Then
+                        Dim monitor As NativeMonitorInfo
+                        If TryMonitorInfo(MonitorFromWindow(Handle, NearestMonitor), monitor) Then
+                            Dim limits = Marshal.PtrToStructure(Of NativeMinMaxInfo)(message.LParam)
+                            limits.MaxPosition = New NativePoint With {.X = monitor.WorkArea.Left - monitor.Bounds.Left,
+                                                                       .Y = monitor.WorkArea.Top - monitor.Bounds.Top}
+                            limits.MaxSize = New NativePoint With {.X = monitor.WorkArea.Right - monitor.WorkArea.Left,
+                                                                   .Y = monitor.WorkArea.Bottom - monitor.WorkArea.Top}
+                            Marshal.StructureToPtr(limits, message.LParam, False)
+                            message.Result = IntPtr.Zero
+                        End If
+                    End If
+                    Return
+                Case &H46 ' WM_WINDOWPOSCHANGING
+                    MyBase.WndProc(message)
+                    If resizable AndAlso message.LParam <> IntPtr.Zero AndAlso IsZoomed(Handle) Then
+                        FitMaximizedWindow(message.LParam)
+                    End If
+                    Return
                 Case &H83 ' WM_NCCALCSIZE: keep the whole HWND as client pixels.
                     message.Result = IntPtr.Zero
                     Return
@@ -69,6 +93,34 @@ Namespace Windows.Composition
             MyBase.WndProc(message)
         End Sub
 
+        Private Shared Function TryMonitorInfo(monitor As IntPtr, ByRef info As NativeMonitorInfo) As Boolean
+            info.Size = CUInt(Marshal.SizeOf(Of NativeMonitorInfo)())
+            Return GetMonitorInfo(monitor, info)
+        End Function
+
+        Private Sub FitMaximizedWindow(positionPtr As IntPtr)
+            Dim position = Marshal.PtrToStructure(Of NativeWindowPosition)(positionPtr)
+            Dim canMove = (position.Flags And NoMove) = 0UI
+            Dim canSize = (position.Flags And NoSize) = 0UI
+            If Not canMove AndAlso Not canSize Then Return
+
+            Dim monitor = If(canMove, MonitorFromPoint(New NativePoint With {.X = position.X, .Y = position.Y}, NearestMonitor),
+                             MonitorFromWindow(Handle, NearestMonitor))
+            Dim info As NativeMonitorInfo
+            If Not TryMonitorInfo(monitor, info) Then Return
+            ' Windows may adjust WM_GETMINMAXINFO again for a secondary display.
+            ' Enforce the target monitor's actual work area after that translation.
+            If canMove Then
+                position.X = info.WorkArea.Left
+                position.Y = info.WorkArea.Top
+            End If
+            If canSize Then
+                position.Width = info.WorkArea.Right - info.WorkArea.Left
+                position.Height = info.WorkArea.Bottom - info.WorkArea.Top
+            End If
+            Marshal.StructureToPtr(position, positionPtr, False)
+        End Sub
+
         Public Sub Dispose() Implements IDisposable.Dispose
             If disposed Then Return
             disposed = True
@@ -76,9 +128,40 @@ Namespace Windows.Composition
         End Sub
 
         <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativePoint
+            Public X, Y As Integer
+        End Structure
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativeMinMaxInfo
+            Public Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize As NativePoint
+        End Structure
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativeWindowPosition
+            Public Window, InsertAfter As IntPtr
+            Public X, Y, Width, Height As Integer
+            Public Flags As UInteger
+        End Structure
+
+        <StructLayout(LayoutKind.Sequential)>
+        Private Structure NativeMonitorInfo
+            Public Size As UInteger
+            Public Bounds, WorkArea As NativeRect
+            Public Flags As UInteger
+        End Structure
+
+        <StructLayout(LayoutKind.Sequential)>
         Private Structure NativeRect
             Public Left, Top, Right, Bottom As Integer
         End Structure
+        <DllImport("user32.dll")> Private Shared Function MonitorFromWindow(hwnd As IntPtr, flags As UInteger) As IntPtr
+        End Function
+        <DllImport("user32.dll")> Private Shared Function MonitorFromPoint(point As NativePoint, flags As UInteger) As IntPtr
+        End Function
+        <DllImport("user32.dll", EntryPoint:="GetMonitorInfoW")>
+        Private Shared Function GetMonitorInfo(monitor As IntPtr, ByRef info As NativeMonitorInfo) As Boolean
+        End Function
         <DllImport("user32.dll")> Private Shared Function GetWindowRect(hwnd As IntPtr, ByRef rect As NativeRect) As Boolean
         End Function
         <DllImport("user32.dll")> Private Shared Function IsZoomed(hwnd As IntPtr) As Boolean
