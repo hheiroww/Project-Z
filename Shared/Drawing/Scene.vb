@@ -333,13 +333,15 @@ Namespace [Shared].Drawing
         Protected Friend Sub MouseWheel(delta As Integer, p As Point)
             RaiseEvent OnMouseWheel(delta, p)
             Dim element = PointToElement(p)
-            ' Wheel input bubbles so a ScrollViewer still receives it when its
-            ' content (text, images, buttons, etc.) is the topmost hit target.
+            ' Route through the hit element to the closest scrollable ancestor
+            ' that can still move in the requested direction.
             Dim current = element
             While current IsNot Nothing
                 If current.isEnabled Then
+                    Dim consumed = current.CanConsumeMouseWheel(delta)
                     current.OnMouseWheel(delta, p.Subtract(current.Position))
                     current.OnUserInvalidated()
+                    If consumed Then Exit While
                 End If
                 current = current.Parent
             End While

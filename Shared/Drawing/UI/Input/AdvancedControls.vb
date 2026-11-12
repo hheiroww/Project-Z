@@ -782,12 +782,18 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub HandleMouseWheel(delta As Integer, point As Point)
-            If delta = 0 Then Return
-            _scrollOffset -= (delta / 120.0F) * _itemHeight * 3
-            Dim maxOffset = Math.Max(0.0F, ContentHeight - (Size.Y - HeaderOffset))
-            _scrollOffset = Math.Max(0.0F, Math.Min(_scrollOffset, maxOffset))
+            If Not CanConsumeMouseWheel(delta) Then Return
+            _scrollOffset = Math.Clamp(_scrollOffset - delta / 120.0F * _itemHeight * 3, 0.0F, MaximumScrollOffset())
             Invalidate()
         End Sub
+
+        Protected Friend Overrides Function CanConsumeMouseWheel(delta As Integer) As Boolean
+            Return If(delta > 0, _scrollOffset > 0, delta < 0 AndAlso _scrollOffset < MaximumScrollOffset())
+        End Function
+
+        Private Function MaximumScrollOffset() As Single
+            Return Math.Max(0.0F, ContentHeight - Math.Max(0.0F, Size.Y - HeaderOffset))
+        End Function
 
         Public Sub AddItem(item As String)
             _items.Add(item)
@@ -1314,8 +1320,16 @@ Namespace [Shared].Drawing.UI.Input
         End Property
 
         Private Sub HandleMouseWheel(delta As Integer, p As Point)
-            ApplyWheelImpulse(delta)
+            If CanConsumeMouseWheel(delta) Then ApplyWheelImpulse(delta)
         End Sub
+
+        Protected Friend Overrides Function CanConsumeMouseWheel(delta As Integer) As Boolean
+            If delta = 0 OrElse Not (_canScrollVertically OrElse _canScrollHorizontally) Then Return False
+            Dim available = ScrollableSize
+            Dim offset = If(_canScrollVertically, _scrollOffset.Y, _scrollOffset.X)
+            Dim limit = If(_canScrollVertically, available.Y, available.X)
+            Return If(delta > 0, offset > 0, offset < limit)
+        End Function
 
         Public Sub ApplyWheelImpulse(delta As Integer)
             If delta = 0 Then Return

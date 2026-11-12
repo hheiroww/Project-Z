@@ -76,6 +76,7 @@ sealed class PhysicsProbe : Game
             GraphicsQuality.ForDevice(GraphicsDevice).AntiAliasingSamples = 0;
             CheckMotionAndParameters();
             CheckScrolling();
+            CheckNestedWheelRouting();
             CheckParticles();
             CheckPointerInput();
             CheckXamlAndNativePolling();
@@ -191,6 +192,41 @@ sealed class PhysicsProbe : Game
         System.Threading.Thread.Sleep(120);
         manager.InjectMouseLeftUp(55, 35, 320, 240);
         Require(child.Velocity == Vector2.Zero, "Stationary release discards stale fling velocity");
+    }
+
+    void CheckNestedWheelRouting()
+    {
+        using var scene = NewScene();
+        var outer = new ScrollViewer(scene) { Size = new Vector2(200, 140) };
+        var content = new RectangleElement(scene) { Size = new Vector2(180, 560) };
+        var inner = new ScrollViewer(scene) { Position = new Vector2(12, 8), Size = new Vector2(140, 90) };
+        var innerContent = new RectangleElement(scene) { Size = new Vector2(120, 360) };
+        var button = new ProjectZ.Shared.Drawing.UI.Input.Button(scene) { Position = new Vector2(12, 8), Size = new Vector2(80, 28), Text = "Wheel here" };
+        innerContent.Children.Add(button);
+        inner.Content = innerContent;
+        content.Children.Add(inner);
+        outer.Content = content;
+        scene.AddElement(outer);
+        Tick(scene, 0);
+        var point = button.Rectangle.Center;
+        Require(scene.PointToElement(point) == button, "Wheel test is above a child button");
+        manager.InjectMouseWheel(point.X, point.Y, 320, 240, -30);
+        Require(inner.ScrollVelocity.Y > 0 && outer.ScrollVelocity.Y == 0, "Precision wheel goes to the nearest panel over a button");
+        Tick(scene, 0.02);
+        Require(inner.ScrollOffset.Y > 0 && outer.ScrollOffset.Y == 0, "Parent remains still while the child scrolls");
+        inner.StopScrolling();
+        inner.ScrollTo(inner.ScrollableSize);
+        Tick(scene, 0);
+        point = inner.Rectangle.Center;
+        manager.InjectMouseWheel(point.X, point.Y, 320, 240, -120);
+        Require(inner.ScrollVelocity.Y == 0 && outer.ScrollVelocity.Y > 0, "Wheel continues to the parent at the child's bottom");
+        outer.StopScrolling();
+        outer.ScrollTo(new Vector2(0, 8));
+        inner.ScrollTo(Vector2.Zero);
+        Tick(scene, 0);
+        point = inner.Rectangle.Center;
+        manager.InjectMouseWheel(point.X, point.Y, 320, 240, 30);
+        Require(inner.ScrollVelocity.Y == 0 && outer.ScrollVelocity.Y < 0, "Reverse precision wheel continues at the child's top");
     }
 
     void CheckParticles()
