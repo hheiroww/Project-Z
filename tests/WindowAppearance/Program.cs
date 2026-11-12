@@ -5,9 +5,11 @@ using System.Text.Json;
 static class Program
 {
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wparam, IntPtr lparam);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
     static void Require(bool value, string message) { if (!value) throw new Exception(message); Console.WriteLine("PASS " + message); }
     [STAThread] static void Main()
     {
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         var settings = new WindowAppearanceSettings { BackgroundOpacity = -3 };
         Require(settings.BackgroundOpacity == 0, "opacity is clamped at zero");
         settings.BackgroundOpacity = 110;
@@ -38,5 +40,49 @@ static class Program
         appearance.Update(new WindowAppearanceSettings { BackgroundOpacity = 64, DwmBlurEnabled = false });
         Require(callbacks == before + 1 && secondOpacity == 37, "disposed windows are detached from shared changes");
         first.Hide(); second.Hide();
+
+        foreach (var monitor in Screen.AllScreens)
+        {
+            var work = monitor.WorkingArea;
+            using var window = new PassiveForm
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                ShowInTaskbar = false,
+                StartPosition = FormStartPosition.Manual,
+                Bounds = new Rectangle(work.Left + 30, work.Top + 40, 460, 300),
+                MinimumSize = new Size(300, 200)
+            };
+            using var binding = appearance.Bind(window.Handle);
+            window.Show();
+            Application.DoEvents();
+            var restoredBounds = window.Bounds;
+
+            window.WindowState = FormWindowState.Maximized;
+            Application.DoEvents();
+            var client = window.RectangleToScreen(window.ClientRectangle);
+            Require(window.WindowState == FormWindowState.Maximized && window.Bounds == work && client == work,
+                $"borderless maximize uses the work area on {monitor.DeviceName}: window={window.Bounds}, client={client}, work={work}");
+            Require(SetWindowPos(window.Handle, IntPtr.Zero, work.Left + 1, work.Top + 1, work.Width + 32, work.Height + 32, 0x14)
+                && window.RectangleToScreen(window.ClientRectangle) == work,
+                "an oversized native position request stays inside the work area while maximized");
+            window.WindowState = FormWindowState.Normal;
+            Application.DoEvents();
+            Require(window.Bounds == restoredBounds && window.MinimumSize == new Size(300, 200),
+                "restore returns to the original bounds and preserves the form's minimum size");
+        }
+    }
+
+    private sealed class PassiveForm : Form
+    {
+        protected override bool ShowWithoutActivation => true;
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var parameters = base.CreateParams;
+                parameters.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
+                return parameters;
+            }
+        }
     }
 }
