@@ -22,7 +22,7 @@ Build desktop tools, creative applications and game interfaces with a GPU-render
 Add the framework to a Windows .NET 8 or .NET 10 project:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.11.1
+dotnet add package ProjectZ --version 2026.11.11.2
 ```
 
 For a ready-to-run C# or Visual Basic starter, [download the Visual Studio 2026 templates](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix). Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**, install the VSIX, then search **Project-Z** in **File → New → Project**.
@@ -71,7 +71,7 @@ dotnet build "Project Z Windows.vbproj" -c Release -p:UseLocalSocketJack=false
 
 The DX11 fallback is available with `-p:ProjectZGraphicsBackend=DirectX11`; use `OpenGL` for the OpenGL backend. [Examples and solution projects](docs/GETTING-STARTED.md#explore-the-solution).
 
-For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.11.1**.
+For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templates (C# or VB) or the **Cross-Platform Scene XAML** template (C#). The [latest framework release](https://github.com/hheiroww/Project-Z/releases/latest) provides one [installable Visual Studio VSIX](ProjectTemplate/VS2026/README.md) containing all seven templates, pinned to **2026.11.11.2**.
 
 ## Documentation
 
@@ -83,6 +83,8 @@ For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templ
 - [Third-party notices](THIRD-PARTY-NOTICES.md)
 
 ## Current release
+
+**2026.11.11.2** keeps maximized borderless Windows apps inside the monitor work area and routes wheel input through nested scrollable panels.
 
 **2026.11.11.1** improves image blending, scene clipping, and Windows video pacing. Video displays a still on open and after a paused seek. Images and fresh video frames request redraws in scenes with on-demand presentation.
 
