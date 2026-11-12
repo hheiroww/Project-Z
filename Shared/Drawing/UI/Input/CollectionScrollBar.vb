@@ -33,6 +33,9 @@ Namespace [Shared].Drawing.UI.Input
         Public Sub Scroll(delta As Integer)
             If isEnabled AndAlso delta <> 0 Then FirstIndex -= Math.Sign(delta)
         End Sub
+        Protected Friend Overrides Function CanConsumeMouseWheel(delta As Integer) As Boolean
+            Return If(delta > 0, offset > 0, delta < 0 AndAlso offset < Math.Max(0, ItemCount - VisibleItems))
+        End Function
         Private Sub SetPosition(y As Single)
             Dim thumb = ThumbHeight(), span = Math.Max(1, Size.Y - thumb)
             FirstIndex = CInt(Math.Round(Math.Clamp((y - Position.Y - thumb / 2) / span, 0, 1) * Math.Max(0, ItemCount - VisibleItems)))

@@ -603,6 +603,11 @@ Namespace [Shared].Drawing.UI
             RaiseEvent MouseWheel(delta, p)
         End Sub
 
+        ''' <summary>Whether this element can scroll in the direction of the wheel delta.</summary>
+        Protected Friend Overridable Function CanConsumeMouseWheel(delta As Integer) As Boolean
+            Return False
+        End Function
+
         Protected Friend Sub OnMouseMove(currentPoint As Point, lastPoint As Point)
             If FilterImportedInput("MouseMove", currentPoint, lastPoint) Then Return
             RaiseEvent MouseMove(currentPoint, lastPoint)
