@@ -12,10 +12,10 @@
       <Event Name="Click" Action="{Parameter action}" When="element.Enabled" />
     </Element>
   </Factory>
-  <Button x:Name="CreateHeading" Factory="Button" Text="{Resource Heading}" Width="240" Height="30" Font="fixture_22" BackgroundBlur="12" DropDownBackgroundBlur="0" Click="{Parameter action}">
+  <Button x:Name="CreateHeading" Factory="Button" Text="{Resource Heading}" Width="240" Height="30" Font="fixture_22" BackgroundBlur="12" DropDownBackgroundBlur="0" Cursor="Arrow" Click="{Parameter action}">
     <Parameter Name="action" Type="Action" />
   </Button>
-  <Button x:Name="CreateInheritedBlur" Factory="Button" Text="Inherited" BackgroundBlur="24" DropDownBackgroundBlur="{x:Null}" Click="{Parameter action}">
+  <Button x:Name="CreateInheritedBlur" Factory="Button" Text="Inherited" BackgroundBlur="24" DropDownBackgroundBlur="{x:Null}" Cursor="{x:Null}" Click="{Parameter action}">
     <Parameter Name="action" Type="Action" />
   </Button>
   <Button x:Name="CreatePhysics" Factory="Button" Text="Physics" Click="{Parameter action}" RigidBody="true" FreeMove="true" CollisionEnabled="true" Weight="4.5" Bounce="0.35" Friction="0.2" FrictionType="Ice" PhysicsMotion="RenderTranslation" Gravity="0, 980" Velocity="120, -15" Velocity3D="1, 2, 3" Gravity3D="0, -9.81, 0" Position3D="-1, 0, 2" PhysicsSize3D="2, 3, 4">

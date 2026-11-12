@@ -135,6 +135,8 @@ Namespace [Shared].Drawing
             Public ReadOnly Messages As New System.Collections.Concurrent.ConcurrentQueue(Of (Id As Integer, Value As Integer, Flags As Long))
             Private ReadOnly capturePointer As Boolean
             Private leftPressed, rightPressed As Boolean
+            Private clientCursor As IntPtr
+            Private lastHitWasClient As Boolean = True
             Public ReadOnly Property PointerButtonsPressed As Boolean
                 Get
                     Return leftPressed OrElse rightPressed
@@ -144,7 +146,20 @@ Namespace [Shared].Drawing
                 Me.capturePointer = capturePointer
                 AssignHandle(handle)
             End Sub
+            Public Sub UpdateClientCursor(cursor As IntPtr)
+                If clientCursor = cursor Then Return
+                clientCursor = cursor
+                If clientCursor <> IntPtr.Zero AndAlso lastHitWasClient Then SetNativeCursor(clientCursor)
+            End Sub
             Protected Overrides Sub WndProc(ByRef m As System.Windows.Forms.Message)
+                If m.Msg = &H20 AndAlso m.WParam = Handle Then ' WM_SETCURSOR
+                    lastHitWasClient = (m.LParam.ToInt64() And &HFFFF) = 1 ' HTCLIENT
+                    If lastHitWasClient AndAlso clientCursor <> IntPtr.Zero Then
+                        SetNativeCursor(clientCursor)
+                        m.Result = New IntPtr(1)
+                        Return
+                    End If
+                End If
                 If capturePointer Then
                     Select Case m.Msg
                         Case &H201 : leftPressed = True
@@ -715,6 +730,50 @@ Namespace [Shared].Drawing
 
         <DllImport("user32.dll")>
         Private Shared Function IsIconic(hwnd As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32.dll")>
+        Private Shared Function WindowFromPoint(point As NativePoint) As IntPtr
+        End Function
+
+        <DllImport("user32.dll", EntryPoint:="SetCursor")>
+        Private Shared Function SetNativeCursor(cursor As IntPtr) As IntPtr
+        End Function
+
+        Private Sub UpdateNativeCursor()
+            Dim window = nativeKeyboard
+            If window Is Nothing OrElse window.Handle = IntPtr.Zero Then Return
+            Dim cursor As IntPtr = IntPtr.Zero
+            Dim scene = ActiveScene
+            If scene IsNot Nothing AndAlso Not UseExternalInput AndAlso Sender.IsMouseVisible AndAlso
+               Not scene.isCursorVisible AndAlso Not touchPointer.HasValue Then
+                Dim point As NativePoint
+                Dim bounds As NativeRect
+                Dim ownsCapture = GetNativeCapture() = window.Handle AndAlso scene.CapturedPointerElement IsNot Nothing
+                If GetCursorPos(point) AndAlso (ownsCapture OrElse WindowFromPoint(point) = window.Handle) AndAlso
+                   ScreenToClient(window.Handle, point) AndAlso GetClientRect(window.Handle, bounds) Then
+                    If ownsCapture OrElse (point.X >= 0 AndAlso point.Y >= 0 AndAlso point.X < bounds.Right AndAlso point.Y < bounds.Bottom) Then
+                        Dim viewportPoint = ClientToViewport(New Point(point.X, point.Y), bounds.Right, bounds.Bottom)
+                        cursor = NativeCursorFor(scene.ResolveCursor(viewportPoint)).Handle
+                    End If
+                End If
+            End If
+            window.UpdateClientCursor(cursor)
+        End Sub
+
+        Private Shared Function NativeCursorFor(cursor As SceneCursor) As System.Windows.Forms.Cursor
+            Select Case cursor
+                Case SceneCursor.Hand : Return System.Windows.Forms.Cursors.Hand
+                Case SceneCursor.IBeam : Return System.Windows.Forms.Cursors.IBeam
+                Case SceneCursor.SizeWE : Return System.Windows.Forms.Cursors.SizeWE
+                Case SceneCursor.SizeNS : Return System.Windows.Forms.Cursors.SizeNS
+                Case SceneCursor.SizeNWSE : Return System.Windows.Forms.Cursors.SizeNWSE
+                Case SceneCursor.SizeNESW : Return System.Windows.Forms.Cursors.SizeNESW
+                Case SceneCursor.SizeAll : Return System.Windows.Forms.Cursors.SizeAll
+                Case SceneCursor.Wait : Return System.Windows.Forms.Cursors.WaitCursor
+                Case SceneCursor.Cross : Return System.Windows.Forms.Cursors.Cross
+                Case Else : Return System.Windows.Forms.Cursors.Arrow
+            End Select
         End Function
 
         ' Windows-specific: Get actual titlebar and border sizes from System.Windows.Forms
@@ -1302,6 +1361,9 @@ Namespace [Shared].Drawing
                 End If
                 desktopPrompt?.Tick()
             End If
+#If WINDOWS Then
+            UpdateNativeCursor()
+#End If
         End Sub
 
 

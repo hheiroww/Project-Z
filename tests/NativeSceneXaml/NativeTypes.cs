@@ -11,3 +11,7 @@ namespace ProjectZ.Shared.Drawing.UI
 {
     enum PhysicsMotion { RenderTranslation, Position }
 }
+namespace ProjectZ.Shared.Drawing
+{
+    enum SceneCursor { Arrow, Hand, IBeam }
+}

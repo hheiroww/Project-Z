@@ -8,6 +8,7 @@ sealed class Control(View owner)
     public bool Enabled { get; set; } = true;
     public float BackgroundBlur { get; set; }
     public float? DropDownBackgroundBlur { get; set; }
+    public ProjectZ.Shared.Drawing.SceneCursor? CursorOverride { get; set; } = ProjectZ.Shared.Drawing.SceneCursor.Hand;
     public bool RigidBody { get; set; }
     public bool RidgidBody { get => RigidBody; set => RigidBody = value; }
     public bool FreeMove { get; set; }
@@ -40,6 +41,8 @@ partial class View
         if (control.BackgroundBlur != 12 || control.DropDownBackgroundBlur != 0) throw new Exception("Popup blur zero must override inherited background blur.");
         var inherited = CreateInheritedBlur(() => { });
         if (inherited.BackgroundBlur != 24 || inherited.DropDownBackgroundBlur != null) throw new Exception("Popup blur null fallback was lost in native XAML.");
+        if (control.CursorOverride != ProjectZ.Shared.Drawing.SceneCursor.Arrow || inherited.CursorOverride != null)
+            throw new Exception("Native XAML must preserve explicit Arrow and clearing a factory cursor override.");
         var physics = CreatePhysics(() => { });
         if (!physics.RigidBody || !physics.FreeMove || !physics.CollisionEnabled || physics.Weight != 4.5 || physics.Bounce != 0.35 || physics.Friction != 0.2)
             throw new Exception("Compiled markup lost physics flags or double-valued parameters.");

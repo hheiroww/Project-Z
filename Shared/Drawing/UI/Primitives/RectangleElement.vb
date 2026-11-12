@@ -167,42 +167,23 @@ Namespace [Shared].Drawing.UI.Primitives
         End Sub
 
         Private Sub RectangleElement_MouseMove(currentPoint As Point, lastPoint As Point) Handles Me.MouseMove
-            alignment(currentPoint, lastPoint)
+            If Scene Is Nothing OrElse Not Scene.isCursorVisible Then Return
+            Scene.ChangeCursorType(ResizeGripAt(currentPoint).GetValueOrDefault(CursorType.Default))
         End Sub
 
-        Private Sub alignment(currentPoint As Point, lastPoint As Point)
-            If isResizable = AlignmentType.Horizontal Then
-                If currentPoint.X >= Size.X - 4 Then
-                    EnableResizeCursor(AlignmentType.Horizontal, 1)
-                ElseIf currentPoint.X <= 4 Then
-                    EnableResizeCursor(AlignmentType.Horizontal, -1)
-                Else
-                    Scene.ChangeCursorType(CursorType.Default)
-                End If
-            ElseIf isResizable = AlignmentType.Vertical Then
-                If currentPoint.Y >= Size.Y - 4 Then
-                    EnableResizeCursor(AlignmentType.Vertical, 1)
-                ElseIf currentPoint.Y <= 4 Then
-                    EnableResizeCursor(AlignmentType.Vertical, -1)
-                End If
-            Else
-                Scene.ChangeCursorType(CursorType.Default)
-            End If
-        End Sub
-
-        Private Sub EnableResizeCursor(type As AlignmentType, location As Integer)
-            If location < 0 AndAlso type = AlignmentType.Horizontal Then
-                Scene.ChangeCursorType(CursorType.ResizeLeft)
-
-            ElseIf location < 0 AndAlso type = AlignmentType.Vertical Then
-                Scene.ChangeCursorType(CursorType.ResizeTop)
-            End If
-            If location > 0 AndAlso type = AlignmentType.Horizontal Then
-                Scene.ChangeCursorType(CursorType.ResizeRight)
-            ElseIf location > 0 AndAlso type = AlignmentType.Vertical Then
-                Scene.ChangeCursorType(CursorType.ResizeBottom)
-            End If
-        End Sub
+        Friend Function ResizeGripAt(point As Point) As CursorType?
+            If isResizable = AlignmentType.None Then Return Nothing
+            If point.X < 0 OrElse point.Y < 0 OrElse point.X >= Size.X OrElse point.Y >= Size.Y Then Return Nothing
+            Select Case isResizable
+                Case AlignmentType.Horizontal
+                    If point.X >= Size.X - 4 Then Return CursorType.ResizeRight
+                    If point.X <= 4 Then Return CursorType.ResizeLeft
+                Case AlignmentType.Vertical
+                    If point.Y >= Size.Y - 4 Then Return CursorType.ResizeBottom
+                    If point.Y <= 4 Then Return CursorType.ResizeTop
+            End Select
+            Return Nothing
+        End Function
 
         Private Sub RectangleElement_Loaded() Handles Me.Loaded
 

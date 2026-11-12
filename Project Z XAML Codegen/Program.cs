@@ -36,7 +36,7 @@ internal static class Program
         "IsEnabled", "IsHitTestVisible", "ClipToBounds", "HorizontalAlignment", "VerticalAlignment", "ZIndex",
         "Background", "Foreground", "Fill", "Stroke", "StrokeThickness", "CornerRadius", "FontSize",
         "FontFamily", "FontWeight", "FontStyle", "Text", "Content", "TextWrapping", "TextTrimming",
-        "TextAlignment", "Source", "Stretch", "ToolTip", "IsChecked", "Value", "Minimum", "Maximum",
+        "TextAlignment", "Source", "Stretch", "ToolTip", "Cursor", "IsChecked", "Value", "Minimum", "Maximum",
         "Orientation", "ItemsSource", "SelectedIndex", "Header", "IsExpanded", "AutoSizeWidthOnTextOverflow",
         "CanContentScroll", "HorizontalScrollBarVisibility", "VerticalScrollBarVisibility", "AllowDrop",
         "ResizeMode", "WindowStyle", "Topmost", "ShowInTaskbar", "Title", "Icon", "AllowsTransparency",

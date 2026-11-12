@@ -79,6 +79,7 @@ sealed class PhysicsProbe : Game
             CheckNestedWheelRouting();
             CheckParticles();
             CheckPointerInput();
+            CheckCursorResolution();
             CheckXamlAndNativePolling();
             Require(SceneElement.RenderExceptionCount == 0, "No swallowed render errors");
             File.WriteAllLines(Path.Combine(output, "result.txt"), results);
@@ -192,6 +193,76 @@ sealed class PhysicsProbe : Game
         System.Threading.Thread.Sleep(120);
         manager.InjectMouseLeftUp(55, 35, 320, 240);
         Require(child.Velocity == Vector2.Zero, "Stationary release discards stale fling velocity");
+    }
+
+    void CheckCursorResolution()
+    {
+        using var scene = NewScene();
+        var parser = new SceneXamlParser(scene);
+        var root = parser.Parse("""
+            <Canvas xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="320" Height="240">
+              <Button x:Name="Action" X="10" Y="10" Width="90" Height="24" Text="Action" />
+              <Button x:Name="Disabled" X="10" Y="10" Width="90" Height="24" Text="Disabled" IsEnabled="False" Cursor="Hand" />
+              <TextBox x:Name="Editor" X="10" Y="45" Width="90" Height="24" Text="Editable" />
+              <TextBlock x:Name="Selectable" X="10" Y="85" Width="100" Height="24" Text="Selectable" IsTextSelectionEnabled="True" />
+              <TextBlock x:Name="Plain" X="10" Y="125" Width="90" Height="24" Text="Ordinary" />
+              <Rectangle x:Name="ExplicitParent" X="140" Y="10" Width="75" Height="55" Cursor="Arrow" ClipToBounds="True">
+                <Button x:Name="Nested" X="6" Y="5" Width="98" Height="22" Text="Nested" />
+              </Rectangle>
+            </Canvas>
+            """);
+        var action = parser.FindName<SceneElement>("Action");
+        var disabled = parser.FindName<SceneElement>("Disabled");
+        var editor = parser.FindName<SceneElement>("Editor");
+        var parent = parser.FindName<SceneElement>("ExplicitParent");
+        var nested = parser.FindName<SceneElement>("Nested");
+        var horizontal = new RectangleElement(scene) { Position = new(10, 160), Size = new(85, 20), isResizable = AlignmentType.Horizontal };
+        var vertical = new RectangleElement(scene) { Position = new(110, 160), Size = new(20, 65), isResizable = AlignmentType.Vertical };
+        scene.AddElement(root);
+        scene.AddElement(horizontal);
+        scene.AddElement(vertical);
+        Tick(scene, 0);
+        // The probe skips Draw's layout pass. Set scene coordinates before testing the nested clip.
+        nested.Position = parent.Position + new Vector2(6, 5);
+
+        var actionPoint = action.Rectangle.Center;
+        Require(scene.PointToElement(actionPoint) == action && scene.ResolveCursor(actionPoint) == SceneCursor.Arrow, "A disabled surface stays Arrow without changing click hit-testing");
+        disabled.isVisible = false;
+        Require(scene.ResolveCursor(actionPoint) == SceneCursor.Hand, "An actionable button and its bypassed label use Hand");
+        Require(scene.ResolveCursor(editor.Rectangle.Center) == SceneCursor.IBeam, "Editable text uses IBeam");
+        Require(scene.ResolveCursor(parser.FindName<SceneElement>("Selectable").Rectangle.Center) == SceneCursor.IBeam, "Selectable display text uses IBeam");
+        Require(scene.ResolveCursor(parser.FindName<SceneElement>("Plain").Rectangle.Center) == SceneCursor.Arrow, "Ordinary display text uses Arrow");
+
+        var nestedPoint = new Point(nested.Rectangle.Left + 8, nested.Rectangle.Center.Y);
+        Require(scene.PointToElement(nestedPoint) == nested && parent.CursorOverride == SceneCursor.Arrow &&
+            scene.ResolveCursor(nestedPoint) == SceneCursor.Arrow, "An explicit ancestor Arrow wins over the nested button's inferred Hand");
+        nested.CursorOverride = SceneCursor.Cross;
+        Require(scene.ResolveCursor(nestedPoint) == SceneCursor.Cross, "The nearest explicit override wins");
+        Require(scene.ResolveCursor(new(parent.Rectangle.Right + 8, nestedPoint.Y)) == SceneCursor.Arrow, "A clipped-off child cannot set its cursor");
+        parent.isEnabled = false;
+        Require(scene.ResolveCursor(nestedPoint) == SceneCursor.Arrow, "Disabled ancestors suppress cursor overrides");
+        parent.isEnabled = true;
+
+        var popup = new Popup(scene) { Position = action.Position, Size = action.Size, IsOpen = true, CursorOverride = SceneCursor.Wait };
+        scene.AddElement(popup);
+        Tick(scene, 0);
+        Require(scene.ResolveCursor(actionPoint) == SceneCursor.Wait, "The topmost popup takes cursor ownership");
+        scene.CapturePointer(editor);
+        Require(scene.ResolveCursor(actionPoint) == SceneCursor.IBeam && scene.ResolveCursor(new(-5, -5)) == SceneCursor.IBeam, "Capture keeps the text cursor across a popup and outside scene geometry");
+        scene.ReleasePointerCapture(editor);
+        Require(scene.ResolveCursor(actionPoint) == SceneCursor.Wait, "Releasing capture restores the popup cursor");
+
+        var edge = new Point(horizontal.Rectangle.Left + 1, horizontal.Rectangle.Center.Y);
+        Require(scene.ResolveCursor(edge) == SceneCursor.SizeWE &&
+            scene.ResolveCursor(new(horizontal.Rectangle.Right - 1, edge.Y)) == SceneCursor.SizeWE &&
+            scene.ResolveCursor(horizontal.Rectangle.Center) == SceneCursor.Arrow, "Horizontal resize uses only the existing edge grips");
+        Require(scene.ResolveCursor(new(vertical.Rectangle.Center.X, vertical.Rectangle.Top + 1)) == SceneCursor.SizeNS &&
+            scene.ResolveCursor(new(vertical.Rectangle.Center.X, vertical.Rectangle.Bottom - 1)) == SceneCursor.SizeNS &&
+            scene.ResolveCursor(vertical.Rectangle.Center) == SceneCursor.Arrow, "Vertical resize uses only the existing edge grips");
+        manager.InjectMouseMove(edge.X, edge.Y, 320, 240);
+        scene.CapturePointer(horizontal);
+        Require(scene.ResolveCursor(actionPoint) == SceneCursor.SizeWE, "Captured resize keeps its axis while dragging away from the grip");
+        scene.ReleasePointerCapture(horizontal);
     }
 
     void CheckNestedWheelRouting()

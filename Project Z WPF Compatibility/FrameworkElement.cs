@@ -255,6 +255,7 @@ public partial class UIElement : DependencyObject, IInputElement, IDisposable
     internal void ReplaceNative(SceneElement native)
     {
         foreach (var action in detach) action(); detach.Clear(); adapters.Remove(NativeElement);
+        native.CursorOverride ??= NativeElement.CursorOverride;
         NativeElement.Dispose(); NativeElement = native; AttachNative();
     }
     protected void Listen(string name, Action<object?[]> callback)
@@ -377,7 +378,16 @@ public class FrameworkElement : UIElement
     Threading.DispatcherTimer? toolTipTimer;
     public object? ToolTip { get => toolTip; set => toolTip = value; }
     public Controls.ContextMenu? ContextMenu { get; set; }
-    public Input.Cursor? Cursor { get; set; }
+    public Input.Cursor? Cursor
+    {
+        get => Input.Cursors.FromShape(NativeElement.CursorOverride);
+        set
+        {
+            if (NativeElement.CursorOverride == value?.Shape) return;
+            NativeElement.CursorOverride = value?.Shape;
+            Changed(nameof(Cursor));
+        }
+    }
     bool hasContext;
     internal bool WidthSpecified, HeightSpecified, HorizontalAlignmentSpecified, VerticalAlignmentSpecified;
     public object? DataContext { get => hasContext ? GetValue(DataContextProperty) : Parent?.DataContext; set => SetValue(DataContextProperty, value); }
@@ -395,8 +405,8 @@ public class FrameworkElement : UIElement
     protected virtual void OnRender(Media.DrawingContext drawingContext) { }
     protected internal FrameworkElement(SceneElement native) : base(native)
     {
-        MouseEnter += (_, _) => { if (Cursor != null) System.Windows.Forms.Cursor.Current = Cursor.Native; if (ToolTip != null) { toolTipTimer ??= new() { Interval = TimeSpan.FromMilliseconds(500) }; toolTipTimer.Tick -= ShowToolTip; toolTipTimer.Tick += ShowToolTip; toolTipTimer.Start(); } };
-        MouseLeave += (_, _) => { toolTipTimer?.Stop(); if (visibleToolTip != null) visibleToolTip.IsOpen = false; System.Windows.Forms.Cursor.Current = System.Windows.Forms.Cursors.Default; };
+        MouseEnter += (_, _) => { if (ToolTip != null) { toolTipTimer ??= new() { Interval = TimeSpan.FromMilliseconds(500) }; toolTipTimer.Tick -= ShowToolTip; toolTipTimer.Tick += ShowToolTip; toolTipTimer.Start(); } };
+        MouseLeave += (_, _) => { toolTipTimer?.Stop(); if (visibleToolTip != null) visibleToolTip.IsOpen = false; };
     }
     void ShowToolTip(object? sender, EventArgs args) { toolTipTimer?.Stop(); if (ToolTip == null || IsDisposed) return; visibleToolTip = ToolTip as Controls.ToolTip ?? new Controls.ToolTip { Content = ToolTip }; visibleToolTip.Show(new(NativeElement.Position.X, NativeElement.Position.Y + NativeElement.Size.Y + 4)); }
     protected override void SyncMarkup(string property, object? value) => MarkupSetter?.Invoke(property, value);
