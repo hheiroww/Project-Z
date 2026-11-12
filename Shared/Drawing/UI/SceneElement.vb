@@ -255,6 +255,9 @@ Namespace [Shared].Drawing.UI
 
         Public Property isEnabled As Boolean = True
 
+        ''' <summary>Overrides cursor inference for this element and its descendants. Nothing uses context; Arrow is explicit.</summary>
+        Public Property CursorOverride As SceneCursor?
+
         Public Property isSelected As Boolean
             Get
                 Return _isSelected

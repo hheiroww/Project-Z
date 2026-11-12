@@ -1013,6 +1013,12 @@ End Function
                 element.isMouseBypassEnabled = Not GetAttributeBoolean(xmlElement, "IsHitTestVisible", True)
             End If
 
+            If xmlElement.HasAttribute("Cursor") Then
+                Dim cursor As SceneCursor
+                element.CursorOverride = If([Enum].TryParse(xmlElement.GetAttribute("Cursor"), True, cursor) AndAlso [Enum].IsDefined(cursor),
+                                            CType(cursor, SceneCursor?), Nothing)
+            End If
+
             ' WPF panels and images commonly rely on ClipToBounds for masks.
             If xmlElement.HasAttribute("ClipToBounds") Then
                 element.Clip = GetAttributeBoolean(xmlElement, "ClipToBounds", False)

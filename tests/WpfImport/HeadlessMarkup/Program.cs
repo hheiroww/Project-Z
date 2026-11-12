@@ -124,6 +124,13 @@ static class Program
             var facade = (FrameworkElement)Activator.CreateInstance(typeof(FrameworkElement), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new object[] { new HeadlessNative() }, null)!;
             using (facade)
             {
+                facade.Cursor = ProjectZ.WpfCompatibility.Input.Cursors.Arrow;
+                Require(facade.NativeElement.CursorOverride == ProjectZ.Shared.Drawing.SceneCursor.Arrow &&
+                    facade.Cursor == ProjectZ.WpfCompatibility.Input.Cursors.Arrow, "WPF explicit Arrow reaches the native cursor resolver");
+                facade.Cursor = ProjectZ.WpfCompatibility.Input.Cursors.IBeam;
+                Require(facade.NativeElement.CursorOverride == ProjectZ.Shared.Drawing.SceneCursor.IBeam, "WPF cursor updates replace the native override");
+                facade.Cursor = null;
+                Require(facade.NativeElement.CursorOverride == null && facade.Cursor == null, "Clearing a WPF cursor restores shared inference");
                 var scale = new ScaleTransform(2, 3); facade.RenderTransform = scale;
                 Require(facade.NativeElement.RenderScale == new Vector2(2, 3) && facade.NativeElement.RenderScaleOrigin == Vector2.Zero, "scale transforms update native rendering with WPF's default origin");
                 scale.ScaleX = 4;

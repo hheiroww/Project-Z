@@ -14,6 +14,7 @@ internal static class NativeSceneCompiler
         ["BackgroundBlur"] = "float", ["DropDownBackgroundBlur"] = "float?", ["MaxDropDownHeight"] = "float", ["ItemHeight"] = "float",
         ["DropDownBackgroundColor"] = "Color", ["DropDownHighlightColor"] = "Color", ["DropDownIndicatorColor"] = "Color",
         ["Clip"] = "bool", ["IsOverlay"] = "bool", ["AutoSizeWidthOnTextOverflow"] = "bool", ["TextWrapping"] = "TextWrapping", ["TextTrimming"] = "TextTrimming",
+        ["Cursor"] = "ProjectZ.Shared.Drawing.SceneCursor?",
         ["RigidBody"] = "bool", ["RidgidBody"] = "bool", ["FreeMove"] = "bool", ["CollisionEnabled"] = "bool",
         ["Mass"] = "double", ["Weight"] = "double", ["Bounce"] = "double", ["Friction"] = "double",
         ["FrictionType"] = "ProjectZ.Shared.Physics.FrictionType", ["PhysicsMotion"] = "ProjectZ.Shared.Drawing.UI.PhysicsMotion",
@@ -32,6 +33,8 @@ internal static class NativeSceneCompiler
         return type switch
         {
             "float?" => value is "{x:Null}" or "inherit" ? "null" : Expression(value, "float"),
+            "ProjectZ.Shared.Drawing.SceneCursor?" => value is "{x:Null}" or "inherit" ? "null" :
+                "global::ProjectZ.Shared.Drawing.SceneCursor." + Identifier(value),
             "string" => Quote(value),
             "bool" => bool.Parse(value) ? "true" : "false",
             "Vector2" when !value.StartsWith('{') => "new Vector2(" + string.Join(", ", value.Split(',').Select(v => Expression(v.Trim(), "float"))) + ")",
@@ -120,7 +123,12 @@ internal static class NativeSceneCompiler
                                 foreach (var property in overrides)
                                 {
                                     var expression = Expression(property.Value, Overrides[property.Name.LocalName]);
-                                    code.AppendLine(property.Name.LocalName == "Height" ? $"        element.Size = new Microsoft.Xna.Framework.Vector2(element.Size.X, {expression});" : $"        element.{property.Name.LocalName} = {expression};");
+                                    code.AppendLine(property.Name.LocalName switch
+                                    {
+                                        "Height" => $"        element.Size = new Microsoft.Xna.Framework.Vector2(element.Size.X, {expression});",
+                                        "Cursor" => $"        element.CursorOverride = {expression};",
+                                        var propertyName => $"        element.{propertyName} = {expression};"
+                                    });
                                 }
                                 code.AppendLine("        return element;\n    }");
                             }

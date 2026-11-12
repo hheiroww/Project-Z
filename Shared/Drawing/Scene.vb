@@ -59,6 +59,7 @@ Namespace [Shared].Drawing
             End Get
         End Property
         Private pointerCapture As SceneElement
+        Private pointerCaptureResizeCursor As SceneCursor?
         Public ReadOnly Property CapturedPointerElement As SceneElement
             Get
                 If pointerCapture IsNot Nothing AndAlso pointerCapture.IsDisposed Then pointerCapture = Nothing
@@ -70,6 +71,7 @@ Namespace [Shared].Drawing
             If pointerCapture Is element Then Return
             Dim previous = pointerCapture
             pointerCapture = element
+            pointerCaptureResizeCursor = ResizeCursorFor(element, MousePosition)
             If previous IsNot Nothing Then SceneEvents.RaiseEvent(previous, New SceneRoutedEventArgs(SceneRoutedEvent.Register("LostMouseCapture", SceneEventRouting.Bubble), previous))
             If element IsNot Nothing Then SceneEvents.RaiseEvent(element, New SceneRoutedEventArgs(SceneRoutedEvent.Register("GotMouseCapture", SceneEventRouting.Bubble), element))
         End Sub
@@ -578,6 +580,10 @@ Namespace [Shared].Drawing
         ''' Finds the topmost element at the given point, checking children hierarchically.
         ''' </summary>
         Public Function PointToElement(p As Point) As SceneElement
+            Return PointToElement(p, includeDisabled:=False)
+        End Function
+
+        Private Function PointToElement(p As Point, includeDisabled As Boolean) As SceneElement
             ' The render list already contains every descendant.  Walking each
             ' registered item recursively tests children multiple times and can
             ' select a low-z sibling through a parent after a popup was tested.
@@ -587,7 +593,7 @@ Namespace [Shared].Drawing
                 Dim element = ordered(i)
                 If Not element.IsInsideInputClip(p) OrElse Not element.ContainsPoint(p) Then Continue For
                 ' Reject off-point geometry before walking the parent chain.
-                If Not IsEffectivelyVisible(element) OrElse Not IsEffectivelyEnabled(element) Then Continue For
+                If Not IsEffectivelyVisible(element) OrElse (Not includeDisabled AndAlso Not IsEffectivelyEnabled(element)) Then Continue For
                 If Not element.isMouseBypassEnabled Then Return element
 
                 ' Ancestors already have their own slots in this render list.
