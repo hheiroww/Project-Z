@@ -27,8 +27,9 @@ Namespace [Shared].Drawing
             If effectCompositeBatch Is Nothing Then effectCompositeBatch = New SpriteBatch(device)
             Try
                 device.SetRenderTarget(effectCanvas)
+                device.RasterizerState = RasterizerState.CullNone
                 DrawSceneBackground()
-                device.ScissorRectangle = physicalViewport
+                device.ScissorRectangle = device.Viewport.Bounds
                 DrawEffectRange(ordered, 0, ordered.Count, device, viewport, forceClip, Nothing)
             Finally
                 EffectRenderOffset = Vector2.Zero
@@ -37,9 +38,7 @@ Namespace [Shared].Drawing
                 device.RasterizerState = rasterizer
                 device.ScissorRectangle = scissor
             End Try
-            effectCompositeBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone)
-            effectCompositeBatch.Draw(effectCanvas, physicalViewport, Color.White)
-            effectCompositeBatch.End()
+            CompositeSceneSurface(effectCompositeBatch, effectCanvas, physicalViewport, SamplerState.LinearClamp)
             If wasBegun Then spriteBatch.Begin() : hasBegun = True
         End Sub
 
@@ -98,18 +97,19 @@ Namespace [Shared].Drawing
                         If ancestor.Clip Then clip = Rectangle.Intersect(clip, ancestor.ClippingRectangle)
                         ancestor = ancestor.Parent
                     End While
-                    clip.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
-                    clip = Quality.ScaleRectangle(clip)
+                    clip = PhysicalClip(clip)
                     clip = Rectangle.Intersect(clip, previousScissor)
                     If clip.Width > 0 AndAlso clip.Height > 0 Then
-                        If _scissorRasterizerState Is Nothing Then _scissorRasterizerState = New RasterizerState With {.ScissorTestEnable = True, .CullMode = CullMode.None}
-                        device.RasterizerState = _scissorRasterizerState
-                        device.ScissorRectangle = clip
-                        Dim destination = bounds
-                        destination.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
-                        fx.Composite(device, texture, Quality.ScaleRectangle(destination), element, 0, (element.RotationPivot - New Vector2(bounds.X, bounds.Y)) * Quality.RenderScale)
-                        device.RasterizerState = previousRasterizer
-                        device.ScissorRectangle = previousScissor
+                        Try
+                            device.RasterizerState = SceneScissorRasterizer()
+                            device.ScissorRectangle = clip
+                            Dim destination = bounds
+                            destination.Offset(-CInt(previousOffset.X), -CInt(previousOffset.Y))
+                            fx.Composite(device, texture, Quality.ScaleRectangle(destination), element, 0, (element.RotationPivot - New Vector2(bounds.X, bounds.Y)) * Quality.RenderScale)
+                        Finally
+                            device.RasterizerState = previousRasterizer
+                            device.ScissorRectangle = previousScissor
+                        End Try
                     End If
                 End If
                 index = last

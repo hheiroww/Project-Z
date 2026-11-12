@@ -21,8 +21,7 @@ Namespace [Shared].Drawing
                 ancestor = ancestor.Parent
             End While
             If forceClip AndAlso Not element.Clip AndAlso element.Parent IsNot Nothing Then clip = Rectangle.Intersect(clip, element.Parent.Rectangle)
-            clip.Offset(-CInt(EffectRenderOffset.X), -CInt(EffectRenderOffset.Y))
-            clip = Rectangle.Intersect(Quality.ScaleRectangle(clip), originalScissor)
+            clip = Rectangle.Intersect(PhysicalClip(clip), originalScissor)
             If clip.Width <= 0 OrElse clip.Height <= 0 Then Return
             bounds.Offset(-CInt(EffectRenderOffset.X), -CInt(EffectRenderOffset.Y))
             Dim mask = Quality.ScaleRectangle(bounds)
@@ -47,9 +46,8 @@ Namespace [Shared].Drawing
                 device.RasterizerState = originalRasterizer
                 device.ScissorRectangle = originalScissor
             End Try
-            If _scissorRasterizerState Is Nothing Then _scissorRasterizerState = New RasterizerState With {.ScissorTestEnable = True, .CullMode = CullMode.None, .MultiSampleAntiAlias = True}
             Try
-                device.RasterizerState = _scissorRasterizerState
+                device.RasterizerState = SceneScissorRasterizer()
                 device.ScissorRectangle = clip
                 Dim corners = If(TryCast(element, RectangleElement)?.CornerRadii, New CornerRadii(0))
                 Dim opacity = element.ApplyOpacity(Color.White).A / 255.0F

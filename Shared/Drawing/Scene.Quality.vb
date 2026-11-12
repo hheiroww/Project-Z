@@ -27,7 +27,11 @@ Namespace [Shared].Drawing
 
         Private Sub DrawWithQuality(time As GameTime, Optional bypassRenderTarget As Boolean = False)
             Dim samples = Quality.SupportedSamples(graphicsDevice, Quality.AntiAliasingSamples)
-            If (samples = 0 AndAlso PresentationScale = Vector2.One) OrElse (UseRenderTarget AndAlso Not bypassRenderTarget) Then
+            Dim rasterizer = graphicsDevice.RasterizerState
+            Dim hasCallerClip = rasterizer IsNot Nothing AndAlso rasterizer.ScissorTestEnable AndAlso
+                graphicsDevice.ScissorRectangle <> graphicsDevice.Viewport.Bounds
+            If (samples = 0 AndAlso PresentationScale = Vector2.One AndAlso Not hasCallerClip) OrElse
+               (UseRenderTarget AndAlso Not bypassRenderTarget) Then
                 DrawCore(time)
                 Return
             End If
@@ -51,6 +55,7 @@ Namespace [Shared].Drawing
             Dim previousScale = Quality.RenderScale
             Try
                 graphicsDevice.SetRenderTarget(qualityTarget)
+                graphicsDevice.RasterizerState = RasterizerState.CullNone
                 Quality.RenderScale = scale * PresentationScale
                 DrawCore(time, True)
             Finally
@@ -59,6 +64,7 @@ Namespace [Shared].Drawing
                 If prior.Length = 0 Then graphicsDevice.SetRenderTarget(Nothing) Else graphicsDevice.SetRenderTargets(prior)
                 graphicsDevice.Viewport = viewport
                 graphicsDevice.ScissorRectangle = scissor
+                graphicsDevice.RasterizerState = rasterizer
             End Try
             If scale <> Vector2.One Then
                 If qualityResolve Is Nothing Then
@@ -73,10 +79,25 @@ Namespace [Shared].Drawing
                 qualityResolve.Parameters("BlurStep").SetValue(scale)
                 qualityResolve.Parameters("TexelSize").SetValue(New Vector2(1.0F / width, 1.0F / height))
             End If
-            qualityBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
-                DepthStencilState.None, RasterizerState.CullNone, If(scale = Vector2.One, Nothing, qualityResolve))
-            qualityBatch.Draw(qualityTarget, New Rectangle(0, 0, viewport.Width, viewport.Height), Color.White)
-            qualityBatch.End()
+            CompositeSceneSurface(qualityBatch, qualityTarget, New Rectangle(0, 0, viewport.Width, viewport.Height),
+                                  SamplerState.PointClamp, If(scale = Vector2.One, Nothing, qualityResolve))
+        End Sub
+
+        Private Sub CompositeSceneSurface(batch As SpriteBatch, surface As Texture2D, destination As Rectangle,
+                                          sampler As SamplerState, Optional resolve As Effect = Nothing)
+            Dim device = batch.GraphicsDevice
+            Dim rasterizer = device.RasterizerState
+            Dim scissor = device.ScissorRectangle
+            Dim clipEnabled = rasterizer IsNot Nothing AndAlso rasterizer.ScissorTestEnable
+            Try
+                batch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, sampler, DepthStencilState.None,
+                            If(clipEnabled, SceneScissorRasterizer(), RasterizerState.CullNone), resolve)
+                batch.Draw(surface, destination, Color.White)
+                batch.End()
+            Finally
+                device.RasterizerState = rasterizer
+                device.ScissorRectangle = scissor
+            End Try
         End Sub
     End Class
 End Namespace

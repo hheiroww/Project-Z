@@ -1,9 +1,13 @@
 using Microsoft.Xna.Framework;
 using Color = Microsoft.Xna.Framework.Color;
+using Point = Microsoft.Xna.Framework.Point;
+using Rectangle = Microsoft.Xna.Framework.Rectangle;
 using Microsoft.Xna.Framework.Graphics;
 using ProjectZ.Shared.Content;
 using ProjectZ.Shared.Drawing;
 using ProjectZ.Shared.Drawing.UI;
+using ProjectZ.Shared.Drawing.UI.Advanced;
+using ProjectZ.Shared.Drawing.UI.Input;
 using ProjectZ.Shared.Drawing.UI.Primitives;
 using ProjectZ.Shared.Drawing.Designer;
 
@@ -157,6 +161,7 @@ sealed class QualityProbe : Game
                 results.Add($"PASS {samples}x AA: effect placement, blur halo, parent clipping");
             }
             HoverQualityChecks.Run(this, time, output, results);
+            CheckMediaComposition(manager, time);
             Require(SceneElement.RenderExceptionCount == 0, "no swallowed rendering errors");
             results.Add("PASS compiled free vector font at 10–48pt, fractional bold, AA 16x / AF 16x; zero font atlases or render errors");
             File.WriteAllLines(Path.Combine(output, "result.txt"), results);
@@ -172,5 +177,71 @@ sealed class QualityProbe : Game
     static void Require(bool value, string message)
     {
         if (!value) throw new InvalidOperationException(message);
+    }
+
+    void CheckMediaComposition(SceneManager manager, GameTime time)
+    {
+        var quality = GraphicsQuality.ForDevice(GraphicsDevice);
+        using var target = new RenderTarget2D(GraphicsDevice, 640, 300, false, SurfaceFormat.Color,
+            DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+        using var source = new Texture2D(GraphicsDevice, 1, 1);
+        source.SetData(new[] { Color.Blue });
+        using var callerRasterizer = new RasterizerState { CullMode = CullMode.None, ScissorTestEnable = true };
+        foreach (var effects in new[] { false, true })
+        {
+            using var scene = new ProbeScene(manager) { BackgroundColor = Color.Black, EnableDesignTimeControls = false };
+            scene.Initialize(time);
+            var parser = new SceneXamlParser(scene);
+            var effect = effects ? "<MediaElement.Effect><BlurEffect Radius=\"2\"/></MediaElement.Effect>" : "";
+            scene.AddElement(parser.Parse($$"""
+                <Canvas xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="640" Height="300">
+                  <Canvas Canvas.Left="40" Canvas.Top="40" Width="90" Height="70" ClipToBounds="True">
+                    <Canvas Canvas.Left="20" Width="65" Height="70" ClipToBounds="True">
+                      <Image x:Name="Still" Canvas.Left="30" Canvas.Top="5" Width="80" Height="28" Stretch="Fill"/>
+                      <MediaElement x:Name="Video" Canvas.Left="30" Canvas.Top="39" Width="80" Height="28" Stretch="Fill">{{effect}}</MediaElement>
+                    </Canvas>
+                  </Canvas>
+                  <Border x:Name="Front" Canvas.Left="102" Canvas.Top="79" Width="12" Height="14" Panel.ZIndex="20" Background="Lime" BorderThickness="0"/>
+                </Canvas>
+                """));
+            var still = parser.FindName<ImageElement>("Still");
+            var video = parser.FindName<MediaElement>("Video");
+            var front = parser.FindName<SceneElement>("Front");
+            still.LoadPixels(1, 1, new[] { Color.Red });
+            video.PresentFrame(source, TimeSpan.Zero);
+            scene.Tick(time);
+            Require(ReferenceEquals(scene.PointToElement(new Point(108, 89)), front), "foreground wins the hit test over media");
+            Require(!ReferenceEquals(scene.PointToElement(new Point(128, 89)), video), "ancestor clipping excludes overflow from media hit testing");
+
+            foreach (var (scale, useTarget, samples) in new[] {
+                (Vector2.One, false, 0), (new Vector2(1.25f, 1.5f), false, 4), (Vector2.One, true, 4) })
+            {
+                scene.PresentationScale = scale;
+                scene.UseRenderTarget = useTarget;
+                quality.AntiAliasingSamples = samples;
+                int X(int value) => (int)Math.Round(value * scale.X);
+                int Y(int value) => (int)Math.Round(value * scale.Y);
+                var clip = new Rectangle(X(95), Y(42), X(180) - X(95), Y(111) - Y(42));
+                GraphicsDevice.SetRenderTarget(target);
+                GraphicsDevice.Clear(Color.Magenta);
+                GraphicsDevice.RasterizerState = callerRasterizer;
+                GraphicsDevice.ScissorRectangle = clip;
+                scene.Draw(time);
+                Require(GraphicsDevice.RasterizerState == callerRasterizer && GraphicsDevice.ScissorRectangle == clip,
+                    "scene restores the caller's active scissor");
+                GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+                GraphicsDevice.SetRenderTarget(null);
+                var pixels = new Color[target.Width * target.Height];
+                target.GetData(pixels);
+                Color At(int x, int y) => pixels[Y(y) * target.Width + X(x)];
+                Require(At(93, 56) == Color.Magenta && At(190, 89) == Color.Magenta,
+                    $"scene leaves pixels outside the caller scissor untouched ({At(93, 56)}, {At(190, 89)})");
+                Require(At(98, 56).R > 240, "still image remains visible inside the scissor");
+                Require(At(119, 89).B > 240, "video stays visible between the foreground control and clip edge");
+                Require(At(108, 89).G > 240, "foreground draws over video");
+                Require(At(128, 89) == Color.Black, "nested clip prevents video and effect overflow");
+                results.Add($"PASS media composition effects={effects}, scale={scale}, target={useTarget}, samples={samples}");
+            }
+        }
     }
 }

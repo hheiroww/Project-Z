@@ -951,12 +951,12 @@ Namespace [Shared].Drawing
         ''' </summary>
         Private Sub DrawElementRecursive(E As SceneElement, gd As GraphicsDevice, viewportRect As Rectangle, ForceClip As Boolean)
             If Not IsEffectivelyVisible(E) Then Return
-            Dim Start As Long = Diagnostics.Stopwatch.GetTimestamp
-            Dim previousScissor As Rectangle = gd.ScissorRectangle
-            Dim needsClipRestore As Boolean = False
+            Dim start = Diagnostics.Stopwatch.GetTimestamp()
+            Dim previousScissor = gd.ScissorRectangle
+            Dim previousRasterizer = gd.RasterizerState
 
-            Dim clipRect As Rectangle = viewportRect
-            Dim hasClip As Boolean = ForceClip
+            Dim clipRect = viewportRect
+            Dim hasClip = ForceClip
             Dim clipOwner As SceneElement = E
             While clipOwner IsNot Nothing
                 If clipOwner.Clip Then
@@ -975,68 +975,52 @@ Namespace [Shared].Drawing
             drawBounds.Inflate(2, 2)
             If Not drawBounds.Intersects(clipRect) Then Return
 
-            If hasClip Then
-                ' A clipped ancestor constrains every descendant.  The scene
-                ' stores children in a flat render list, so derive the complete
-                ' ancestor mask for each draw instead of relying on recursion.
-                Dim globalScissor = previousScissor
-                globalScissor = New Rectangle(CInt(globalScissor.X / Quality.RenderScale.X), CInt(globalScissor.Y / Quality.RenderScale.Y),
-                    CInt(globalScissor.Width / Quality.RenderScale.X), CInt(globalScissor.Height / Quality.RenderScale.Y))
-                globalScissor.Offset(CInt(EffectRenderOffset.X), CInt(EffectRenderOffset.Y))
-                clipRect = Rectangle.Intersect(clipRect, globalScissor)
-
-                ' Skip drawing if the scissor rectangle is empty
-                If clipRect.Width <= 0 OrElse clipRect.Height <= 0 Then
-                    Return
-                End If
-
-                ' Enable scissor test if not already enabled
-                Dim scissorWasEnabled As Boolean = False
-                Try
-                    Dim rs = gd.RasterizerState
-                    scissorWasEnabled = (rs IsNot Nothing AndAlso rs.ScissorTestEnable)
-                Catch
-                End Try
-
-                If Not scissorWasEnabled Then
-                    If _scissorRasterizerState Is Nothing Then
-                        _scissorRasterizerState = New RasterizerState() With {
-                            .CullMode = CullMode.None,
-                            .ScissorTestEnable = True,
-                            .MultiSampleAntiAlias = True
-                        }
+            Try
+                If hasClip Then
+                    Dim physicalBounds = Rectangle.Intersect(PhysicalClip(clipRect), gd.Viewport.Bounds)
+                    If previousRasterizer IsNot Nothing AndAlso previousRasterizer.ScissorTestEnable Then
+                        physicalBounds = Rectangle.Intersect(physicalBounds, previousScissor)
                     End If
-                    gd.RasterizerState = _scissorRasterizerState
+                    If physicalBounds.Width <= 0 OrElse physicalBounds.Height <= 0 Then Return
+                    gd.RasterizerState = SceneScissorRasterizer()
+                    gd.ScissorRectangle = physicalBounds
+                End If
+                E.OnPreDraw(gameTime)
+                E.doDraw(gameTime)
+
+                If EnableFrameProfiling Then
+                    Dim key = E.GetType().Name
+                    If Not drawCosts.ContainsKey(key) Then drawCosts(key) = 0
+                    If Not drawCounts.ContainsKey(key) Then drawCounts(key) = 0
+                    drawCosts(key) += Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds
+                    drawCounts(key) += 1
                 End If
 
-                clipRect.Offset(-CInt(EffectRenderOffset.X), -CInt(EffectRenderOffset.Y))
-                gd.ScissorRectangle = Quality.ScaleRectangle(clipRect)
-                needsClipRestore = True
-            End If
-
-            ' Layout was validated once from the visual roots before this flat
-            ' draw pass. Revalidating here recursively made gallery scrolling
-            ' quadratic and calculated clip rectangles from stale geometry.
-            E.OnPreDraw(gameTime)
-            E.doDraw(gameTime)
-
-            If EnableFrameProfiling Then
-                Dim key = E.GetType().Name
-                If Not drawCosts.ContainsKey(key) Then drawCosts(key) = 0
-                drawCosts(key) += Diagnostics.Stopwatch.GetElapsedTime(Start).TotalMilliseconds
-                If Not drawCounts.ContainsKey(key) Then drawCounts(key) = 0
-                drawCounts(key) += 1
-            End If
-
-            ' Notify draw finished
-            Dim elapsedTime As TimeSpan = TimeSpan.FromTicks(Diagnostics.Stopwatch.GetTimestamp - Start)
-            E.OnDrawFinished(elapsedTime)
-
-            ' Restore previous scissor rectangle if we changed it
-            If needsClipRestore Then
-                gd.ScissorRectangle = previousScissor
-            End If
+                E.OnDrawFinished(Diagnostics.Stopwatch.GetElapsedTime(start))
+            Finally
+                If hasClip Then
+                    gd.RasterizerState = previousRasterizer
+                    gd.ScissorRectangle = previousScissor
+                End If
+            End Try
         End Sub
+
+        Private Function SceneScissorRasterizer() As RasterizerState
+            If _scissorRasterizerState Is Nothing Then
+                _scissorRasterizerState = New RasterizerState With {
+                    .CullMode = CullMode.None, .ScissorTestEnable = True, .MultiSampleAntiAlias = True}
+            End If
+            Return _scissorRasterizerState
+        End Function
+
+        Private Function PhysicalClip(logicalClip As Rectangle) As Rectangle
+            Dim scale = Quality.RenderScale
+            Dim left = CInt((logicalClip.Left - EffectRenderOffset.X) * scale.X)
+            Dim top = CInt((logicalClip.Top - EffectRenderOffset.Y) * scale.Y)
+            Dim right = CInt((logicalClip.Right - EffectRenderOffset.X) * scale.X)
+            Dim bottom = CInt((logicalClip.Bottom - EffectRenderOffset.Y) * scale.Y)
+            Return New Rectangle(left, top, right - left, bottom - top)
+        End Function
 
         Public Overridable Sub ApplyEffects()
             If Effects Is Nothing Then Return
@@ -1085,47 +1069,40 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Function DrawToRenderTarget() As RenderTarget2D
-            If UseRenderTarget Then
-                Dim prior = graphicsDevice.GetRenderTargets()
-                ' Ensure render target matches current back buffer size
-                UpdateRenderTargetSize()
-
+            If Not UseRenderTarget Then Return Nothing
+            Dim prior = graphicsDevice.GetRenderTargets()
+            Dim viewport = graphicsDevice.Viewport
+            Dim scissor = graphicsDevice.ScissorRectangle
+            Dim rasterizer = graphicsDevice.RasterizerState
+            UpdateRenderTargetSize()
+            Try
+                graphicsDevice.SetRenderTarget(renderTarget)
+                graphicsDevice.RasterizerState = RasterizerState.CullNone
                 If Quality.AntiAliasingTechnique = "SSAA" AndAlso Quality.AntiAliasingSamples > 0 Then
-                    Try
-                        graphicsDevice.SetRenderTarget(renderTarget)
-                        DrawWithQuality(gameTime, True)
-                    Finally
-                        If prior.Length = 0 Then graphicsDevice.SetRenderTarget(Nothing) Else graphicsDevice.SetRenderTargets(prior)
-                    End Try
+                    DrawWithQuality(gameTime, True)
                     Return renderTarget
                 End If
 
-                graphicsDevice.SetRenderTarget(renderTarget)
                 DrawSceneBackground()
-
                 RaiseEvent PreDraw(gameTime)
-
                 ApplyEffects()
-
                 DrawElements(I_Elements.Values)
 
                 If Not hasBegun Then
                     SpriteSettings.Begin(spriteBatch)
                     hasBegun = True
                 End If
-
-                DrawToRenderTarget = renderTarget
-
                 If hasBegun Then
                     hasBegun = False
                     spriteBatch.End()
                 End If
-
+                Return renderTarget
+            Finally
                 If prior.Length = 0 Then graphicsDevice.SetRenderTarget(Nothing) Else graphicsDevice.SetRenderTargets(prior)
-
-                Exit Function
-            End If
-            Return Nothing
+                graphicsDevice.Viewport = viewport
+                graphicsDevice.RasterizerState = rasterizer
+                graphicsDevice.ScissorRectangle = scissor
+            End Try
         End Function
 
         Public Overridable Sub Draw(gameTime As GameTime)
@@ -1146,15 +1123,26 @@ Namespace [Shared].Drawing
 
             If UseRenderTarget AndAlso Not bypassRenderTarget Then
                 Dim Texture As RenderTarget2D = DrawToRenderTarget()
-                If Not hasBegun Then
-                    hasBegun = True
-                    RenderTargetOptions.Begin(spriteBatch)
-                End If
-                spriteBatch.Draw(Texture, New Rectangle(0, 0, renderTarget.Width, renderTarget.Height), Color.White)
-                If hasBegun Then
-                    hasBegun = False
-                    spriteBatch.End()
-                End If
+                Dim rasterizer = graphicsDevice.RasterizerState
+                Dim scissor = graphicsDevice.ScissorRectangle
+                Try
+                    If Not hasBegun Then
+                        hasBegun = True
+                        If rasterizer IsNot Nothing AndAlso rasterizer.ScissorTestEnable Then
+                            RenderTargetOptions.Begin(spriteBatch, SceneScissorRasterizer())
+                        Else
+                            RenderTargetOptions.Begin(spriteBatch)
+                        End If
+                    End If
+                    spriteBatch.Draw(Texture, New Rectangle(0, 0, renderTarget.Width, renderTarget.Height), Color.White)
+                    If hasBegun Then
+                        hasBegun = False
+                        spriteBatch.End()
+                    End If
+                Finally
+                    graphicsDevice.RasterizerState = rasterizer
+                    graphicsDevice.ScissorRectangle = scissor
+                End Try
                 Me.Texture = Texture
             Else
                 DrawSceneBackground()

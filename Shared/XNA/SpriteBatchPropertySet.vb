@@ -31,13 +31,17 @@ Namespace [Shared].XNA
         End Property
         Private _UseEffect As Boolean = False
 
-        Public Sub Begin(SpriteBatch As SpriteBatch)
+        Public Overloads Sub Begin(SpriteBatch As SpriteBatch)
+            Begin(SpriteBatch, RasterizerState)
+        End Sub
+
+        Friend Overloads Sub Begin(SpriteBatch As SpriteBatch, rasterizer As RasterizerState)
             Dim scale = Drawing.GraphicsQuality.ForDevice(SpriteBatch.GraphicsDevice).RenderScale
             Dim transform = Microsoft.Xna.Framework.Matrix.CreateScale(scale.X, scale.Y, 1)
             If UseEffect Then
-                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Effect, transform)
+                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, rasterizer, Effect, transform)
             Else
-                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, RasterizerState, Nothing, transform)
+                SpriteBatch.Begin(SpriteSortMode, BlendState, SamplerState, DepthStencilState, rasterizer, Nothing, transform)
             End If
         End Sub
 
