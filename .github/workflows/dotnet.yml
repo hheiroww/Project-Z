@@ -68,6 +68,9 @@ jobs:
       - name: Verify modal backdrop pumping and existing DX11 timer ownership
         shell: pwsh
         run: dotnet run --project tests/DesktopBackdropWindowLoop/DesktopBackdropWindowLoop.vbproj -c Release
+      - name: Verify shader graph transfer and DirectX compilation
+        shell: pwsh
+        run: dotnet run --project tests/ShaderEditor/ShaderEditor.csproj -c Release -p:GeneratePackageOnBuild=false
       - name: Build base runtime and optional co-packages
         shell: pwsh
         run: ./tools/Pack-RuntimePackages.ps1
