@@ -31,8 +31,7 @@ Partial Public Class zWindow
 
     Protected Overrides Sub Draw(gameTime As GameTime)
 
-        ' Draw the current Scene
-        sceneManager.Draw(gameTime)
+        DrawFrame(gameTime)
 
         MyBase.Draw(gameTime)
 

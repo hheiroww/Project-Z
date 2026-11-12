@@ -1,12 +1,13 @@
 # Shared window appearance
 
-`ProjectZ.Windows.Composition.WindowAppearance` owns one blur and background-opacity setting for an application's windows. Use `WindowAppearance.Default` or create a controller for an independent group. The controller copies settings and updates existing bindings when `Update` is called. `WindowAppearanceSettings` supports JSON serialization and explicit `Save` / `Load`; Project-Z does not choose an application's settings directory.
+`ProjectZ.Windows.Composition.WindowAppearance` owns the blur, background opacity, and palette for an application's windows. Use `WindowAppearance.Default` or create a controller for an independent group. The controller copies settings and updates existing bindings when `Update` is called. `WindowAppearanceSettings` supports JSON serialization and explicit `Save` / `Load`.
 
 ```csharp
 var appearance = WindowAppearance.Default;
 appearance.Update(new WindowAppearanceSettings {
     DwmBlurEnabled = true,
-    BackgroundOpacity = 50
+    BackgroundOpacity = 50,
+    AccentColor = Microsoft.Xna.Framework.Color.MediumSeaGreen
 });
 using var binding = appearance.Bind(hwnd, settings => {
     scene.BackgroundColor = settings.Background(baseBackgroundColor);
@@ -14,6 +15,8 @@ using var binding = appearance.Bind(hwnd, settings => {
 ```
 
 Create, update and dispose bindings on the window UI thread. Bind each new HWND, including secondary editors and popups. Pass `resizable: false` for fixed popups. Background opacity applies to the scene background; controls and text retain their own opacity.
+
+The [shader editor](SHADER-EDITOR.md) follows the active controller's `BackgroundColor`, `SurfaceColor`, `TextColor`, and `AccentColor` while it is open.
 
 For a renderer with its own per-pixel alpha presenter, pass `perPixelPresentation: true`. The binding makes the renderer's owner HWND transparent and supplies a passive DWM companion through `binding.Backdrop`. Call `binding.Tick()` with the host's window update. Dispose the binding when its window is destroyed; hiding the owner hides the companion automatically.
 

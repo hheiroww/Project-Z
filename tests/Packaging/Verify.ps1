@@ -19,6 +19,10 @@ try {
         }
     }
     if (!@($archive.Entries | Where-Object FullName -Match '^lib/[^/]+/ProjectZ\.VectorText\.dll$').Count) { throw 'Base vector text is missing.' }
+    if (!@($archive.Entries | Where-Object FullName -Match '^lib/[^/]+/ProjectZ\.ShaderEditor\.dll$').Count) { throw 'The shader editor worker is missing.' }
+    foreach ($path in @('buildTransitive/ProjectZ.ShaderEditor.Worker.runtimeconfig.json','buildTransitive/ProjectZ.ShaderCompiler/mgfxc.dll','buildTransitive/ProjectZ.ShaderCompiler/windows-x64/dxcompiler.dll')) {
+        if ($null -eq $archive.GetEntry($path)) { throw "The shader editor package is missing $path." }
+    }
     $version = [string]$spec.package.metadata.version
 } finally { $archive.Dispose() }
 [xml]$templateProperties = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props') -Raw
@@ -67,8 +71,16 @@ $assets = Get-Content -LiteralPath (Join-Path $base 'obj/project.assets.json') -
 foreach ($name in $assets.libraries.PSObject.Properties.Name) {
     if ($name -match '^(SocketJack|Silk\.NET(?:\.[^/]+)?|Ultz\.Native\.Assimp|Microsoft\.Web\.WebView2|Assimp|ProjectZ\.(ModelImport|Diagnostics|XamlTools|WebView2))/') { throw "Base restore included optional package: $name" }
 }
-foreach ($file in Get-ChildItem -LiteralPath (Join-Path $base 'publish') -Recurse -File) {
-    if ($file.Name -match '(?i)assimp|webview|socketjack|ProjectZ\.Diagnostics|CodeAnalysis|XamlCodegen') { throw "Base publish included optional file: $($file.Name)" }
+$basePublish = Join-Path $base 'publish'
+$shaderCompiler = Join-Path $basePublish 'ProjectZ.ShaderCompiler'
+foreach ($file in Get-ChildItem -LiteralPath $basePublish -Recurse -File) {
+    if ($file.Name -match '(?i)assimp|webview|socketjack|ProjectZ\.Diagnostics|XamlCodegen' -or
+        ($file.Name -match '(?i)CodeAnalysis' -and $file.DirectoryName -ne $shaderCompiler)) {
+        throw "Base publish included optional file: $($file.Name)"
+    }
+}
+foreach ($path in @('ProjectZ.ShaderEditor.dll','ProjectZ.ShaderEditor.Worker.runtimeconfig.json','ProjectZ.ShaderCompiler/mgfxc.dll','ProjectZ.ShaderCompiler/windows-x64/dxcompiler.dll')) {
+    if (!(Test-Path -LiteralPath (Join-Path $basePublish $path) -PathType Leaf)) { throw "Base publish is missing $path." }
 }
 $native = @(Get-ChildItem -LiteralPath (Join-Path $base 'publish') -Recurse -Filter 'mgruntime.dll')
 if ($native.Count -ne 1 -or $native[0].DirectoryName -ne (Join-Path $base 'publish')) { throw 'Publish must contain exactly one native graphics runtime at the application root.' }

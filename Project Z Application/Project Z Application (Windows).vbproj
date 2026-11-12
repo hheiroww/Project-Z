@@ -37,7 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Icon.ico" />
-
+    <EmbeddedResource Include="Scenes\TetrisWorkspace.xaml" LogicalName="ProjectZ_Application.TetrisWorkspace.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Content\Textures\" />

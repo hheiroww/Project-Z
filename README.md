@@ -76,6 +76,7 @@ For Windows, Linux and macOS, use the **Project-Z Cross-Platform Desktop** templ
 ## Documentation
 
 - [Feature reference](docs/FEATURES.md)
+- [Runtime shader editor](docs/SHADER-EDITOR.md)
 - [Native scene XAML](docs/BUILD-TIME-XAML.md) and [build-time conversion](docs/BUILD-TIME-XAML.md)
 - [Visual Studio 2026 templates](ProjectTemplate/VS2026/README.md)
 - [Offline spelling and custom dictionaries](docs/Spellchecking.md)

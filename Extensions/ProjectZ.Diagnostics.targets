@@ -6,16 +6,32 @@
   <PropertyGroup>
     <ProjectZXamlGeneratorDll Condition="'$(ProjectZXamlGeneratorDll)' == '' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll')">$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.XamlCodegen.dll</ProjectZXamlGeneratorDll>
     <ProjectZNativeXamlTool Condition="'$(ProjectZNativeXamlTool)' == '' and '$(ProjectZXamlGeneratorDll)' != ''">$(ProjectZXamlGeneratorDll)</ProjectZNativeXamlTool>
+    <_ProjectZShaderWorker>$(MSBuildThisFileDirectory)..\lib\net8.0-windows7.0\ProjectZ.ShaderEditor.dll</_ProjectZShaderWorker>
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets"
           Condition="'$(ProjectZNativeXamlIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.NativeXaml.targets')" />
   <ItemGroup>
   </ItemGroup>
+  <Target Name="CopyProjectZShaderWorker" AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(CopyLocalLockFileAssemblies)' != 'true' and Exists('$(_ProjectZShaderWorker)')">
+    <Copy SourceFiles="$(_ProjectZShaderWorker)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
   <ItemGroup>
     <!-- Source references receive these files from the framework project itself.
          Only package consumers need an explicit copy from the package root. -->
     <Content Include="$(MSBuildThisFileDirectory)..\ThirdParty\ProjectZSans\*" Pack="false" Condition="!Exists('$(MSBuildThisFileDirectory)..\Project Z Windows.vbproj')">
       <Link>ThirdParty\ProjectZSans\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler\**\*" Pack="false">
+      <Link>ProjectZ.ShaderCompiler\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderEditor.Worker.runtimeconfig.json" Pack="false"
+             Condition="Exists('$(MSBuildThisFileDirectory)ProjectZ.ShaderEditor.Worker.runtimeconfig.json')">
+      <Link>ProjectZ.ShaderEditor.Worker.runtimeconfig.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

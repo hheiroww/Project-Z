@@ -39,7 +39,7 @@
 	<!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
 	<Compile Remove="artifacts\**" />
 	<Compile Remove="tests\**" />
-	<Page Remove="artifacts\**;Project Z XAML Codegen\**" />
+	<Page Remove="artifacts\**;Project Z XAML Codegen\**;Project Z Application\**;tools\ProjectZ.ShaderEditor\**;Windows\ShaderEditing\**" />
 	<EmbeddedResource Remove="artifacts\**" />
 	<Compile Remove="obj\**" />
 	<Compile Remove="packages\**" />
@@ -95,12 +95,15 @@
 
 <ItemGroup>
 	<ProjectReference Include="Project Z Vector Text\ProjectZ.VectorText.csproj" PrivateAssets="all" />
+	<ProjectReference Include="tools\ProjectZ.ShaderEditor\ProjectZ.ShaderEditor.csproj" PrivateAssets="all" />
 </ItemGroup>
+  <Import Project="tools/ProjectZ.ShaderEditor/ShaderCompilerPayload.targets" />
 
   <!-- Vector text is required by the base UI. Optional features ship separately. -->
   <Target Name="IncludeProjectZVectorText">
     <ItemGroup>
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
+      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ShaderEditor.dll" />
     </ItemGroup>
   </Target>
 
@@ -126,6 +129,7 @@
     <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
     <EmbeddedResource Include="$(IntermediateOutputPath)DesktopBlur.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.DesktopBlur.mgfx" />
     <EmbeddedResource Include="$(IntermediateOutputPath)FXAA.OpenGL.mgfx" LogicalName="ProjectZ.Resources.FXAA.mgfx" Condition="'$(ProjectZGraphicsBackend)' == 'OpenGL'" />
+    <EmbeddedResource Include="Windows\ShaderEditing\**\*.xaml" LogicalName="ProjectZ.ShaderEditing.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".github\copilot-instructions.md" />

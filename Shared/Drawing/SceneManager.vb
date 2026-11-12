@@ -35,6 +35,8 @@ Namespace [Shared].Drawing
         Private _UseHardwareInput As Boolean = False
         ''' <summary>Route this HWND's queued mouse messages through the scene event system.</summary>
         Public Property UseWindowMessagesInput As Boolean
+        ''' <summary>Optional HWND presenting this scene's frames. Set before the first Tick.</summary>
+        Public Property NativeInputWindow As IntPtr
 #Else
         Private Const UseHardwareInput As Boolean = False
 #End If
@@ -180,7 +182,7 @@ Namespace [Shared].Drawing
 
         Private Sub DrainKeyboardMessages()
             If nativeKeyboard Is Nothing Then
-                Dim hwnd = Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender)
+                Dim hwnd = If(NativeInputWindow <> IntPtr.Zero, NativeInputWindow, Global.ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(Sender))
                 If hwnd = IntPtr.Zero Then Return
                 nativeKeyboard = New KeyboardMessageWindow(hwnd, UseWindowMessagesInput)
             End If

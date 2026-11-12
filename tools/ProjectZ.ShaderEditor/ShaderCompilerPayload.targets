@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZShaderCompilerVersion>3.8.5.1</ProjectZShaderCompilerVersion>
+    <_ProjectZShaderCompilerFiles>$(NuGetPackageRoot)dotnet-mgfxc/$(ProjectZShaderCompilerVersion)/tools/net8.0/any/</_ProjectZShaderCompilerFiles>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageDownload Include="dotnet-mgfxc" Version="[$(ProjectZShaderCompilerVersion)]" />
+    <_ProjectZShaderCompiler Include="$(_ProjectZShaderCompilerFiles)*.dll;$(_ProjectZShaderCompilerFiles)mgfxc.*.json;$(_ProjectZShaderCompilerFiles)windows-x64/*" />
+    <_ProjectZShaderCompiler Include="$(MSBuildThisFileDirectory)../../ThirdParty/MonoGame.Native/LICENSE.MonoGame.txt" />
+    <_ProjectZShaderCompiler Update="$(_ProjectZShaderCompilerFiles)windows-x64/*" Subdirectory="windows-x64/" />
+    <Content Include="@(_ProjectZShaderCompiler)">
+      <Link>ProjectZ.ShaderCompiler/%(Subdirectory)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Pack Condition="'$(MSBuildProjectName)' == 'Project Z Windows'">true</Pack>
+      <PackagePath>buildTransitive/ProjectZ.ShaderCompiler/%(Subdirectory)%(Filename)%(Extension)</PackagePath>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)Worker.runtimeconfig.json">
+      <Link>ProjectZ.ShaderEditor.Worker.runtimeconfig.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Pack>true</Pack>
+      <PackagePath>buildTransitive/ProjectZ.ShaderEditor.Worker.runtimeconfig.json</PackagePath>
+    </Content>
+  </ItemGroup>
+</Project>

@@ -17,6 +17,7 @@ public static class NativeMarkup
         ["GradientStop"] = ["Offset", "Color"],
         ["ImageBrush"] = ["ImageSource", "Viewbox", "ViewboxUnits", "Stretch", "Opacity"],
         ["BlurEffect"] = ["Radius"],
+        ["CompiledShaderEffect"] = ["Source"],
         ["DropShadowEffect"] = ["BlurRadius", "ShadowDepth", "Direction", "Opacity", "Color"]
         , ["RotateTransform"] = ["Angle", "CenterX", "CenterY"]
         , ["RectangleGeometry"] = ["Rect", "RadiusX", "RadiusY"]
@@ -157,7 +158,7 @@ public static class NativeMarkup
                 bool supported = property switch
                 {
                     "Background" => value.Name.LocalName is "SolidColorBrush" or "LinearGradientBrush" or "RadialGradientBrush",
-                    "Effect" => value.Name.LocalName is "BlurEffect" or "DropShadowEffect",
+                    "Effect" => value.Name.LocalName is "BlurEffect" or "DropShadowEffect" or "CompiledShaderEffect",
                     "RenderTransform" => value.Name.LocalName == "RotateTransform",
                     "Clip" => value.Name.LocalName == "RectangleGeometry",
                     "Template" => value.Name.LocalName == "ControlTemplate" && IsSurfaceTemplate(value),
