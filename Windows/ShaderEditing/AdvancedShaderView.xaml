@@ -1,0 +1,60 @@
+<Grid xmlns="urn:projectz:scene" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" ClipToBounds="True">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="170" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="174" />
+    </Grid.ColumnDefinitions>
+    <Grid Grid.Column="0" x:Name="InspectorPanel" Background="#80182820">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="34" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Node properties" Margin="10,7,8,0" FontSize="15" />
+        <TextBlock Grid.Row="1" x:Name="InspectorEmpty" Text="Select a node to edit its values." Margin="10,4,8,0" FontSize="12" IsHitTestVisible="False" />
+        <ScrollViewer Grid.Row="1" x:Name="InspectorScroll" Visibility="Collapsed" Background="Transparent" Margin="6,0,5,6">
+            <StackPanel x:Name="InspectorContent" Spacing="4" Padding="4,2,6,8" />
+        </ScrollViewer>
+    </Grid>
+    <Grid Grid.Column="1">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="34" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="25" />
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Spacing="4" Padding="5,3,0,0" Background="#80182820">
+            <Button x:Name="FrameButton" Content="Frame" Width="56" Height="26" />
+            <Button x:Name="OutputButton" Content="Output" Width="58" Height="26" />
+            <Button x:Name="DisconnectButton" Content="Unwire" Width="62" Height="26" />
+            <Button x:Name="PropertiesButton" Content="Props" Width="52" Height="26" />
+            <Button x:Name="PaletteButton" Content="Nodes" Width="63" Height="26" />
+        </StackPanel>
+        <Grid Grid.Row="1" x:Name="CanvasHost" />
+        <Canvas Grid.Row="1" x:Name="ContextLayer" IsHitTestVisible="False">
+            <Grid x:Name="ContextPanel" Width="218" Height="240" Visibility="Collapsed" Background="#FF13251C" Padding="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="24" />
+                    <RowDefinition Height="29" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Add a node" FontSize="14" Margin="2,2,0,0" />
+                <TextBox Grid.Row="1" x:Name="ContextSearch" AcceptsReturn="False" Margin="0,1,0,2" />
+                <TextBlock Grid.Row="1" x:Name="ContextSearchHint" Text="Search nodes" FontSize="12" Margin="6,5,0,0" IsHitTestVisible="False" />
+                <ListBox Grid.Row="2" x:Name="ContextResults" Background="Transparent" ItemHeight="24" />
+            </Grid>
+        </Canvas>
+        <TextBlock Grid.Row="2" x:Name="GraphStatus" Text="Drag ports to connect. Alt-click to disconnect." FontSize="12" Margin="7,4,4,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+    </Grid>
+    <Grid Grid.Column="2" x:Name="PalettePanel" Background="#80182820" Padding="7">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="26" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Node palette" FontSize="15" Margin="2,1,0,0" />
+        <TextBox Grid.Row="1" x:Name="PaletteSearch" AcceptsReturn="False" Margin="0,0,0,3" />
+        <TextBlock Grid.Row="1" x:Name="PaletteSearchHint" Text="Search nodes" FontSize="12" Margin="6,5,0,0" IsHitTestVisible="False" />
+        <ListBox Grid.Row="2" x:Name="PaletteResults" Background="Transparent" ItemHeight="24" />
+        <Button Grid.Row="3" x:Name="AddNodeButton" Content="Add node" Height="26" Margin="0,3,0,0" />
+    </Grid>
+</Grid>

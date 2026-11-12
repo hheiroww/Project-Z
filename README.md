@@ -25,6 +25,7 @@ The renderer has moved from KNI to **MonoGame 3.8.5.1's native DirectX 12 backen
 | **Vector text renderer** | Smooth text drawn from font outlines, with selection and cursor placement that match the displayed letters. |
 | **Native DX12 renderer** | Hardware-rendered scenes, reusable render targets, FXAA, synchronized viewport resizing, and a build-selectable DX11 fallback. |
 | **XAML UI porting** | Convert supported XAML with its C# or VB code-behind and designer files, either on demand or automatically during builds. |
+| **Runtime shader editing** | Open a native [shader editor](docs/SHADER-EDITOR.md) with Simple layer stacks, Advanced node graphs, GPU preview, and XAML effect export. |
 | **XAML shader support** | GPU blur, shadows, inversion, and chromatic effects on controls and subtrees, with animatable effect properties. |
 | **XAML animations** | Storyboards, double/color keyframes, discrete corner-radius keyframes, easing, repeating tracks, and load/hover/click triggers. |
 | **Desktop input with scaling** | Mouse buttons, drag, hover, wheel, keyboard and editable text, with native client-to-render coordinate mapping and transformed hit testing. |

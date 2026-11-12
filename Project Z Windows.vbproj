@@ -41,7 +41,7 @@
 	<!-- Import fixtures and converter outputs are separate consumers, never framework sources. -->
 	<Compile Remove="artifacts\**" />
 	<Compile Remove="tests\**" />
-	<Page Remove="artifacts\**;Project Z XAML Codegen\**" />
+	<Page Remove="artifacts\**;Project Z XAML Codegen\**;Project Z Application\**;tools\ProjectZ.ShaderEditor\**;Windows\ShaderEditing\**" />
 	<EmbeddedResource Remove="artifacts\**" />
 	<Compile Remove="obj\**" />
 	<Compile Remove="packages\**" />
@@ -103,13 +103,16 @@
 	<ProjectReference Include="Project Z Diagnostics\ProjectZ.Diagnostics.vbproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Model Import\Project Z Model Import.csproj" PrivateAssets="all" />
 	<ProjectReference Include="Project Z Vector Text\ProjectZ.VectorText.csproj" PrivateAssets="all" />
+	<ProjectReference Include="tools\ProjectZ.ShaderEditor\ProjectZ.ShaderEditor.csproj" PrivateAssets="all" />
 </ItemGroup>
+  <Import Project="tools/ProjectZ.ShaderEditor/ShaderCompilerPayload.targets" />
 
   <!-- Ship the internal bridge in ProjectZ instead of requiring a separate package. -->
   <Target Name="IncludeProjectZModelImport">
     <ItemGroup>
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ModelImport.dll" />
       <BuildOutputInPackage Include="$(OutputPath)ProjectZ.VectorText.dll" />
+      <BuildOutputInPackage Include="$(OutputPath)ProjectZ.ShaderEditor.dll" />
     </ItemGroup>
   </Target>
 
@@ -126,6 +129,7 @@
   </Target>
   <ItemGroup>
     <EmbeddedResource Include="$(IntermediateOutputPath)XamlEffects.$(ProjectZGraphicsBackend).mgfx" LogicalName="ProjectZ.Resources.XamlEffects.mgfx" />
+    <EmbeddedResource Include="Windows\ShaderEditing\**\*.xaml" LogicalName="ProjectZ.ShaderEditing.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".github\copilot-instructions.md" />

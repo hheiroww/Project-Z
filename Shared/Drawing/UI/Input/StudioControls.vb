@@ -102,7 +102,8 @@ Namespace [Shared].Drawing.UI.Input
             AddHandler OnKeyDown, AddressOf Key
         End Sub
         Private Function EffectiveStep() As Double
-            Dim fine = Keyboard.GetState().IsKeyDown(Keys.LeftShift) OrElse Keyboard.GetState().IsKeyDown(Keys.RightShift)
+            Dim state = Scene.InputKeyboardState
+            Dim fine = state.IsKeyDown(Keys.LeftShift) OrElse state.IsKeyDown(Keys.RightShift)
             Return If(Range.StepSize > 0, Range.StepSize, (MaximumValue - MinimumValue) / 100) * If(fine, 0.1, 1)
         End Function
         Private Sub Key(key As Keys, state As KeyboardState)
@@ -113,7 +114,8 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
         Private Sub Drag(current As Point, previous As Point)
             If Not isMouseDown OrElse Not isEnabled Then Return
-            Dim fine = Keyboard.GetState().IsKeyDown(Keys.LeftShift) OrElse Keyboard.GetState().IsKeyDown(Keys.RightShift)
+            Dim state = Scene.InputKeyboardState
+            Dim fine = state.IsKeyDown(Keys.LeftShift) OrElse state.IsKeyDown(Keys.RightShift)
             SetDragValue(startValue, startY, current.Y, If(fine, 0.1, 1))
         End Sub
         Protected Overridable Sub SetDragValue(initial As Double, initialY As Single, y As Single, scale As Double)
@@ -269,7 +271,8 @@ Namespace [Shared].Drawing.UI.Input
             Dim delta = startY - current.Y
             If Math.Abs(delta) < 4 AndAlso Not moved Then Return
             moved = True
-            Dim fine = Keyboard.GetState().IsKeyDown(Keys.LeftShift) OrElse Keyboard.GetState().IsKeyDown(Keys.RightShift)
+            Dim state = Scene.InputKeyboardState
+            Dim fine = state.IsKeyDown(Keys.LeftShift) OrElse state.IsKeyDown(Keys.RightShift)
             Value = startValue + delta * range.StepSize * If(fine, 0.1, 1)
         End Sub
         Protected Friend Overrides Sub Draw(gameTime As GameTime)

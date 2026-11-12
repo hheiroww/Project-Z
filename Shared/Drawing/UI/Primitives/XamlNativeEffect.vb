@@ -10,6 +10,7 @@ Namespace [Shared].Drawing.UI.Primitives
         SpasticChromaticAberration
         Invert
         LinearChromaticAberration
+        CompiledShader
     End Enum
 
     ''' <summary>Native GPU adapter for common WPF effects. No WPF rendering or bitmap readback.</summary>
@@ -24,9 +25,37 @@ Namespace [Shared].Drawing.UI.Primitives
         Public Property Direction As Single = 315
         Public Property Color As Color = Color.Black
         Public Property Opacity As Single = 1
+
+        Private Const MgfxVersion As Byte = 11
+#If PROJECTZ_DIRECTX12 Then
+        Private Const MgfxProfile As Byte = 2
+#Else
+        Private Const MgfxProfile As Byte = 1
+#End If
+        Private Shared ReadOnly shaderClock As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
+        Private compiledShader As Byte()
+        Friend Property TimeOverride As Single?
+
+        ''' <summary>Creates a visual effect from MGFX bytecode compiled for the current graphics backend.</summary>
+        Public Shared Function FromCompiledShader(bytecode As Byte()) As XamlNativeEffect
+            ArgumentNullException.ThrowIfNull(bytecode)
+            If bytecode.Length <= 14 OrElse Not HasMgfxMarker(bytecode, 0) OrElse Not HasMgfxMarker(bytecode, bytecode.Length - 4) Then
+                Throw New ArgumentException("Expected compiled MGFX shader bytecode.", NameOf(bytecode))
+            End If
+            If bytecode(4) <> MgfxVersion OrElse bytecode(5) <> MgfxProfile Then
+                Throw New ArgumentException("The compiled effect must match this Project-Z build's DirectX backend and MGFX version.", NameOf(bytecode))
+            End If
+            Return New XamlNativeEffect With {.Kind = XamlEffectKind.CompiledShader, .compiledShader = DirectCast(bytecode.Clone(), Byte())}
+        End Function
+
+        Private Shared Function HasMgfxMarker(bytes As Byte(), offset As Integer) As Boolean
+            Return bytes(offset) = &H4D AndAlso bytes(offset + 1) = &H47 AndAlso bytes(offset + 2) = &H46 AndAlso bytes(offset + 3) = &H58
+        End Function
+
         Public ReadOnly Property IsActive As Boolean
             Get
                 If Kind = XamlEffectKind.PassThrough Then Return True
+                If Kind = XamlEffectKind.CompiledShader Then Return compiledShader IsNot Nothing
                 Return If(Kind >= XamlEffectKind.ChromaticAberration, Math.Abs(Amount) > 0.00001F,
                           If(Kind = XamlEffectKind.DropShadow, Opacity > 0, Radius > 0))
             End Get
@@ -60,15 +89,21 @@ Namespace [Shared].Drawing.UI.Primitives
                 renderer.Kind = Me.Kind : renderer.Radius = Me.Radius * Math.Clamp(quality.BlurRadiusScale, 0, 3) : renderer.Amount = Me.Amount * Math.Clamp(quality.ChromaticAberrationScale, 0, 3)
                 renderer.Phase = Me.Phase * Math.Clamp(quality.ShaderMotionSpeed, 0, 3) : renderer.Angle = Me.Angle : renderer.ShadowDepth = Me.ShadowDepth
                 renderer.Direction = Me.Direction : renderer.Color = Me.Color : renderer.Opacity = Me.Opacity * Math.Clamp(quality.ShadowOpacityScale, 0, 2)
+                renderer.compiledShader = Me.compiledShader
+                renderer.TimeOverride = Me.TimeOverride
                 Return renderer.Render(device, width, height, draw)
             End If
             If shader Is Nothing Then
-                Using stream = GetType(XamlNativeEffect).Assembly.GetManifestResourceStream("ProjectZ.Resources.XamlEffects.mgfx")
-                    Using bytes As New IO.MemoryStream()
-                        stream.CopyTo(bytes)
-                        shader = New Effect(device, bytes.ToArray())
+                If Kind = XamlEffectKind.CompiledShader Then
+                    shader = New Effect(device, compiledShader)
+                Else
+                    Using stream = GetType(XamlNativeEffect).Assembly.GetManifestResourceStream("ProjectZ.Resources.XamlEffects.mgfx")
+                        Using bytes As New IO.MemoryStream()
+                            stream.CopyTo(bytes)
+                            shader = New Effect(device, bytes.ToArray())
+                        End Using
                     End Using
-                End Using
+                End If
                 batch = New SpriteBatch(device)
             End If
             If source Is Nothing OrElse source.Width <> width OrElse source.Height <> height Then
@@ -81,6 +116,11 @@ Namespace [Shared].Drawing.UI.Primitives
             draw()
             If Kind = XamlEffectKind.PassThrough Then Return source
             shader.Parameters("TexelSize")?.SetValue(New Vector2(1.0F / width, 1.0F / height))
+            If Kind = XamlEffectKind.CompiledShader Then
+                shader.Parameters("Time")?.SetValue(If(TimeOverride, CSng(shaderClock.Elapsed.TotalSeconds)))
+                DrawPass(device, source, scratch)
+                Return scratch
+            End If
             shader.Parameters("Amount").SetValue(Amount)
             shader.Parameters("Phase").SetValue(Phase)
             shader.Parameters("Angle").SetValue(Angle)
@@ -127,10 +167,14 @@ Namespace [Shared].Drawing.UI.Primitives
         End Sub
 
         Private Sub Pass(device As GraphicsDevice, input As Texture2D, output As RenderTarget2D, mode As Single, stepSize As Vector2)
-            device.SetRenderTarget(output)
-            device.Clear(Color.Transparent)
             shader.Parameters("Mode").SetValue(mode)
             shader.Parameters("BlurStep").SetValue(stepSize)
+            DrawPass(device, input, output)
+        End Sub
+
+        Private Sub DrawPass(device As GraphicsDevice, input As Texture2D, output As RenderTarget2D)
+            device.SetRenderTarget(output)
+            device.Clear(Color.Transparent)
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone, shader)
             batch.Draw(input, New Rectangle(0, 0, output.Width, output.Height), Color.White)
             batch.End()

@@ -36,6 +36,9 @@ Public Class TetrisElement
     ''' <summary>Color of the border around the play area.</summary>
     Public Property BorderColor As Color = New Color(80, 80, 80)
 
+    Public Property LabelColor As Color = Color.White
+    Public Property LabelAccentColor As Color = Color.Gray
+
     ''' <summary>Border thickness in pixels.</summary>
     Public Property BorderThickness As Integer = 2
 
@@ -257,7 +260,7 @@ Public Class TetrisElement
     End Sub
 
     Private Sub HandlePauseRestartInput()
-        Dim kbState As KeyboardState = Keyboard.GetState()
+        Dim kbState = _Scene.InputKeyboardState
 
         If IsNewKeyPress(Keys.R, kbState) Then
             Restart()
@@ -330,7 +333,7 @@ Public Class TetrisElement
     End Sub
 
     Private Sub HandleInput(gameTime As GameTime)
-        Dim kbState As KeyboardState = Keyboard.GetState()
+        Dim kbState = _Scene.InputKeyboardState
         Dim elapsed As Double = gameTime.ElapsedGameTime.TotalMilliseconds
         Dim current = Game.GetCurrentBlock()
 
@@ -556,7 +559,7 @@ Public Class TetrisElement
         Dim previewSize As Integer = PreviewCells * CellSize
 
         ' Draw preview background
-        spriteBatch.Draw(WhiteTexture, New Rectangle(previewX, previewY, previewSize, previewSize), New Color(20, 20, 20))
+        spriteBatch.Draw(WhiteTexture, New Rectangle(previewX, previewY, previewSize, previewSize), BoardColor)
 
         ' Draw preview border
         DrawBorder(previewX - BorderThickness, previewY - BorderThickness,
@@ -565,7 +568,7 @@ Public Class TetrisElement
         ' Draw "NEXT" label
         Dim font As SpriteFont = GetFont()
         If font IsNot Nothing Then
-            spriteBatch.DrawString(font, "NEXT", New Vector2(previewX + 2, previewY - 18), Color.White)
+            spriteBatch.DrawString(font, "NEXT", New Vector2(previewX + 2, previewY - 18), LabelAccentColor)
         End If
 
         ' Draw the next piece
@@ -609,19 +612,19 @@ Public Class TetrisElement
         Dim lineHeight As Integer = 22
         Dim currentY As Integer = y
 
-        spriteBatch.DrawString(font, "SCORE", New Vector2(x + 2, currentY), Color.Gray)
+        spriteBatch.DrawString(font, "SCORE", New Vector2(x + 2, currentY), LabelAccentColor)
         currentY += lineHeight
-        spriteBatch.DrawString(font, _Score.ToString(), New Vector2(x + 2, currentY), Color.White)
+        spriteBatch.DrawString(font, _Score.ToString(), New Vector2(x + 2, currentY), LabelColor)
         currentY += lineHeight + 8
 
-        spriteBatch.DrawString(font, "LINES", New Vector2(x + 2, currentY), Color.Gray)
+        spriteBatch.DrawString(font, "LINES", New Vector2(x + 2, currentY), LabelAccentColor)
         currentY += lineHeight
-        spriteBatch.DrawString(font, _LinesCleared.ToString(), New Vector2(x + 2, currentY), Color.White)
+        spriteBatch.DrawString(font, _LinesCleared.ToString(), New Vector2(x + 2, currentY), LabelColor)
         currentY += lineHeight + 16
 
         ' Controls help
-        Dim helpColor As New Color(100, 100, 100)
-        spriteBatch.DrawString(font, "CONTROLS", New Vector2(x + 2, currentY), Color.Gray)
+        Dim helpColor = Color.Lerp(LabelColor, BoardColor, 0.2F)
+        spriteBatch.DrawString(font, "CONTROLS", New Vector2(x + 2, currentY), LabelAccentColor)
         currentY += lineHeight
         spriteBatch.DrawString(font, "<-> Move", New Vector2(x + 2, currentY), helpColor)
         currentY += lineHeight
@@ -655,7 +658,7 @@ Public Class TetrisElement
         Dim restartPos As New Vector2(
             boardX + (boardWidth - restartSize.X) / 2,
             boardY + (boardHeight - restartSize.Y) / 2 + 12)
-        spriteBatch.DrawString(font, restartText, restartPos, Color.White)
+        spriteBatch.DrawString(font, restartText, restartPos, LabelColor)
     End Sub
 
     Private Sub DrawPauseOverlay(boardX As Integer, boardY As Integer, boardWidth As Integer, boardHeight As Integer)

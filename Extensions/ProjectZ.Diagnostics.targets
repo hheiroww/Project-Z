@@ -14,6 +14,17 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler\**\*" Pack="false">
+      <Link>ProjectZ.ShaderCompiler\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderEditor.Worker.runtimeconfig.json" Pack="false"
+             Condition="Exists('$(MSBuildThisFileDirectory)ProjectZ.ShaderEditor.Worker.runtimeconfig.json')">
+      <Link>ProjectZ.ShaderEditor.Worker.runtimeconfig.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <_ProjectZNativePayload Include="$(MSBuildThisFileDirectory)..\tools\native\win-x64\*" />

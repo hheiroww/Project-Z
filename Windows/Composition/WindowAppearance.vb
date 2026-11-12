@@ -6,6 +6,10 @@ Namespace Windows.Composition
     ''' <summary>Background-only appearance shared by every window in an application.</summary>
     Public NotInheritable Class WindowAppearanceSettings
         Public Property DwmBlurEnabled As Boolean = True
+        Public Property BackgroundColor As Color = New Color(6, 16, 13)
+        Public Property SurfaceColor As Color = New Color(16, 40, 32)
+        Public Property TextColor As Color = New Color(230, 244, 238)
+        Public Property AccentColor As Color = New Color(99, 244, 80)
         Private opacity As Integer = 50
         Public Property BackgroundOpacity As Integer
             Get
@@ -16,7 +20,8 @@ Namespace Windows.Composition
             End Set
         End Property
         Public Function Copy() As WindowAppearanceSettings
-            Return New WindowAppearanceSettings With {.DwmBlurEnabled = DwmBlurEnabled, .BackgroundOpacity = BackgroundOpacity}
+            Return New WindowAppearanceSettings With {.DwmBlurEnabled = DwmBlurEnabled, .BackgroundOpacity = BackgroundOpacity,
+                .BackgroundColor = BackgroundColor, .SurfaceColor = SurfaceColor, .TextColor = TextColor, .AccentColor = AccentColor}
         End Function
         Public Function Background(color As Color) As Color
             Return color * (BackgroundOpacity / 100.0F)
@@ -43,7 +48,9 @@ Namespace Windows.Composition
         End Property
         Public Sub Update(settings As WindowAppearanceSettings)
             ArgumentNullException.ThrowIfNull(settings)
-            If value.BackgroundOpacity = settings.BackgroundOpacity AndAlso value.DwmBlurEnabled = settings.DwmBlurEnabled Then Return
+            If value.BackgroundOpacity = settings.BackgroundOpacity AndAlso value.DwmBlurEnabled = settings.DwmBlurEnabled AndAlso
+                value.BackgroundColor = settings.BackgroundColor AndAlso value.SurfaceColor = settings.SurfaceColor AndAlso
+                value.TextColor = settings.TextColor AndAlso value.AccentColor = settings.AccentColor Then Return
             value = settings.Copy()
             RaiseEvent Changed(Me, EventArgs.Empty)
         End Sub
