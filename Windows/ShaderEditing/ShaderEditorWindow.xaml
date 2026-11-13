@@ -19,6 +19,7 @@
         <Button x:Name="Redo" Canvas.Left="474" Canvas.Top="6" Width="58" Height="30" Content="Redo" />
         <Button x:Name="Simple" Canvas.Left="550" Canvas.Top="6" Width="78" Height="30" Content="Simple" />
         <Button x:Name="Advanced" Canvas.Left="632" Canvas.Top="6" Width="98" Height="30" Content="Advanced" />
+        <AccentButton x:Name="Presets" Canvas.Left="734" Canvas.Top="6" Width="70" Height="30" Content="Presets" />
         <CheckBox x:Name="AutoRun" Canvas.Left="1056" Canvas.Top="9" Width="94" Height="24" Content="Auto run" />
         <AccentButton x:Name="Run" Canvas.Left="1160" Canvas.Top="6" Width="90" Height="30" Content="▶  Run" />
     </Canvas>
@@ -41,6 +42,17 @@
     <Canvas x:Name="Footer" Canvas.Top="714" Width="1260" Height="26" Background="#A0102820">
         <TextBlock x:Name="Status" Canvas.Left="10" Canvas.Top="5" Width="910" FontSize="12" />
         <TextBlock x:Name="Backend" Canvas.Left="1024" Canvas.Top="5" Width="226" FontSize="12" />
+    </Canvas>
+    <Canvas x:Name="PresetBrowser" Width="584" Height="420" Background="#F0102820" Visibility="Collapsed">
+        <TextBlock x:Name="PresetTitle" Canvas.Left="16" Canvas.Top="13" FontSize="17" FontWeight="SemiBold" Text="Shader presets" />
+        <Button x:Name="ClosePresets" Canvas.Left="528" Canvas.Top="8" Width="40" Height="30" Content="×" />
+        <TextBox x:Name="PresetSearch" Canvas.Left="16" Canvas.Top="49" Width="338" Height="30" AcceptsReturn="False" />
+        <TextBlock x:Name="PresetSearchHint" Canvas.Left="23" Canvas.Top="55" Text="Search presets" FontSize="13" IsHitTestVisible="False" />
+        <ComboBox x:Name="PresetCategory" Canvas.Left="366" Canvas.Top="49" Width="202" Height="30" />
+        <ListBox x:Name="PresetResults" Canvas.Left="16" Canvas.Top="90" Width="552" Height="235" ItemHeight="28" />
+        <TextBlock x:Name="PresetDescription" Canvas.Left="16" Canvas.Top="335" Width="552" Height="34" TextWrapping="Wrap" FontSize="13" />
+        <TextBlock x:Name="PresetCount" Canvas.Left="16" Canvas.Top="386" Width="380" FontSize="12" />
+        <AccentButton x:Name="UsePreset" Canvas.Left="440" Canvas.Top="376" Width="128" Height="32" Content="Load preset" />
     </Canvas>
     <Canvas x:Name="SavePrompt" Canvas.Left="426" Canvas.Top="310" Width="408" Height="120" Background="#F0102820" Visibility="Collapsed">
         <TextBlock Canvas.Left="16" Canvas.Top="16" Width="376" Text="Save changes to this shader graph?" FontSize="16" />
