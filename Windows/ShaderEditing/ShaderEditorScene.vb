@@ -18,7 +18,7 @@ Imports ProjectZ.Windows.Composition
 Imports Forms = System.Windows.Forms
 
 Namespace Windows.ShaderEditing
-    Friend NotInheritable Class ShaderEditorScene
+    Partial Friend NotInheritable Class ShaderEditorScene
         Inherits Scene
 
 #If PROJECTZ_DIRECTX12 Then
@@ -53,6 +53,7 @@ Namespace Windows.ShaderEditing
         Private compiledPath As String
         Private compiledGraph As String
         Private pendingRun As Long
+        Private pendingRunPublishes As Boolean
         Private nextPreview As Long
         Private theme As New WindowAppearanceSettings
 
@@ -91,6 +92,7 @@ Namespace Windows.ShaderEditing
             Bind("Redo", Sub() HistoryStep(1))
             Bind("Simple", Sub() ChangeMode(ShaderMode.Simple))
             Bind("Advanced", Sub() ChangeMode(ShaderMode.Advanced))
+            SetUpPresetBrowser()
             Bind("Run", AddressOf RunShader)
             Bind("Play", AddressOf TogglePlayback)
             Bind("LoadImage", AddressOf LoadImage)
@@ -138,6 +140,7 @@ Namespace Windows.ShaderEditing
             root.SetChildPosition(footer, New Vector2(0, height - 26))
             footer.Size = New Vector2(width, 26)
             root.SetChildPosition(prompt, New Vector2((width - prompt.Size.X) / 2, (height - prompt.Size.Y) / 2))
+            ArrangePresetBrowser(width, height)
             header.SetChildPosition(Find(Of Button)("Minimize"), New Vector2(width - 126, 6))
             header.SetChildPosition(Find(Of Button)("Maximize"), New Vector2(width - 86, 6))
             header.SetChildPosition(Find(Of Button)("Close"), New Vector2(width - 46, 6))
@@ -154,6 +157,7 @@ Namespace Windows.ShaderEditing
             ShaderEditorChrome.ApplyTheme(root, settings)
             simple.ApplyAppearance(settings)
             advanced.ApplyAppearance(settings)
+            StylePresetBrowser(settings)
             Find(Of TextElement)("Brand").ForegroundColor = settings.AccentColor
             StyleSelection()
             RequestRender()
@@ -243,6 +247,7 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Private Sub QueueAutoRun()
+            pendingRunPublishes = True
             pendingRun = If(Find(Of CheckBox)("AutoRun").IsChecked.GetValueOrDefault(), Stopwatch.GetTimestamp() + Stopwatch.Frequency * 2 \ 5, 0L)
         End Sub
 
@@ -270,7 +275,7 @@ Namespace Windows.ShaderEditing
         Friend Sub UpdateEditor()
             If compile IsNot Nothing AndAlso compile.IsCompleted Then FinishCompile()
             Dim now = Stopwatch.GetTimestamp()
-            If compile Is Nothing AndAlso pendingRun > 0 AndAlso now >= pendingRun Then StartCompile(True)
+            If compile Is Nothing AndAlso pendingRun > 0 AndAlso now >= pendingRun Then StartCompile(pendingRunPublishes)
             If playback.IsRunning AndAlso now >= nextPreview Then
                 nextPreview = now + Stopwatch.Frequency \ 24
                 Find(Of TextElement)("PreviewTime").Text = playback.Elapsed.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture) & " s"
@@ -298,7 +303,7 @@ Namespace Windows.ShaderEditing
                     replacement.TimeOverride = CSng(playback.Elapsed.TotalSeconds)
                     image.VisualEffect?.Dispose()
                     image.VisualEffect = replacement
-                    SetStatus("Shader running")
+                    SetStatus(If(compiledGraph Is Nothing, "Preview ready · Run to apply", "Shader running"))
                     If compiledGraph IsNot Nothing Then
                         Dim graphFits = Encoding.UTF8.GetByteCount(compiledGraph) <= ShaderDocument.MaximumGraphBytes
                         If Not graphFits Then SetStatus("Shader running · graph exceeds the 256 KiB transfer limit")
@@ -465,6 +470,10 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Private Sub HandleShortcut(key As Keys, state As KeyboardState)
+            If presetBrowser.isVisible Then
+                If key = Keys.Escape Then ShowPresetBrowser(False)
+                Return
+            End If
             If prompt.isVisible Then
                 If key = Keys.Escape Then CompletePrompt(False)
                 Return
@@ -473,6 +482,7 @@ Namespace Windows.ShaderEditing
             Select Case key
                 Case Keys.N : Confirm(Sub() SetDocument(ShaderDocument.Create(), Nothing))
                 Case Keys.O : Confirm(AddressOf OpenDocument)
+                Case Keys.P : ShowPresetBrowser(True)
                 Case Keys.S : SaveDocument()
                 Case Keys.Enter : RunShader()
                 Case Keys.Z : HistoryStep(-1)

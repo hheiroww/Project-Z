@@ -47,8 +47,58 @@ Require(result.Graph is null && result.Bytecode.SequenceEqual(effect), "worker c
 Reject(() => writeRun.Invoke(null, [effect, limitGraph + " "]), "worker rejects an oversized outgoing graph");
 Reject(() => readRun.Invoke(null, [new byte[] { 0, 1, 4, 0, 5 }]), "worker rejects an oversized graph length in an incoming frame");
 
+var presetTool = Environment.GetEnvironmentVariable("PROJECTZ_PRESET_TEST_COMPILER");
+var presetStage = Environment.GetEnvironmentVariable("PROJECTZ_PRESET_TEST_STAGE");
+await CheckPresets(presetTool, presetStage);
+
 if (args.Contains("--desktop", StringComparer.Ordinal))
     await CheckDesktop(json);
+
+static async Task CheckPresets(string? compiler, string? staging)
+{
+    var presets = ShaderPresets.All;
+    Require(presets.Count >= 50 && presets.Select(preset => preset.Id).Distinct(StringComparer.Ordinal).Count() == presets.Count,
+        "the catalog provides at least 50 presets with distinct identities");
+    if ((compiler is null) != (staging is null))
+        throw new ArgumentException("Set both PROJECTZ_PRESET_TEST_COMPILER and PROJECTZ_PRESET_TEST_STAGE to compile MonoGame effects.");
+    if (compiler is not null && (!File.Exists(Path.Combine(compiler, "mgfxc.dll")) || !Path.IsPathFullyQualified(staging!)))
+        throw new ArgumentException("Preset verification requires an installed compiler and an absolute staging directory.");
+
+    var variants = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var preset in presets)
+    {
+        try
+        {
+            var document = preset.CreateDocument();
+            var clone = preset.CreateDocument();
+            string json = document.ToJson();
+            if (document.Name != preset.Name || document.Nodes.Count < 3 || !document.Connections.Any() ||
+                ShaderDocument.Parse(json).ToJson() != json || document.Nodes.Intersect(clone.Nodes).Any() ||
+                document.Nodes.Select(node => node.Id).Intersect(clone.Nodes.Select(node => node.Id)).Any())
+                throw new InvalidOperationException("Expected a valid editable graph, independent copies, and an exact JSON round trip.");
+
+            var video = ShaderGenerator.GenerateVideoShader(document);
+            if (!variants.Add(video)) throw new InvalidOperationException("Two presets produce identical video shaders.");
+            CompilePixelShader(video);
+            if (compiler is not null)
+            {
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                string effectSource = ShaderGenerator.Generate(document);
+                foreach (var backend in Enum.GetValues<ShaderBackend>())
+                {
+                    var result = await ShaderCompiler.CompileAsync(effectSource, backend, compiler, staging!, deadline.Token);
+                    if (!result.Success) throw new InvalidOperationException($"{backend}: {result.Diagnostics}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Preset '{preset.Id}' failed: {ex.Message}", ex);
+        }
+    }
+    Console.WriteLine($"PASS {presets.Count} editable preset graphs and native video shaders" +
+        (compiler is null ? "" : $", plus {presets.Count * 2} MonoGame DirectX 11/12 effect compilations"));
+}
 
 static async Task CheckDesktop(string json)
 {
