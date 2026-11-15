@@ -11,9 +11,9 @@ tools; NuGet consumers receive that universal helper.
 Install **one** platform runtime in an application:
 
 ```sh
-dotnet add package ProjectZ.Linux --version 2026.11.2.1
+dotnet add package ProjectZ.Linux
 # Or, for a Mac:
-dotnet add package ProjectZ.macOS --version 2026.11.2.1
+dotnet add package ProjectZ.macOS
 ```
 
 The platform packages each supply `ProjectZ.dll`. Do not reference both, or
@@ -34,14 +34,16 @@ platform. Keep a separate Windows target when using Windows integrations.
 | Desktop blur | Shared shader with native capture and exclusion; [setup and session limits](DESKTOP-BLUR.md) |
 | Native chrome, hooks, WebView2 and crash observer | Use SDL/framework controls, a browser adapter and portable diagnostics; [all pathways](PLATFORM-PATHWAYS.md) |
 
-The SDL/OpenAL native libraries flow from MonoGame's NuGet dependencies. Publish
-for an explicit RID so the SDK selects the appropriate libraries. Linux requires
-a graphical session and a working OpenGL driver; macOS requires an OpenGL-capable
-desktop session. Application signing, app bundles and notarization are separate
-deployment steps.
+`ProjectZ.Linux` supports x64 and ARM64. `ProjectZ.macOS` supports Intel and
+Apple Silicon. The SDL and OpenAL native libraries come from MonoGame's NuGet
+dependencies. Publish for an explicit RID so the SDK selects the appropriate
+libraries. Linux requires a graphical session and a working OpenGL driver.
+macOS requires an OpenGL-capable desktop session. Application signing, app
+bundles and notarization are separate deployment steps.
 
 ```sh
 dotnet publish MyApp.csproj -c Release -r linux-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r linux-arm64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-x64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-arm64 --self-contained true
 ```
@@ -62,20 +64,21 @@ with the .NET 8 SDK.
 
 ```powershell
 ./tools/Pack-DesktopGLPackages.ps1
-./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier linux-x64
-# Requires a desktop session (or xvfb on Linux):
-./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier linux-x64 -RunGraphics
+./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier linux-arm64
+# Run on an ARM64 Linux host with a desktop session (or Xvfb):
+./tests/DesktopGL/Verify.ps1 -RuntimeIdentifier linux-arm64 -RunGraphics
 ```
 
 Verification uses an independent NuGet consumer outside the source tree, checks
-the dependency graph, loads fonts, validates both embedded OpenGL shaders, and
-publishes Linux x64 and Intel / Apple Silicon macOS payloads. Native CI runs the
-build and checks on Ubuntu and macOS as well as Windows.
+the dependency graph, loads fonts, validates embedded OpenGL shaders, and
+checks which native libraries the SDK selects for each RID. Linux and macOS CI
+run the graphics smoke test on both x64 and ARM64.
 
 The main `dotnet.yml` workflow validates Windows and all DesktopGL matrix jobs,
 then assembles one seven-package version for GitHub and NuGet. Normal master pushes
 and default manual releases include both platform packages. The release takes
-Linux from Ubuntu and the universal macOS package from the Apple Silicon Mac job.
+one Linux package from the x64 Ubuntu job and one universal macOS package from
+the Apple Silicon job after the full matrix succeeds.
 `validate_only=true` verifies the complete set without publishing;
 `desktopgl_only=true` with `publish_desktopgl=true` remains available for a scoped release. Windows hosted CI checks
 builds and publishing without graphics; native Linux and Mac jobs also run the

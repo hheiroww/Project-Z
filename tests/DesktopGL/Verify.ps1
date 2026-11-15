@@ -17,6 +17,20 @@ $temp = if ($WorkDirectory) { [IO.Path]::GetFullPath($WorkDirectory) } else { Jo
 New-Item -ItemType Directory -Force $temp | Out-Null
 $feed = [Security.SecurityElement]::Escape($PackageDirectory)
 Set-Content (Join-Path $temp 'NuGet.Config') "<configuration><packageSources><clear/><add key=`"local`" value=`"$feed`"/><add key=`"nuget.org`" value=`"https://api.nuget.org/v3/index.json`"/></packageSources></configuration>"
+
+function Assert-LinuxNativeArchitecture([string]$Path) {
+    # ELF64 is little endian on both Linux targets. e_machine is at byte 18.
+    $expectedMachine = if ($RuntimeIdentifier -eq 'linux-arm64') { 183 } else { 62 }
+    $reader = [IO.BinaryReader]::new([IO.File]::OpenRead($Path))
+    try {
+        $format = [Convert]::ToHexString($reader.ReadBytes(6))
+        $reader.BaseStream.Position = 18
+        if ($format -ne '7F454C460201' -or $reader.ReadUInt16() -ne $expectedMachine) {
+            throw "$Path does not contain a $RuntimeIdentifier ELF binary."
+        }
+    } finally { $reader.Dispose() }
+}
+
 foreach ($platform in @('Linux', 'macOS')) {
     $package = Join-Path $PackageDirectory "ProjectZ.$platform.$version.nupkg"
     if (!(Test-Path -LiteralPath $package)) { throw "Missing package: $package" }
@@ -51,9 +65,24 @@ foreach ($platform in @('Linux', 'macOS')) {
     foreach ($name in @('ProjectZ.dll','ProjectZ.VectorText.dll','MonoGame.Framework.dll')) {
         if (!(Test-Path (Join-Path $publish $name))) { throw "$platform publish omitted $name" }
     }
-    $sdl = if ($RuntimeIdentifier.StartsWith('osx')) { 'libSDL2-2.0.0.dylib' } elseif ($RuntimeIdentifier.StartsWith('linux')) { 'libSDL2-2.0.so.0' } else { 'SDL2.dll' }
-    if (!(Test-Path (Join-Path $publish $sdl))) { throw "$RuntimeIdentifier SDL runtime missing." }
-    if ($platform -eq 'macOS' -and $RuntimeIdentifier.StartsWith('osx') -and !(Test-Path (Join-Path $publish 'libProjectZDesktopCapture.dylib'))) { throw 'macOS publish omitted the native desktop capture helper.' }
+    $nativeFiles = switch -Wildcard ($RuntimeIdentifier) {
+        'linux-*' { 'Consumer', 'libSDL2-2.0.so.0', 'libopenal.so' }
+        'osx-*' {
+            'Consumer', 'libSDL2-2.0.0.dylib', 'libopenal.dylib'
+            if ($platform -eq 'macOS') { 'libProjectZDesktopCapture.dylib' }
+        }
+        'win-*' { 'SDL2.dll', 'openal.dll' }
+    }
+    foreach ($name in $nativeFiles) {
+        $path = Join-Path $publish $name
+        if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "$platform $RuntimeIdentifier publish omitted $name." }
+        if ($RuntimeIdentifier.StartsWith('linux-')) { Assert-LinuxNativeArchitecture $path }
+        if ($IsMacOS -and $RuntimeIdentifier.StartsWith('osx-')) {
+            $architectures = if ($name -ne 'Consumer') { 'arm64', 'x86_64' } elseif ($RuntimeIdentifier -eq 'osx-arm64') { 'arm64' } else { 'x86_64' }
+            & xcrun lipo $path -verify_arch @architectures
+            if ($LASTEXITCODE -ne 0) { throw "$name must contain the requested macOS architectures ($architectures)." }
+        }
+    }
     if (Get-ChildItem $publish -Recurse -File | Where-Object Name -Match '^(PresentationFramework|PresentationCore|WindowsBase|System.Windows.Forms|SocketJack|WebView2Loader|mgruntime)\.') { throw 'Windows-only dependencies leaked into publish output.' }
     if ($RunGraphics) {
         dotnet (Join-Path $publish 'Consumer.dll') --graphics --desktop-blur

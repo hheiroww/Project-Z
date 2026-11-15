@@ -29,6 +29,8 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
           - os: macos-15-intel
             rid: osx-x64
           - os: macos-15
@@ -74,7 +76,7 @@ jobs:
           name: ProjectZ-DesktopGL-${{ matrix.rid }}
           path: artifacts/desktopgl-packages/*.nupkg
           if-no-files-found: error
-      - name: Preserve native Linux release package
+      - name: Preserve Linux release package
         if: matrix.rid == 'linux-x64'
         uses: actions/upload-artifact@v4
         with:
