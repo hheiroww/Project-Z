@@ -17,11 +17,16 @@ foreach ($project in @(
     'Project Z Diagnostics/ProjectZ.Diagnostics.vbproj',
     'Project Z XAML Codegen/ProjectZ.XamlCodegen.csproj'
 )) {
+    $projectPath = Join-Path $root $project
     $platformProperties = @()
     if ($project -eq 'Project Z Windows.vbproj') {
         $platformProperties = @('-p:BuildProjectZWindowsArm64=true', "-p:ProjectZArm64NativeRuntimeDirectory=$arm64Runtime")
+        # The pack evaluation must see NuGetPackageRoot and the restored MGFXC files.
+        & dotnet restore $projectPath --nologo -p:GeneratePackageOnBuild=false @platformProperties
+        if ($LASTEXITCODE -ne 0) { throw "Package restore failed: $project" }
+        $platformProperties += '--no-restore'
     }
-    & dotnet pack (Join-Path $root $project) -c $Configuration -o $OutputDirectory --nologo -m:1 -nr:false -p:UseSharedCompilation=false -p:GeneratePackageOnBuild=false @platformProperties
+    & dotnet pack $projectPath -c $Configuration -o $OutputDirectory --nologo -m:1 -nr:false -p:UseSharedCompilation=false -p:GeneratePackageOnBuild=false @platformProperties
     if ($LASTEXITCODE -ne 0) { throw "Package build failed: $project" }
 }
 Write-Host "Runtime packages: $OutputDirectory"

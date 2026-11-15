@@ -79,18 +79,18 @@ jobs:
       - name: Build base runtime and optional co-packages
         shell: pwsh
         run: ./tools/Pack-RuntimePackages.ps1
+      - name: Preserve packages for architecture verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectZ-runtime-packages
+          path: artifacts/runtime-packages/*.nupkg
+          if-no-files-found: error
       - name: Verify standalone base and optional package consumers
         shell: pwsh
         run: |
           [xml]$properties = Get-Content Extensions/ProjectZ.Package.props
           $version = $properties.Project.PropertyGroup.Version
           ./tests/Packaging/Verify.ps1 -PackagePath "artifacts/runtime-packages/ProjectZ.$version.nupkg"
-      - name: Preserve packages for GitHub distribution
-        uses: actions/upload-artifact@v4
-        with:
-          name: ProjectZ-runtime-packages
-          path: artifacts/runtime-packages/*.nupkg
-          if-no-files-found: error
   windows-arm64:
     needs: windows-packages
     runs-on: windows-11-arm
