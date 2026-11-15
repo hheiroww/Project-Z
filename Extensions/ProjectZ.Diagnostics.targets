@@ -51,7 +51,7 @@
     <ItemGroup Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != ''">
       <_ProjectZNativePayload Include="@(_ProjectZNativeRuntimeSource->WithMetadataValue('RuntimeIdentifier', '$(_ProjectZWindowsRuntimeIdentifier)'))" />
       <_ProjectZNativePayload Include="$(MSBuildThisFileDirectory)../tools/native/$(_ProjectZWindowsRuntimeIdentifier)/*" />
-      <Content Include="@(_ProjectZNativePayload)" Link="ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/%(Filename)%(Extension)"
+      <None Include="@(_ProjectZNativePayload)" Link="ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/%(Filename)%(Extension)"
                CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
     </ItemGroup>
   </Target>

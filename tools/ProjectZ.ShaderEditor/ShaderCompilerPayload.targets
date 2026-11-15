@@ -22,7 +22,8 @@
   </ItemGroup>
   <Target Name="CollectProjectZSourceShaderCompiler" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectZWindowsRuntime">
     <ItemGroup>
-      <Content Include="@(_ProjectZShaderCompiler)" Condition="'%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '' or '%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '$(_ProjectZWindowsRuntimeIdentifier)'"
+      <!-- Content with Pack=false would exclude the same physical files from the package. -->
+      <None Include="@(_ProjectZShaderCompiler)" Condition="'%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '' or '%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '$(_ProjectZWindowsRuntimeIdentifier)'"
                Link="ProjectZ.ShaderCompiler/%(_ProjectZShaderCompiler.Subdirectory)%(_ProjectZShaderCompiler.Filename)%(_ProjectZShaderCompiler.Extension)"
                CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
     </ItemGroup>
