@@ -91,6 +91,8 @@
 
 <Target Name="ValidateProjectZGraphicsBackend" BeforeTargets="PrepareForBuild">
 	<Error Condition="'$(ProjectZGraphicsBackend)' != 'DirectX12' and '$(ProjectZGraphicsBackend)' != 'DirectX11' and '$(ProjectZGraphicsBackend)' != 'OpenGL'" Text="ProjectZGraphicsBackend must be DirectX12, DirectX11 or OpenGL." />
+    <Error Condition="'$(BuildProjectZWindowsArm64)' == 'true' and '$(ProjectZGraphicsBackend)' == 'DirectX12' and (!Exists('$(ProjectZArm64NativeRuntimeDirectory)/mgruntime.dll') or !Exists('$(ProjectZArm64NativeRuntimeDirectory)/runtime.json'))"
+           Text="The Windows ARM64 package requires the patched MonoGame runtime and runtime.json. Set ProjectZArm64NativeRuntimeDirectory to the payload built by ThirdParty/MonoGame.Native/Build.ps1." />
 </Target>
 
 <ItemGroup>
@@ -169,16 +171,17 @@
 
   <ItemGroup>
     <None Include="Extensions\ProjectZ.Diagnostics.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.targets" />
+    <None Include="Extensions\ProjectZ.WindowsRuntime.targets" Pack="true" PackagePath="buildTransitive\ProjectZ.WindowsRuntime.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.NativeXaml.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.NativeXaml.targets" />
     <None Include="Project Z XAML Codegen\ProjectZ.RenderingQuality.targets" Pack="true" PackagePath="tools\xaml-codegen\ProjectZ.RenderingQuality.targets" />
     <None Include="ThirdParty\WPFPixelShaderLibrary\LICENSE" Pack="true" PackagePath="licenses\WPFPixelShaderLibrary\" />
-    <Content Include="ThirdParty\MonoGame.Native\win-x64\mgruntime.dll;ThirdParty\MonoGame.Native\win-x64\runtime.json;ThirdParty\MonoGame.Native\LICENSE*" Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
-      <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Pack>true</Pack>
-      <PackagePath>tools\native\win-x64\</PackagePath>
-    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(ProjectZGraphicsBackend)' == 'DirectX12'">
+    <_ProjectZNativeRuntimeSource Include="ThirdParty/MonoGame.Native/win-x64/mgruntime.dll;ThirdParty/MonoGame.Native/win-x64/runtime.json;ThirdParty/MonoGame.Native/LICENSE*" RuntimeIdentifier="win-x64" />
+    <_ProjectZNativeRuntimeSource Include="$(ProjectZArm64NativeRuntimeDirectory)/mgruntime.dll;$(ProjectZArm64NativeRuntimeDirectory)/runtime.json;ThirdParty/MonoGame.Native/LICENSE*"
+                                  RuntimeIdentifier="win-arm64" Condition="'$(ProjectZArm64NativeRuntimeDirectory)' != ''" />
+    <None Include="@(_ProjectZNativeRuntimeSource->WithMetadataValue('RuntimeIdentifier', 'win-x64'))" Pack="true" PackagePath="tools/native/win-x64/" />
+    <None Include="@(_ProjectZNativeRuntimeSource->WithMetadataValue('RuntimeIdentifier', 'win-arm64'))" Pack="true" PackagePath="tools/native/win-arm64/" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Remove="obj\Debug\net8.0-windows7.0\XamlEffects.DirectX12.mgfx" />

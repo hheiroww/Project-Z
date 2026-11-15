@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <ProjectZFrameworkVersion>2026.11.11.3</ProjectZFrameworkVersion>
+    <ProjectZFrameworkVersion>2026.11.14.1</ProjectZFrameworkVersion>
     <!-- An explicit publish RID takes precedence over the build host. -->
     <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('linux-'))">Linux</ProjectZPlatform>
     <ProjectZPlatform Condition="'$(ProjectZPlatform)' == '' and $(RuntimeIdentifier.StartsWith('osx-'))">macOS</ProjectZPlatform>
@@ -13,7 +13,7 @@
     <EnableWindowsTargeting Condition="'$(ProjectZPlatform)' == 'Windows'">true</EnableWindowsTargeting>
     <OutputType>Exe</OutputType>
     <OutputType Condition="'$(ProjectZPlatform)' == 'Windows'">WinExe</OutputType>
-    <PlatformTarget Condition="'$(ProjectZPlatform)' == 'Windows'">x64</PlatformTarget>
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-x64'">x64</PlatformTarget>
     <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'Windows'">ProjectZ</ProjectZRuntimePackage>
     <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'Linux'">ProjectZ.Linux</ProjectZRuntimePackage>
     <ProjectZRuntimePackage Condition="'$(ProjectZPlatform)' == 'macOS'">ProjectZ.macOS</ProjectZRuntimePackage>

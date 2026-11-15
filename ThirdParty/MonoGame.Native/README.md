@@ -1,14 +1,17 @@
 # Project-Z native GPU fence fix
 
-This is a source-built Windows x64 DX12 runtime for MonoGame 3.8.5.1, pinned
+This is a source-built Windows x64 and ARM64 DX12 runtime for MonoGame 3.8.5.1, pinned
 to upstream commit `5e9fe9b100ffa67026dff97cc8adffae1414534e`.
 `GpuFence.patch` contains the changes; `Build.ps1` fetches the exact sources
 and submodules, compiles their shaders, builds the DLL and PDB, and optionally
 runs real GPU regression tests. Visual Studio C++ tools and CMake are required
-to rebuild. Normal framework/app builds use the checked-in runtime payload.
+to rebuild. Normal x64 framework/app builds use the checked-in runtime payload.
+The Windows NuGet release build compiles the ARM64 payload and includes it
+alongside the x64 payload under `tools/native/win-arm64`.
 
 ```powershell
 ./ThirdParty/MonoGame.Native/Build.ps1 -Tests
+./ThirdParty/MonoGame.Native/Build.ps1 -Architecture arm64
 ```
 
 Upstream turns a five-second CPU fence timeout into `DXGI_ERROR_DEVICE_HUNG`

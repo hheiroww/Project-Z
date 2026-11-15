@@ -1,4 +1,8 @@
-param([Parameter(Mandatory = $true)][string]$PackagePath)
+param(
+    [Parameter(Mandatory)][string]$PackagePath,
+    [ValidateSet('win-x64', 'win-arm64')][string]$RuntimeIdentifier = 'win-x64',
+    [string]$WorkDirectory
+)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $packageFile = (Resolve-Path -LiteralPath $PackagePath).Path
@@ -23,6 +27,12 @@ try {
     foreach ($path in @('buildTransitive/ProjectZ.ShaderEditor.Worker.runtimeconfig.json','buildTransitive/ProjectZ.ShaderCompiler/mgfxc.dll','buildTransitive/ProjectZ.ShaderCompiler/windows-x64/dxcompiler.dll')) {
         if ($null -eq $archive.GetEntry($path)) { throw "The shader editor package is missing $path." }
     }
+    foreach ($rid in 'win-x64', 'win-arm64') {
+        foreach ($path in @("runtimes/$rid/native/ProjectZDesktopCapture.dll", "tools/native/$rid/mgruntime.dll")) {
+            if (!$archive.GetEntry($path)) { throw "The package is missing $path." }
+        }
+    }
+    if (!$archive.GetEntry('buildTransitive/ProjectZ.ShaderCompiler/windows-arm64/dxcompiler.dll')) { throw 'The ARM64 shader compiler is missing.' }
     $version = [string]$spec.package.metadata.version
 } finally { $archive.Dispose() }
 [xml]$templateProperties = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../ProjectTemplate/VS2026/Common/ProjectZ.Graphics.props') -Raw
@@ -45,7 +55,21 @@ foreach ($id in @('ProjectZ.ModelImport','ProjectZ.WebView2','ProjectZ.Diagnosti
 }
 
 # External consumers cannot inherit repository targets, source references or cached packages under test.
-$consumerRoot = Join-Path ([IO.Path]::GetTempPath()) ('ProjectZ.PackageConsumer.' + [Guid]::NewGuid().ToString('N'))
+$consumerRoot = if ($WorkDirectory) { [IO.Path]::GetFullPath($WorkDirectory) }
+    else { Join-Path ([IO.Path]::GetTempPath()) ('ProjectZ.PackageConsumer.' + [Guid]::NewGuid().ToString('N')) }
+$architecture = $RuntimeIdentifier.Split('-')[1]
+$machine = if ($architecture -eq 'arm64') { 0xaa64 } else { 0x8664 }
+function Assert-WindowsArchitecture([string]$Path) {
+    $reader = [IO.BinaryReader]::new([IO.File]::OpenRead($Path))
+    try {
+        if ($reader.ReadUInt16() -ne 0x5a4d) { throw "Missing DOS header: $Path" }
+        $reader.BaseStream.Position = 0x3c
+        $reader.BaseStream.Position = $reader.ReadUInt32()
+        if ($reader.ReadUInt32() -ne 0x4550 -or $reader.ReadUInt16() -ne $machine) {
+            throw "Expected a $RuntimeIdentifier PE binary: $Path"
+        }
+    } finally { $reader.Dispose() }
+}
 New-Item -ItemType Directory -Path $consumerRoot | Out-Null
 $feed = [Security.SecurityElement]::Escape($feedDirectory)
 $cache = [Security.SecurityElement]::Escape((Join-Path $consumerRoot 'packages'))
@@ -60,13 +84,13 @@ function New-Consumer([string]$Name, [string]$References) {
     $directory = Join-Path $consumerRoot $Name
     New-Item -ItemType Directory -Path $directory | Out-Null
     @"
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0-windows7.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><UseWindowsForms>true</UseWindowsForms><PlatformTarget>x64</PlatformTarget><NuGetAudit>true</NuGetAudit><NuGetAuditMode>all</NuGetAuditMode></PropertyGroup><ItemGroup><PackageReference Include="ProjectZ" Version="[$version]" />$References</ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0-windows7.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><UseWindowsForms>true</UseWindowsForms><PlatformTarget>$architecture</PlatformTarget><NuGetAudit>true</NuGetAudit><NuGetAuditMode>all</NuGetAuditMode></PropertyGroup><ItemGroup><PackageReference Include="ProjectZ" Version="[$version]" />$References</ItemGroup></Project>
 "@ | Set-Content -LiteralPath (Join-Path $directory 'Consumer.csproj') -Encoding utf8
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'RuntimeSmoke.cs') -Destination (Join-Path $directory 'Program.cs')
     return $directory
 }
 $base = New-Consumer 'Base' ''
-Invoke-DotNet @('publish',(Join-Path $base 'Consumer.csproj'),'-c','Release','-r','win-x64','--self-contained','false','-o',(Join-Path $base 'publish'),'--nologo')
+Invoke-DotNet @('publish',(Join-Path $base 'Consumer.csproj'),'-c','Release','-r',$RuntimeIdentifier,'--self-contained','false','-o',(Join-Path $base 'publish'),'--nologo')
 $assets = Get-Content -LiteralPath (Join-Path $base 'obj/project.assets.json') -Raw | ConvertFrom-Json
 foreach ($name in $assets.libraries.PSObject.Properties.Name) {
     if ($name -match '^(SocketJack|Silk\.NET(?:\.[^/]+)?|Ultz\.Native\.Assimp|Microsoft\.Web\.WebView2|Assimp|ProjectZ\.(ModelImport|Diagnostics|XamlTools|WebView2))/') { throw "Base restore included optional package: $name" }
@@ -79,28 +103,37 @@ foreach ($file in Get-ChildItem -LiteralPath $basePublish -Recurse -File) {
         throw "Base publish included optional file: $($file.Name)"
     }
 }
-foreach ($path in @('ProjectZ.ShaderEditor.dll','ProjectZ.ShaderEditor.Worker.runtimeconfig.json','ProjectZ.ShaderCompiler/mgfxc.dll','ProjectZ.ShaderCompiler/windows-x64/dxcompiler.dll')) {
+foreach ($path in @('ProjectZ.ShaderEditor.dll','ProjectZ.ShaderEditor.Worker.runtimeconfig.json','ProjectZ.ShaderCompiler/mgfxc.dll',"ProjectZ.ShaderCompiler/windows-$architecture/dxcompiler.dll")) {
     if (!(Test-Path -LiteralPath (Join-Path $basePublish $path) -PathType Leaf)) { throw "Base publish is missing $path." }
+}
+$compilerArchitectures = @(Get-ChildItem -LiteralPath $shaderCompiler -Directory -Filter 'windows-*')
+if ($compilerArchitectures.Count -ne 1 -or $compilerArchitectures[0].Name -ne "windows-$architecture") {
+    throw "Base publish must include only the $architecture DXC payload."
 }
 $native = @(Get-ChildItem -LiteralPath (Join-Path $base 'publish') -Recurse -Filter 'mgruntime.dll')
 if ($native.Count -ne 1 -or $native[0].DirectoryName -ne (Join-Path $base 'publish')) { throw 'Publish must contain exactly one native graphics runtime at the application root.' }
-$expectedNative = Join-Path $consumerRoot "packages/projectz/$version/tools/native/win-x64/mgruntime.dll"
+$expectedNative = Join-Path $consumerRoot "packages/projectz/$version/tools/native/$RuntimeIdentifier/mgruntime.dll"
 if ((Get-FileHash -LiteralPath $native[0].FullName).Hash -ne (Get-FileHash -LiteralPath $expectedNative).Hash) { throw 'Publish selected the upstream graphics runtime instead of the Project-Z build.' }
-Invoke-DotNet @((Join-Path $base 'publish/Consumer.dll'),(Join-Path $base 'logs'))
+foreach ($path in @('Consumer.exe','mgruntime.dll','ProjectZDesktopCapture.dll',"ProjectZ.ShaderCompiler/windows-$architecture/dxcompiler.dll")) {
+    Assert-WindowsArchitecture (Join-Path $basePublish $path)
+}
+& (Join-Path $basePublish 'Consumer.exe') (Join-Path $base 'logs') '--native'
+if ($LASTEXITCODE -ne 0) { throw "Native runtime and shader check failed on $RuntimeIdentifier." }
 
 $model = New-Consumer 'Model' "<PackageReference Include=`"ProjectZ.ModelImport`" Version=`"[$version]`" />"
-Invoke-DotNet @('publish',(Join-Path $model 'Consumer.csproj'),'-c','Release','-r','win-x64','--self-contained','true','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-o',(Join-Path $model 'publish'),'--nologo')
+Invoke-DotNet @('publish',(Join-Path $model 'Consumer.csproj'),'-c','Release','-r',$RuntimeIdentifier,'--self-contained','true','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-o',(Join-Path $model 'publish'),'--nologo')
 & (Join-Path $model 'publish/Consumer.exe') (Join-Path $model 'logs') '--model'
 if ($LASTEXITCODE -ne 0) { throw 'Single-file model importer consumer failed.' }
 
 $browser = New-Consumer 'Browser' "<PackageReference Include=`"ProjectZ.WebView2`" Version=`"[$version]`" />"
 'public static class BrowserApi { public static System.Type Host => typeof(ProjectZ.Shared.Html5.Html5EngineHost); }' | Set-Content -LiteralPath (Join-Path $browser 'BrowserApi.cs')
-Invoke-DotNet @('build',(Join-Path $browser 'Consumer.csproj'),'-c','Release','--nologo')
+Invoke-DotNet @('build',(Join-Path $browser 'Consumer.csproj'),'-c','Release','-r',$RuntimeIdentifier,'--nologo')
 
 $diagnostics = New-Consumer 'Diagnostics' "<PackageReference Include=`"ProjectZ.Diagnostics`" Version=`"[$version]`" />"
-Invoke-DotNet @('publish',(Join-Path $diagnostics 'Consumer.csproj'),'-c','Release','-r','win-x64','--self-contained','true','-p:PublishSingleFile=true','-p:IncludeAllContentForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-o',(Join-Path $diagnostics 'publish'),'--nologo')
+Invoke-DotNet @('publish',(Join-Path $diagnostics 'Consumer.csproj'),'-c','Release','-r',$RuntimeIdentifier,'--self-contained','true','-p:PublishSingleFile=true','-p:IncludeAllContentForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-o',(Join-Path $diagnostics 'publish'),'--nologo')
 $observer = Join-Path $diagnostics 'publish/ProjectZ.Diagnostics.exe'
 if (!(Test-Path -LiteralPath $observer)) { throw 'Optional observer was not deployed beside the bundled host.' }
+Assert-WindowsArchitecture $observer
 & (Join-Path $diagnostics 'publish/Consumer.exe') (Join-Path $diagnostics 'logs')
 if ($LASTEXITCODE -ne 0) { throw 'Self-contained diagnostics consumer failed.' }
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -117,6 +150,6 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../NativeSceneXaml/View.xaml') 
 $taskProjectPath = Join-Path $xaml 'Consumer.csproj'
 $taskProjectText = [IO.File]::ReadAllText($taskProjectPath).Replace('</Project>','<ItemGroup><ProjectZSceneXaml Include="View.xaml" /></ItemGroup></Project>')
 [IO.File]::WriteAllText($taskProjectPath,$taskProjectText)
-Invoke-DotNet @('run','--project',$taskProjectPath,'-c','Release','--','Native XAML')
+Invoke-DotNet @('run','--project',$taskProjectPath,'-c','Release','-r',$RuntimeIdentifier,'--','Native XAML')
 $baseBytes = (Get-ChildItem -LiteralPath (Join-Path $base 'publish') -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host "PACKAGE_OK ProjectZ=$version; basePublishBytes=$baseBytes; consumer=$consumerRoot"
+Write-Host "PACKAGE_OK ProjectZ=$version; rid=$RuntimeIdentifier; basePublishBytes=$baseBytes; consumer=$consumerRoot"

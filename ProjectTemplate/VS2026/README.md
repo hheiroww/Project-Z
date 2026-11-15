@@ -8,7 +8,7 @@ Version **2026.11.2.2** installs seven templates in Visual Studio 2026 on Window
 | --- | --- | --- |
 | Project-Z Desktop | C#, Visual Basic | Windows x64; DX12, DX11 or OpenGL |
 | Project-Z XAML Desktop | C#, Visual Basic | Windows x64; native app plus WPF Designer project |
-| Project-Z Cross-Platform Desktop | C#, Visual Basic | Windows x64, Linux x64, Intel/Apple Silicon macOS |
+| Project-Z Cross-Platform Desktop | C#, Visual Basic | Windows and Linux x64/ARM64, Intel/Apple Silicon macOS |
 | Project-Z Cross-Platform Scene XAML | C# | The same desktop platforms, with compiled native scene markup |
 
 Install the **.NET desktop development** workload and **.NET 8 and .NET 10 SDKs**,
@@ -31,9 +31,11 @@ project in Visual Studio, its source can also be built on Linux or macOS with th
 
 ```sh
 dotnet publish MyApp.csproj -c Release -r linux-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r linux-arm64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-x64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-arm64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r win-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r win-arm64 --self-contained true
 ```
 
 For builds without a RID, `-p:ProjectZPlatform=Linux`, `macOS` or `Windows` selects

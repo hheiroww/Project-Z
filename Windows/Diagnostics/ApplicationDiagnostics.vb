@@ -227,7 +227,7 @@ Public NotInheritable Class ApplicationDiagnostics
         Dim nativeFault = False
         Dim graphicsOriginCaptured = False
         Dim attachBreakpoint = True
-        Dim events = Marshal.AllocHGlobal(176) ' Windows x64 DEBUG_EVENT
+        Dim events = Marshal.AllocHGlobal(176) ' DEBUG_EVENT uses the same layout on x64 and Arm64.
         Try
             Using target = Process.GetProcessById(targetId)
                 If Not DebugActiveProcess(CUInt(targetId)) Then
@@ -337,7 +337,7 @@ Public NotInheritable Class ApplicationDiagnostics
     End Function
 
     Private Shared Function ReadGraphicsException(target As Process, events As IntPtr) As String
-        ' MSVC x64 C++ exception metadata uses image-relative RTTI offsets.
+        ' MSVC 64-bit C++ exception metadata uses image-relative RTTI offsets.
         ' Validate the exact DX exception type before interpreting its HRESULT.
         Try
             If Marshal.ReadInt32(events, 40) <> 4 Then Return Nothing
@@ -366,7 +366,9 @@ Public NotInheritable Class ApplicationDiagnostics
     End Sub
 
     Private Shared Sub WriteDump(target As Process, session As String, events As IntPtr, threadId As UInteger)
-        Dim contextBuffer = Marshal.AllocHGlobal(1248)
+        Dim arm64 = RuntimeInformation.ProcessArchitecture = Architecture.Arm64
+        Dim contextSize = If(arm64, &H390, 1232)
+        Dim contextBuffer = Marshal.AllocHGlobal(contextSize + 15)
         Dim context = New IntPtr((contextBuffer.ToInt64() + 15L) And Not 15L)
         Dim pointers = Marshal.AllocHGlobal(16)
         Dim exceptionInfo = Marshal.AllocHGlobal(16) ' MINIDUMP headers use pack(4)
@@ -378,8 +380,12 @@ Public NotInheritable Class ApplicationDiagnostics
             Using output As New FileStream(Path.ChangeExtension(session, ".dmp"), FileMode.Create, FileAccess.Write, FileShare.Read)
                 ' Include thread stacks, module metadata and unloaded modules.
                 ' Full process memory (chat contents/credentials) is not requested.
-                Marshal.Copy(New Byte(1231) {}, 0, context, 1232)
-                Marshal.WriteInt32(context, 48, &H10001F) ' x64 CONTEXT_ALL
+                Marshal.Copy(New Byte(contextSize - 1) {}, 0, context, contextSize)
+                If arm64 Then
+                    Marshal.WriteInt32(context, 0, &H400007) ' ARM64 CONTEXT_FULL
+                Else
+                    Marshal.WriteInt32(context, 48, &H10001F) ' x64 CONTEXT_ALL
+                End If
                 Dim info = IntPtr.Zero
                 If thread <> IntPtr.Zero AndAlso GetThreadContext(thread, context) Then
                     Marshal.WriteIntPtr(pointers, 0, IntPtr.Add(events, 16)) ' local EXCEPTION_RECORD64

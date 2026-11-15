@@ -1,11 +1,7 @@
-# Project-Z 2026.11.11.3
+# Project-Z 2026.11.14.1
 
-- The DirectX shader editor supports visual node graphs, a live preview,
-  editable graph files and shader export. Host apps can receive the graph
-  for a successful Run and compile it as a standalone D3D11 pixel shader.
-- Native Windows scenes resolve cursors across nested controls, overlays,
-  text selection, resize handles and pointer capture. Scene XAML and
-  WPF compatibility accept explicit cursor overrides.
+- `ProjectZ` targets Windows x64 and ARM64 with DirectX 12 and matching native capture and shader compiler assets.
+- `ProjectZ.Linux` targets Linux x64 and ARM64. `ProjectZ.macOS` supports Intel and Apple Silicon using the same universal package.
+- The cross-platform desktop and native scene XAML starters accept all six desktop RIDs.
 
-The seven runtime packages and combined Visual Studio template extension use
-the same framework version.
+The runtime packages and combined Visual Studio template extension use the same framework version.

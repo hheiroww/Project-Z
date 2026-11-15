@@ -1,21 +1,40 @@
 <Project>
+  <Import Project="ProjectZ.WindowsRuntime.targets" Condition="'$(ProjectZWindowsRuntimeSelectionImported)' != 'true'" />
   <PropertyGroup>
     <ProjectZCaptureRoot>$(MSBuildThisFileDirectory)../</ProjectZCaptureRoot>
     <BuildProjectZDesktopCapture Condition="'$(BuildProjectZDesktopCapture)' == ''">true</BuildProjectZDesktopCapture>
-    <ProjectZCaptureLibrary Condition="$([MSBuild]::IsOSPlatform('Windows'))">ProjectZDesktopCapture.dll</ProjectZCaptureLibrary>
-    <ProjectZCaptureLibrary Condition="$([MSBuild]::IsOSPlatform('OSX'))">libProjectZDesktopCapture.dylib</ProjectZCaptureLibrary>
   </PropertyGroup>
-  <Target Name="BuildProjectZDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles"
-          Condition="'$(BuildProjectZDesktopCapture)' == 'true' and (('$(MSBuildProjectName)' == 'Project Z Windows' and $([MSBuild]::IsOSPlatform('Windows'))) or ('$(ProjectZDesktopPlatform)' == 'macOS' and $([MSBuild]::IsOSPlatform('OSX'))))"
-          Inputs="$(ProjectZCaptureRoot)Native/DesktopCapture/WindowsCapture.cpp;$(ProjectZCaptureRoot)Native/DesktopCapture/MacCapture.swift;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1"
-          Outputs="$(IntermediateOutputPath)desktop-capture/$(ProjectZCaptureLibrary)">
+  <Target Name="ResolveProjectZWindowsCaptureArchitectures" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <ItemGroup>
+      <_ProjectZWindowsCapture Include="x64" Condition="'$(_ProjectZWindowsRuntimeIdentifier)' == 'win-x64' or '$(BuildProjectZWindowsArm64)' == 'true'" />
+      <_ProjectZWindowsCapture Include="arm64" Condition="'$(_ProjectZWindowsRuntimeIdentifier)' == 'win-arm64' or '$(BuildProjectZWindowsArm64)' == 'true'" />
+    </ItemGroup>
+  </Target>
+  <Target Name="BuildProjectZWindowsDesktopCapture" DependsOnTargets="ResolveProjectZWindowsCaptureArchitectures"
+          Condition="'$(BuildProjectZDesktopCapture)' == 'true' and '$(NoBuild)' != 'true' and $([MSBuild]::IsOSPlatform('Windows'))"
+          Inputs="$(ProjectZCaptureRoot)Native/DesktopCapture/WindowsCapture.cpp;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1"
+          Outputs="$(IntermediateOutputPath)desktop-capture/win-%(_ProjectZWindowsCapture.Identity)/ProjectZDesktopCapture.dll">
+    <Exec Condition="'@(_ProjectZWindowsCapture)' != ''"
+          Command="pwsh -NoProfile -File &quot;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1&quot; -Architecture %(_ProjectZWindowsCapture.Identity) -OutputDirectory &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)desktop-capture/win-%(_ProjectZWindowsCapture.Identity)', '$(MSBuildProjectDirectory)'))&quot;" />
+  </Target>
+  <Target Name="IncludeProjectZWindowsDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles" DependsOnTargets="ResolveProjectZWindowsCaptureArchitectures;BuildProjectZWindowsDesktopCapture"
+          Condition="'$(MSBuildProjectName)' == 'Project Z Windows' and '$(BuildProjectZDesktopCapture)' == 'true'">
+    <ItemGroup>
+      <Content Include="$(IntermediateOutputPath)desktop-capture/win-%(_ProjectZWindowsCapture.Identity)/ProjectZDesktopCapture.dll"
+               Condition="'@(_ProjectZWindowsCapture)' != '' and Exists('$(IntermediateOutputPath)desktop-capture/win-%(_ProjectZWindowsCapture.Identity)/ProjectZDesktopCapture.dll')"
+               Link="ProjectZDesktopCapture.dll" Pack="true" PackagePath="runtimes/win-%(_ProjectZWindowsCapture.Identity)/native/">
+        <CopyToOutputDirectory Condition="'win-%(_ProjectZWindowsCapture.Identity)' == '$(_ProjectZWindowsRuntimeIdentifier)'">PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory Condition="'win-%(_ProjectZWindowsCapture.Identity)' == '$(_ProjectZWindowsRuntimeIdentifier)'">PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+  <Target Name="BuildProjectZDesktopCapture" Condition="'$(BuildProjectZDesktopCapture)' == 'true' and '$(ProjectZDesktopPlatform)' == 'macOS' and $([MSBuild]::IsOSPlatform('OSX'))"
+          Inputs="$(ProjectZCaptureRoot)Native/DesktopCapture/MacCapture.swift;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1"
+          Outputs="$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib">
     <Exec Command="pwsh -NoProfile -File &quot;$(ProjectZCaptureRoot)tools/Build-DesktopCapture.ps1&quot; -OutputDirectory &quot;$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)desktop-capture', '$(MSBuildProjectDirectory)'))&quot;" Condition="'$(NoBuild)' != 'true'" />
   </Target>
-  <Target Name="IncludeProjectZDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles" DependsOnTargets="BuildProjectZDesktopCapture">
-    <ItemGroup Condition="'$(MSBuildProjectName)' == 'Project Z Windows' and Exists('$(IntermediateOutputPath)desktop-capture/ProjectZDesktopCapture.dll')">
-      <Content Include="$(IntermediateOutputPath)desktop-capture/ProjectZDesktopCapture.dll" Link="ProjectZDesktopCapture.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="runtimes/win-x64/native/" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(ProjectZDesktopPlatform)' == 'macOS' and Exists('$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib')">
+  <Target Name="IncludeProjectZDesktopCapture" BeforeTargets="AssignTargetPaths;_GetPackageFiles" DependsOnTargets="BuildProjectZDesktopCapture" Condition="'$(ProjectZDesktopPlatform)' == 'macOS'">
+    <ItemGroup Condition="Exists('$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib')">
       <Content Include="$(IntermediateOutputPath)desktop-capture/libProjectZDesktopCapture.dylib" Link="libProjectZDesktopCapture.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="runtimes/osx/native/" />
     </ItemGroup>
   </Target>

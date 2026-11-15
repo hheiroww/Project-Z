@@ -5,16 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageDownload Include="dotnet-mgfxc" Version="[$(ProjectZShaderCompilerVersion)]" />
-    <_ProjectZShaderCompiler Include="$(_ProjectZShaderCompilerFiles)*.dll;$(_ProjectZShaderCompilerFiles)mgfxc.*.json;$(_ProjectZShaderCompilerFiles)windows-x64/*" />
+    <_ProjectZShaderCompiler Include="$(_ProjectZShaderCompilerFiles)*.dll;$(_ProjectZShaderCompilerFiles)mgfxc.*.json;$(_ProjectZShaderCompilerFiles)windows-x64/*;$(_ProjectZShaderCompilerFiles)windows-arm64/*" />
     <_ProjectZShaderCompiler Include="$(MSBuildThisFileDirectory)../../ThirdParty/MonoGame.Native/LICENSE.MonoGame.txt" />
-    <_ProjectZShaderCompiler Update="$(_ProjectZShaderCompilerFiles)windows-x64/*" Subdirectory="windows-x64/" />
-    <Content Include="@(_ProjectZShaderCompiler)">
-      <Link>ProjectZ.ShaderCompiler/%(Subdirectory)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Pack Condition="'$(MSBuildProjectName)' == 'Project Z Windows'">true</Pack>
+    <_ProjectZShaderCompiler Update="$(_ProjectZShaderCompilerFiles)windows-x64/*" Subdirectory="windows-x64/" RuntimeIdentifier="win-x64" />
+    <_ProjectZShaderCompiler Update="$(_ProjectZShaderCompilerFiles)windows-arm64/*" Subdirectory="windows-arm64/" RuntimeIdentifier="win-arm64" />
+    <None Include="@(_ProjectZShaderCompiler)" Pack="true">
       <PackagePath>buildTransitive/ProjectZ.ShaderCompiler/%(Subdirectory)%(Filename)%(Extension)</PackagePath>
-    </Content>
+    </None>
     <Content Include="$(MSBuildThisFileDirectory)Worker.runtimeconfig.json">
       <Link>ProjectZ.ShaderEditor.Worker.runtimeconfig.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -23,4 +20,11 @@
       <PackagePath>buildTransitive/ProjectZ.ShaderEditor.Worker.runtimeconfig.json</PackagePath>
     </Content>
   </ItemGroup>
+  <Target Name="CollectProjectZSourceShaderCompiler" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <ItemGroup>
+      <Content Include="@(_ProjectZShaderCompiler)" Condition="'%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '' or '%(_ProjectZShaderCompiler.RuntimeIdentifier)' == '$(_ProjectZWindowsRuntimeIdentifier)'"
+               Link="ProjectZ.ShaderCompiler/%(_ProjectZShaderCompiler.Subdirectory)%(_ProjectZShaderCompiler.Filename)%(_ProjectZShaderCompiler.Extension)"
+               CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
+    </ItemGroup>
+  </Target>
 </Project>

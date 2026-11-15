@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZWindowsRuntimeSelectionImported>true</ProjectZWindowsRuntimeSelectionImported>
+  </PropertyGroup>
+  <Target Name="ResolveProjectZWindowsRuntime">
+    <PropertyGroup>
+      <_ProjectZWindowsRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64'">$(RuntimeIdentifier)</_ProjectZWindowsRuntimeIdentifier>
+      <_ProjectZWindowsRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(PlatformTarget)' == 'ARM64'">win-arm64</_ProjectZWindowsRuntimeIdentifier>
+      <_ProjectZWindowsRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(PlatformTarget)' == 'x64'">win-x64</_ProjectZWindowsRuntimeIdentifier>
+      <_ProjectZWindowsRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and ('$(PlatformTarget)' == '' or '$(PlatformTarget)' == 'AnyCPU') and '$(Prefer32Bit)' != 'true' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-arm64')">$(NETCoreSdkPortableRuntimeIdentifier)</_ProjectZWindowsRuntimeIdentifier>
+    </PropertyGroup>
+  </Target>
+</Project>

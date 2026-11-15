@@ -86,11 +86,30 @@ jobs:
           name: ProjectZ-runtime-packages
           path: artifacts/runtime-packages/*.nupkg
           if-no-files-found: error
+  windows-arm64:
+    needs: windows
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Download the Windows package set
+        uses: actions/download-artifact@v4
+        with:
+          name: ProjectZ-runtime-packages
+          path: runtime-packages
+      - name: Verify standalone package consumers on ARM64
+        shell: pwsh
+        run: |
+          [xml]$properties = Get-Content Extensions/ProjectZ.Package.props
+          $version = $properties.Project.PropertyGroup.Version
+          ./tests/Packaging/Verify.ps1 -PackagePath "runtime-packages/ProjectZ.$version.nupkg" -RuntimeIdentifier win-arm64
   desktopgl:
     uses: ./.github/workflows/desktopgl.yml
   release:
-    if: ${{ always() && !cancelled() && needs.desktopgl.result == 'success' && (needs.windows.result == 'success' || inputs.desktopgl_only == true) }}
-    needs: [windows, desktopgl]
+    if: ${{ always() && !cancelled() && needs.desktopgl.result == 'success' && ((needs.windows.result == 'success' && needs.windows-arm64.result == 'success') || inputs.desktopgl_only == true) }}
+    needs: [windows, windows-arm64, desktopgl]
     runs-on: windows-latest
     permissions:
       contents: write

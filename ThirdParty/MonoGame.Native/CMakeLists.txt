@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(ProjectZMonoGameNative LANGUAGES C CXX)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(FATAL_ERROR "This patch builds the Windows x64 DX12 runtime.")
+  message(FATAL_ERROR "This patch builds the Windows x64 and ARM64 DX12 runtimes.")
 endif()
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)

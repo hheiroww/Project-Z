@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using ProjectZ.RuntimeDiagnostics;
+using ProjectZ.ShaderEditor;
 using ProjectZ.Shared.Drawing.ThreeD;
 using ProjectZ.Shared.Drawing.UI.Primitives;
 
@@ -38,6 +40,19 @@ internal static class Program
         cancellation.Cancel();
         try { await ModelImporter3D.LoadAsync(modelPath, cancellation.Token); throw new Exception("Canceled import was accepted."); }
         catch (OperationCanceledException) { }
+        if (args.Contains("--native"))
+        {
+            foreach (var payload in new[] { "mgruntime.dll", "ProjectZDesktopCapture.dll" })
+                NativeLibrary.Free(NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, payload)));
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var compiler = Path.Combine(AppContext.BaseDirectory, "ProjectZ.ShaderCompiler");
+            var shader = ShaderGenerator.Generate(ShaderDocument.Create());
+            var result = await ShaderCompiler.CompileAsync(shader, ShaderBackend.DirectX12, compiler,
+                Path.Combine(directory, "shader"), timeout.Token);
+            if (!result.Success)
+                throw new InvalidOperationException($"Packaged DX12 shader compilation failed: {result.Diagnostics}");
+        }
         Console.WriteLine("PACKAGE_RUNTIME_OK");
     }
 }

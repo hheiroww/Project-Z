@@ -9,7 +9,7 @@ Search for **Project-Z** after installing the extension and restarting Visual St
 | --- | --- | --- |
 | Project-Z Desktop | C#, Visual Basic | Windows x64 |
 | Project-Z XAML Desktop | C#, Visual Basic | Windows x64, with a WPF designer project |
-| Project-Z Cross-Platform Desktop | C#, Visual Basic | Windows x64, Linux x64, Intel and Apple Silicon macOS |
+| Project-Z Cross-Platform Desktop | C#, Visual Basic | Windows and Linux x64/ARM64, Intel and Apple Silicon macOS |
 | Project-Z Cross-Platform Scene XAML | C# | Windows, Linux and macOS |
 
 The Windows templates include DirectX 12, DirectX 11 and OpenGL configurations,

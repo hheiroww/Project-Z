@@ -3,7 +3,7 @@ param(
     [string]$BuildDirectory,
     [string]$WorkDirectory,
     [string]$PackageDirectory,
-    [string[]]$RuntimeIdentifiers = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64'),
+    [string[]]$RuntimeIdentifiers = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64'),
     [switch]$SkipRuntime,
     [switch]$Resume
 )
@@ -56,7 +56,7 @@ function Assert-Output([string]$Folder, [string]$Platform) {
     foreach ($name in @('ProjectZ.dll', 'ProjectZ.VectorText.dll', 'ThirdParty/ProjectZSans/OFL.txt')) {
         if (!(Test-Path -LiteralPath "$Folder/$name")) { throw "Missing $Platform published asset: $name" }
     }
-    $native = switch ($Platform) { 'win-x64' { 'ProjectZDesktopCapture.dll' } 'linux-x64' { 'libSDL2-2.0.so.0' } default { 'libProjectZDesktopCapture.dylib' } }
+    $native = switch -Wildcard ($Platform) { 'win-*' { 'ProjectZDesktopCapture.dll' } 'linux-*' { 'libSDL2-2.0.so.0' } default { 'libProjectZDesktopCapture.dylib' } }
     if (!(Get-ChildItem -LiteralPath $Folder -Recurse -File | Where-Object Name -EQ $native)) { throw "Missing $Platform native asset: $native" }
     if ($Platform -like 'osx-*' -and !(Get-ChildItem -LiteralPath $Folder -Recurse -File | Where-Object Name -Like '*SDL2*.dylib')) { throw 'Missing macOS SDL2.' }
     if (@(Get-ChildItem -LiteralPath $Folder -File -Recurse | Where-Object Name -Match 'ProjectZ\.Diagnostics|Assimp|WebView2|ProjectZ\.XamlCodegen|ProjectZ\.WpfCompatibility').Count) { throw 'Optional/tooling payload leaked into the published app.' }
@@ -70,7 +70,9 @@ try {
         Run-Dotnet @('new', 'install', $pack, '--debug:custom-hive', $hive) 'install'
         Set-Content -LiteralPath "$hive/installed.txt" -Value $digest
     }
-    $hostRid = if ($IsWindows) { 'win-x64' } elseif ($IsLinux) { 'linux-x64' } elseif ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' }
+    $hostOs = if ($IsWindows) { 'win' } elseif ($IsLinux) { 'linux' } else { 'osx' }
+    $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+    $hostRid = "$hostOs-$hostArchitecture"
     foreach ($variant in @('CSharp', 'VisualBasic', 'SceneXaml')) {
         $language = if ($variant -eq 'VisualBasic') { 'VB' } else { 'C#' }
         $template = if ($variant -eq 'SceneXaml') { 'projectz-scene' } else { 'projectz-desktop' }

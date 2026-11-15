@@ -15,9 +15,11 @@ The generated cross-platform project can build on Windows, Linux and macOS with
 
 ```sh
 dotnet publish MyApp.csproj -c Release -r linux-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r linux-arm64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-x64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r osx-arm64 --self-contained true
 dotnet publish MyApp.csproj -c Release -r win-x64 --self-contained true
+dotnet publish MyApp.csproj -c Release -r win-arm64 --self-contained true
 ```
 
 Linux/macOS use OpenGL; Windows uses DX12. Native scene XAML compiles during

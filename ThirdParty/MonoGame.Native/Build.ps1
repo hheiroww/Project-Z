@@ -1,11 +1,30 @@
-param([string]$SourceRoot, [string]$BuildRoot, [switch]$Tests)
+param(
+    [string]$SourceRoot,
+    [string]$BuildRoot,
+    [string]$OutputDirectory,
+    [ValidateSet('x64','arm64')][string]$Architecture = 'x64',
+    [switch]$Tests
+)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if(-not $SourceRoot) { $SourceRoot = Join-Path $repo 'artifacts\NativeRuntime\MonoGame' }
-if(-not $BuildRoot) { $BuildRoot = Join-Path $repo 'artifacts\NativeRuntime\build' }
+if(-not $BuildRoot) {
+    $BuildRoot = Join-Path $repo $(if($Architecture -eq 'arm64') { 'artifacts\NativeRuntime\build-arm64' } else { 'artifacts\NativeRuntime\build' })
+}
+$defaultOutput = $PSScriptRoot
+if($Architecture -eq 'arm64') { $defaultOutput = Split-Path $BuildRoot -Parent }
+if(-not $OutputDirectory) { $OutputDirectory = Join-Path $defaultOutput "win-$Architecture" }
 $SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
 $BuildRoot = [IO.Path]::GetFullPath($BuildRoot)
+$OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $commit = '5e9fe9b100ffa67026dff97cc8adffae1414534e'
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$compilerComponent = if($Architecture -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+$vs = @(& $vswhere -latest -prerelease -products '*' -requires $compilerComponent Microsoft.VisualStudio.Component.VC.CMake.Project -format json | ConvertFrom-Json)[0]
+if(-not $vs) { throw "Visual Studio $Architecture C++ build tools and CMake are required." }
+$cmake = Join-Path $vs.installationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+$generator = if([version]$vs.installationVersion -ge [version]'18.0') { 'Visual Studio 18 2026' } else { 'Visual Studio 17 2022' }
+$platform = if($Architecture -eq 'arm64') { 'ARM64' } else { 'x64' }
 function Check-NativeBuild([string]$step) { if($LASTEXITCODE -ne 0) { throw "$step failed ($LASTEXITCODE)." } }
 if(-not (Test-Path (Join-Path $SourceRoot '.git'))) {
     New-Item -ItemType Directory (Split-Path $SourceRoot) -Force | Out-Null
@@ -35,12 +54,7 @@ try {
         Check-NativeBuild 'Native shader compilation'
     }
 } finally { Pop-Location }
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$vs = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)[0]
-if(-not $vs) { throw 'Visual Studio C++ build tools are required.' }
-$cmake = Join-Path $vs.installationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
-$generator = if([version]$vs.installationVersion -ge [version]'18.0') { 'Visual Studio 18 2026' } else { 'Visual Studio 17 2022' }
-& $cmake -S $PSScriptRoot -B $BuildRoot -G $generator -A x64 "-DMONOGAME_SOURCE=$($SourceRoot.Replace('\','/'))" "-DPROJECTZ_NATIVE_TESTS=$($Tests.IsPresent)"
+& $cmake -S $PSScriptRoot -B $BuildRoot -G $generator -A $platform "-DCMAKE_GENERATOR_INSTANCE=$($vs.installationPath)" "-DMONOGAME_SOURCE=$SourceRoot" "-DPROJECTZ_NATIVE_TESTS=$($Tests.IsPresent)"
 Check-NativeBuild 'Native configuration'
 & $cmake --build $BuildRoot --config Release --parallel 8
 Check-NativeBuild 'Native compilation'
@@ -48,10 +62,9 @@ if($Tests) {
     & (Join-Path $BuildRoot 'Release\ProjectZFenceWait.exe')
     Check-NativeBuild 'Real GPU fence tests'
 }
-$payload = Join-Path $PSScriptRoot 'win-x64'
-New-Item -ItemType Directory $payload -Force | Out-Null
-Copy-Item (Join-Path $BuildRoot 'Release\mgruntime.dll') $payload -Force
-Copy-Item (Join-Path $BuildRoot 'Release\mgruntime.pdb') $payload -Force
-$hash = (Get-FileHash (Join-Path $payload 'mgruntime.dll')).Hash
-[ordered]@{version='3.8.5.1-projectz.1';upstreamCommit=$commit;sha256=$hash} | ConvertTo-Json | Set-Content (Join-Path $payload 'runtime.json') -Encoding utf8
-Write-Output "Built Project-Z native DX12 runtime; SHA256=$hash"
+New-Item -ItemType Directory $OutputDirectory -Force | Out-Null
+Copy-Item (Join-Path $BuildRoot 'Release\mgruntime.dll') $OutputDirectory -Force
+Copy-Item (Join-Path $BuildRoot 'Release\mgruntime.pdb') $OutputDirectory -Force
+$hash = (Get-FileHash (Join-Path $OutputDirectory 'mgruntime.dll')).Hash
+[ordered]@{version='3.8.5.1-projectz.1';upstreamCommit=$commit;sha256=$hash} | ConvertTo-Json | Set-Content (Join-Path $OutputDirectory 'runtime.json') -Encoding utf8
+Write-Output "Built Project-Z native DX12 runtime ($Architecture); SHA256=$hash"

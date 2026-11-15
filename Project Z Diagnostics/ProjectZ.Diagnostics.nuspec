@@ -15,9 +15,12 @@
     </dependencies>
   </metadata>
   <files>
-    <file src="bin/$configuration$/net8.0-windows7.0/win-x64/publish/ProjectZ.Diagnostics.exe" target="tools/diagnostics/" />
+    <file src="$observerPackDirectory$win-x64/ProjectZ.Diagnostics.exe" target="tools/diagnostics/win-x64/" />
+    <file src="$observerPackDirectory$win-arm64/ProjectZ.Diagnostics.exe" target="tools/diagnostics/win-arm64/" />
     <file src="ProjectZ.Diagnostics.targets" target="buildTransitive/" />
+    <file src="../Extensions/ProjectZ.WindowsRuntime.targets" target="buildTransitive/" />
     <file src="../docs/MODULAR-PACKAGES.md" target="/" />
-    <file src="../ThirdParty/DotNetRuntime/*" target="licenses/DotNetRuntime/" />
+    <file src="../ThirdParty/DotNetRuntime/LICENSE.TXT" target="licenses/DotNetRuntime/" />
+    <file src="../ThirdParty/DotNetRuntime/THIRD-PARTY-NOTICES.TXT" target="licenses/DotNetRuntime/" />
   </files>
 </package>

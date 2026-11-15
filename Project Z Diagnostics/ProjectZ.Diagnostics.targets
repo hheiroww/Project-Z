@@ -1,12 +1,18 @@
 <Project>
-  <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)../tools/diagnostics/ProjectZ.Diagnostics.exe" Pack="false">
-      <Link>ProjectZ.Diagnostics.exe</Link>
-      <TargetPath>ProjectZ.Diagnostics.exe</TargetPath>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <!-- The observer is launched as a separate process, including by bundled hosts. -->
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-    </Content>
-  </ItemGroup>
+  <Import Project="ProjectZ.WindowsRuntime.targets" Condition="'$(ProjectZWindowsRuntimeSelectionImported)' != 'true'" />
+  <PropertyGroup>
+    <_ProjectZObserverDirectory>$(MSBuildThisFileDirectory)../tools/diagnostics/</_ProjectZObserverDirectory>
+  </PropertyGroup>
+  <Target Name="IncludeProjectZCrashObserver" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <ItemGroup Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != ''">
+      <Content Include="$(_ProjectZObserverDirectory)$(_ProjectZWindowsRuntimeIdentifier)/ProjectZ.Diagnostics.exe" Pack="false">
+        <Link>ProjectZ.Diagnostics.exe</Link>
+        <TargetPath>ProjectZ.Diagnostics.exe</TargetPath>
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <!-- The observer is launched as a separate process, including by bundled hosts. -->
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </Content>
+    </ItemGroup>
+  </Target>
 </Project>

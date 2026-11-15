@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="ProjectZ.WindowsRuntime.targets" Condition="'$(ProjectZWindowsRuntimeSelectionImported)' != 'true'" />
   <Import Project="$(MSBuildThisFileDirectory)..\Project Z XAML Codegen\ProjectZ.RenderingQuality.targets"
           Condition="'$(ProjectZRenderingQualityIntegrationImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)..\Project Z XAML Codegen\ProjectZ.RenderingQuality.targets')" />
   <Import Project="$(MSBuildThisFileDirectory)..\tools\xaml-codegen\ProjectZ.RenderingQuality.targets"
@@ -24,8 +25,8 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler\**\*" Pack="false">
-      <Link>ProjectZ.ShaderCompiler\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler\*" Pack="false">
+      <Link>ProjectZ.ShaderCompiler\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
@@ -36,35 +37,41 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
-  <ItemGroup>
-    <_ProjectZNativePayload Include="$(MSBuildThisFileDirectory)..\tools\native\win-x64\*" />
-    <Content Include="@(_ProjectZNativePayload)">
-      <Link>ProjectZ.Native\%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-  </ItemGroup>
+  <Target Name="CollectProjectZPackagedShaderCompiler" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <PropertyGroup Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != ''">
+      <_ProjectZShaderCompilerSubdirectory>windows-$(_ProjectZWindowsRuntimeIdentifier.Substring(4))</_ProjectZShaderCompilerSubdirectory>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(_ProjectZShaderCompilerSubdirectory)' != ''">
+      <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/*"
+               Link="ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/%(Filename)%(Extension)" Pack="false"
+               CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+  <Target Name="CollectProjectZNativeGraphicsRuntime" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <ItemGroup Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != ''">
+      <_ProjectZNativePayload Include="@(_ProjectZNativeRuntimeSource->WithMetadataValue('RuntimeIdentifier', '$(_ProjectZWindowsRuntimeIdentifier)'))" />
+      <_ProjectZNativePayload Include="$(MSBuildThisFileDirectory)../tools/native/$(_ProjectZWindowsRuntimeIdentifier)/*" />
+      <Content Include="@(_ProjectZNativePayload)" Link="ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/%(Filename)%(Extension)"
+               CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
+    </ItemGroup>
+  </Target>
   <!-- Select the patched native runtime before the SDK bundles/copies publish
        files. Copying it after Publish leaves the upstream DLL inside a bundle
        and ships an unnecessary second copy under ProjectZ.Native. -->
   <Target Name="SelectProjectZPublishedNativeRuntime" AfterTargets="ComputeResolvedFilesToPublishList"
-          BeforeTargets="_HandleFileConflictsForPublish"
-          Condition="'$(RuntimeIdentifier)' != 'win-arm64' and '$(RuntimeIdentifier)' != 'win-x86' and '$(PlatformTarget)' != 'ARM64' and '$(PlatformTarget)' != 'x86' and '$(Prefer32Bit)' != 'true'">
-    <ItemGroup>
+          BeforeTargets="_HandleFileConflictsForPublish" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <ItemGroup Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != ''">
       <_ProjectZPublishedNative Include="@(ResolvedFileToPublish)"
-          Condition="'%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native\mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native/mgruntime.dll'" />
+          Condition="'%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native\$(_ProjectZWindowsRuntimeIdentifier)\mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/mgruntime.dll'" />
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-          Condition="'@(_ProjectZPublishedNative)' != '' and ('%(ResolvedFileToPublish.RelativePath)' == 'mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native\mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native/mgruntime.dll')" />
+          Condition="'@(_ProjectZPublishedNative)' != '' and ('%(ResolvedFileToPublish.RelativePath)' == 'mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native\$(_ProjectZWindowsRuntimeIdentifier)\mgruntime.dll' or '%(ResolvedFileToPublish.RelativePath)' == 'ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/mgruntime.dll')" />
       <ResolvedFileToPublish Include="@(_ProjectZPublishedNative)" RelativePath="mgruntime.dll" />
     </ItemGroup>
   </Target>
   <!-- A separate payload path avoids duplicate publish-asset conflicts. -->
-  <Target Name="UseProjectZNativeGraphicsRuntime" AfterTargets="Build;Publish"
-          Condition="'$(RuntimeIdentifier)' != 'win-arm64' and '$(RuntimeIdentifier)' != 'win-x86' and '$(PlatformTarget)' != 'ARM64' and '$(PlatformTarget)' != 'x86' and '$(Prefer32Bit)' != 'true'">
-    <Copy SourceFiles="$(TargetDir)ProjectZ.Native\mgruntime.dll" DestinationFiles="$(TargetDir)mgruntime.dll"
-          Condition="Exists('$(TargetDir)ProjectZ.Native\mgruntime.dll')" />
-    <Copy SourceFiles="$(PublishDir)ProjectZ.Native\mgruntime.dll" DestinationFiles="$(PublishDir)mgruntime.dll"
-          Condition="'$(PublishDir)' != '' and Exists('$(PublishDir)ProjectZ.Native\mgruntime.dll')" />
+  <Target Name="UseProjectZNativeGraphicsRuntime" AfterTargets="Build" DependsOnTargets="ResolveProjectZWindowsRuntime">
+    <Copy SourceFiles="$(TargetDir)ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/mgruntime.dll" DestinationFiles="$(TargetDir)mgruntime.dll"
+          Condition="'$(_ProjectZWindowsRuntimeIdentifier)' != '' and Exists('$(TargetDir)ProjectZ.Native/$(_ProjectZWindowsRuntimeIdentifier)/mgruntime.dll')" />
   </Target>
   <!-- ProjectZ.Diagnostics.exe carries its own CLR. Never substitute a host's
        runtimeconfig/deps: single-file hosts need not extract their CLR beside it. -->

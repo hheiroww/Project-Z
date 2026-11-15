@@ -1,16 +1,18 @@
 # Your Project-Z desktop application
 
 Install the .NET 8 SDK or later, then run `dotnet run` from this directory.
-The first build restores the exact Project-Z 2026.11.2.2 package from NuGet.org.
+The first build restores the Project-Z version pinned in ProjectZ.Platform.props.
 Edit `MainScene` to change the UI. This project works without a framework checkout.
 
-The build selects one runtime for the current host: `ProjectZ` on Windows x64
-(DX12), `ProjectZ.Linux` on Linux x64, or `ProjectZ.macOS` on Intel/Apple Silicon
+The build selects one runtime for the current host: `ProjectZ` on Windows (DX12),
+`ProjectZ.Linux` on Linux, or `ProjectZ.macOS` on Intel/Apple Silicon
 Macs (OpenGL). An explicit publish RID selects its corresponding runtime instead:
 
 ```sh
 dotnet publish -c Release -r win-x64 --self-contained true
+dotnet publish -c Release -r win-arm64 --self-contained true
 dotnet publish -c Release -r linux-x64 --self-contained true
+dotnet publish -c Release -r linux-arm64 --self-contained true
 dotnet publish -c Release -r osx-x64 --self-contained true
 dotnet publish -c Release -r osx-arm64 --self-contained true
 ```

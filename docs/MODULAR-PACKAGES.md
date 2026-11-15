@@ -7,8 +7,8 @@ flow into every application.
 
 | Package | Install when the application needs |
 | --- | --- |
-| `ProjectZ` | The Windows native UI runtime. |
-| `ProjectZ.Linux` / `ProjectZ.macOS` | The corresponding Linux or macOS DesktopGL runtime. Install one platform runtime per target. See [DesktopGL](DESKTOPGL.md). |
+| `ProjectZ` | The Windows native UI runtime. Use `win-x64` or `win-arm64` for DX12 publishing. |
+| `ProjectZ.Linux` / `ProjectZ.macOS` | The corresponding Linux or macOS DesktopGL runtime on x64 and ARM64. Install one platform runtime per target. See [DesktopGL](DESKTOPGL.md). |
 | `ProjectZ.ModelImport` | Assimp-backed OBJ/FBX loading through `ModelImporter3D` or `Surface3DElement.LoadModel`. |
 | `ProjectZ.WebView2` | `ProjectZ.Shared.Html5.Html5EngineHost` and WebView2 HTML5 hosting. The separate Microsoft WebView2 browser runtime must also be available. |
 | `ProjectZ.Diagnostics` | An external native crash observer, forced-exit detection and minidumps. Includes its own runtime and deploys as a sidecar executable. |
@@ -18,17 +18,17 @@ flow into every application.
 Use the same version for Project-Z co-packages:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.2.1
+dotnet add package ProjectZ --version 2026.11.14.1
 # Only for applications that load model files:
-dotnet add package ProjectZ.ModelImport --version 2026.11.2.1
+dotnet add package ProjectZ.ModelImport --version 2026.11.14.1
 # Only for applications that need native crash dumps:
-dotnet add package ProjectZ.Diagnostics --version 2026.11.2.1
+dotnet add package ProjectZ.Diagnostics --version 2026.11.14.1
 ```
 
 For native scene XAML compilation:
 
 ```xml
-<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.2.1" PrivateAssets="all" />
+<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.14.1" PrivateAssets="all" />
 ```
 
 ## Migrating an application
@@ -57,15 +57,20 @@ self-contained. WPF/WinForms trimming is not enabled by this change.
 
 ## Building and checking all packages
 
+On Windows, install the .NET 8 SDK, CMake, and the Visual Studio C++ x64 and
+ARM64 build tools. The release script builds the patched ARM64 DirectX 12
+runtime and packages both Windows architectures.
+
 ```powershell
 ./tools/Pack-RuntimePackages.ps1
-./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.2.1.nupkg
+./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.14.1.nupkg
 ```
 
 The packaging test builds consumers outside the source tree. It checks the base
 dependency graph and publish output, verifies managed logging without optional
 features, imports a real OBJ through the optional importer, compiles HTML5 host
-usage and native XAML, and verifies deployment of the optional observer.
+usage and native XAML, and verifies deployment of the optional observer. Use `-RuntimeIdentifier win-arm64`
+on an ARM64 Windows host to check the native runtime, shader compiler and sidecar.
 Build output, temporary consumers and measurements are not source assets.
 
 ## Normal releases
