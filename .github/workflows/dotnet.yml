@@ -22,9 +22,6 @@ jobs:
   windows:
     if: ${{ inputs.desktopgl_only != true }}
     runs-on: windows-latest
-    permissions:
-      contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -71,6 +68,14 @@ jobs:
       - name: Verify shader graph transfer and DirectX compilation
         shell: pwsh
         run: dotnet run --project tests/ShaderEditor/ShaderEditor.csproj -c Release -p:GeneratePackageOnBuild=false
+  windows-packages:
+    if: ${{ inputs.desktopgl_only != true }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
       - name: Build base runtime and optional co-packages
         shell: pwsh
         run: ./tools/Pack-RuntimePackages.ps1
@@ -87,7 +92,7 @@ jobs:
           path: artifacts/runtime-packages/*.nupkg
           if-no-files-found: error
   windows-arm64:
-    needs: windows
+    needs: windows-packages
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -108,8 +113,8 @@ jobs:
   desktopgl:
     uses: ./.github/workflows/desktopgl.yml
   release:
-    if: ${{ always() && !cancelled() && needs.desktopgl.result == 'success' && ((needs.windows.result == 'success' && needs.windows-arm64.result == 'success') || inputs.desktopgl_only == true) }}
-    needs: [windows, windows-arm64, desktopgl]
+    if: ${{ always() && !cancelled() && needs.desktopgl.result == 'success' && ((needs.windows.result == 'success' && needs.windows-packages.result == 'success' && needs.windows-arm64.result == 'success') || inputs.desktopgl_only == true) }}
+    needs: [windows, windows-packages, windows-arm64, desktopgl]
     runs-on: windows-latest
     permissions:
       contents: write
