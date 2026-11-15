@@ -42,8 +42,9 @@
       <_ProjectZShaderCompilerSubdirectory>windows-$(_ProjectZWindowsRuntimeIdentifier.Substring(4))</_ProjectZShaderCompilerSubdirectory>
     </PropertyGroup>
     <ItemGroup Condition="'$(_ProjectZShaderCompilerSubdirectory)' != ''">
-      <Content Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/*"
-               Link="ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/%(Filename)%(Extension)" Pack="false"
+      <_ProjectZPackagedShaderCompiler Include="$(MSBuildThisFileDirectory)ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/*" />
+      <Content Include="@(_ProjectZPackagedShaderCompiler)"
+               Link="ProjectZ.ShaderCompiler/$(_ProjectZShaderCompilerSubdirectory)/%(_ProjectZPackagedShaderCompiler.Filename)%(_ProjectZPackagedShaderCompiler.Extension)" Pack="false"
                CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
