@@ -78,7 +78,7 @@ foreach ($platform in @('Linux', 'macOS')) {
         if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "$platform $RuntimeIdentifier publish omitted $name." }
         if ($RuntimeIdentifier.StartsWith('linux-')) { Assert-LinuxNativeArchitecture $path }
         if ($IsMacOS -and $RuntimeIdentifier.StartsWith('osx-')) {
-            $architectures = if ($name -ne 'Consumer') { 'arm64', 'x86_64' } elseif ($RuntimeIdentifier -eq 'osx-arm64') { 'arm64' } else { 'x86_64' }
+            [string[]]$architectures = if ($name -ne 'Consumer') { 'arm64', 'x86_64' } elseif ($RuntimeIdentifier -eq 'osx-arm64') { 'arm64' } else { 'x86_64' }
             & xcrun lipo $path -verify_arch @architectures
             if ($LASTEXITCODE -ne 0) { throw "$name must contain the requested macOS architectures ($architectures)." }
         }
