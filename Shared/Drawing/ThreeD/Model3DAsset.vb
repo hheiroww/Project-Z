@@ -1,9 +1,14 @@
 Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
+#If Not PROJECTZ_DESKTOPGL Then
+Imports ProjectZ.ShaderEditor
+#End If
 
 Namespace [Shared].Drawing.ThreeD
 
     Public Class SurfaceMaterial3D
+        Private shader As ShaderSnapshot
+
         Public Property Name As String = "Material"
         Public Property DiffuseColor As Color = Color.White
         Public Property TexturePath As String
@@ -11,6 +16,45 @@ Namespace [Shared].Drawing.ThreeD
         Public Property TexturePixels As Color()
         Public Property TextureWidth As Integer
         Public Property TextureHeight As Integer
+
+        ''' <summary>An optional editable Project-Z material graph for DirectX surface hosts.</summary>
+        Public Property ShaderGraph As String
+            Get
+                Return shader?.Graph
+            End Get
+            Set(value As String)
+                If value Is Nothing Then
+                    shader = Nothing
+                    Return
+                End If
+#If PROJECTZ_DESKTOPGL Then
+                Throw New PlatformNotSupportedException("Surface material shaders require a DirectX host.")
+#Else
+                Dim document = ShaderDocument.Parse(value)
+                Dim source = SurfaceMaterials.GenerateHlsl(document)
+                Dim graph = document.ToJson()
+                If System.Text.Encoding.UTF8.GetByteCount(graph) > ShaderDocument.MaximumGraphBytes Then
+                    Throw New IO.InvalidDataException("The material graph exceeds the 256 KiB transfer limit.")
+                End If
+                shader = New ShaderSnapshot(graph, source)
+#End If
+            End Set
+        End Property
+
+        ''' <summary>Returns the shader function associated with this material, or Nothing for diffuse rendering.</summary>
+        Public Function GenerateShaderSource() As String
+            Return shader?.Source
+        End Function
+
+        Private NotInheritable Class ShaderSnapshot
+            Public ReadOnly Graph As String
+            Public ReadOnly Source As String
+
+            Public Sub New(graph As String, source As String)
+                Me.Graph = graph
+                Me.Source = source
+            End Sub
+        End Class
     End Class
 
     Public Class SurfaceMesh3D

@@ -2,6 +2,7 @@ Imports System.Diagnostics
 Imports System.Runtime.InteropServices
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
+Imports ProjectZ.ShaderEditor
 Imports ProjectZ.Shared.Content
 Imports ProjectZ.Shared.Drawing
 Imports ProjectZ.Windows.Composition
@@ -18,6 +19,8 @@ Namespace Windows.ShaderEditing
         Private ReadOnly getAppearance As Func(Of WindowAppearanceSettings)
         Private ReadOnly publish As Action(Of Byte(), String)
         Private ReadOnly shouldClose As Func(Of Boolean)
+        Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
+        Private ReadOnly hosted, surface As Boolean
         Private manager As SceneManager
         Private scene As ShaderEditorScene
         Private sprite As SpriteBatch
@@ -31,12 +34,16 @@ Namespace Windows.ShaderEditing
         Private failure As Exception
 
         Friend Sub New(documentPath As String, graphJson As String, getAppearance As Func(Of WindowAppearanceSettings),
-                       publish As Action(Of Byte(), String), shouldClose As Func(Of Boolean))
+                       publish As Action(Of Byte(), String), shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt),
+                       hosted As Boolean, surface As Boolean)
             Me.documentPath = documentPath
             Me.graphJson = graphJson
             Me.getAppearance = getAppearance
             Me.publish = publish
             Me.shouldClose = shouldClose
+            Me.takeReceipt = takeReceipt
+            Me.hosted = hosted
+            Me.surface = surface
             Window.Title = "Project-Z shader rendering device " & Environment.ProcessId.ToString(Globalization.CultureInfo.InvariantCulture)
             IsFixedTimeStep = False
             InactiveSleepTime = TimeSpan.Zero
@@ -76,7 +83,7 @@ Namespace Windows.ShaderEditing
             scene = New ShaderEditorScene(manager, windowSurface, documentPath, graphJson, publish,
                 Sub() windowSurface.WindowState = Forms.FormWindowState.Minimized,
                 Sub() windowSurface.WindowState = If(windowSurface.WindowState = Forms.FormWindowState.Maximized, Forms.FormWindowState.Normal, Forms.FormWindowState.Maximized),
-                Sub() closing = True)
+                Sub() closing = True, takeReceipt, hosted, surface)
             scene.Quality.AntiAliasingSamples = 4
             scene.Quality.PpiPerfectText = True
             manager.AddScene("shader-editor", scene)
@@ -92,7 +99,7 @@ Namespace Windows.ShaderEditing
                 If shouldClose() Then closing = True
                 If promptToClose Then
                     promptToClose = False
-                    scene.Confirm(Sub() closing = True)
+                    scene.RequestClose()
                 End If
                 If closing Then
                     windowSurface.Close()

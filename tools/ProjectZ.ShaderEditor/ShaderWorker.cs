@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Reflection;
@@ -13,6 +14,8 @@ namespace ProjectZ.ShaderEditor;
 public sealed class ShaderWorkerProcess
 {
     private readonly Channel<bool> changes = Channel.CreateBounded<bool>(1);
+    private readonly ConcurrentQueue<ShaderGraphReceipt> receipts = new();
+    private readonly TaskCompletionSource closeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly object resultLock = new();
     private string appearance;
     private byte[]? latestBytecode;
@@ -21,10 +24,13 @@ public sealed class ShaderWorkerProcess
 
     public ShaderWorkerProcess(string? documentPath, string appearance) : this(documentPath, appearance, null) { }
 
-    public ShaderWorkerProcess(string? documentPath, string appearance, string? graphJson)
+    public ShaderWorkerProcess(string? documentPath, string appearance, string? graphJson) :
+        this(documentPath, appearance, graphJson, false, false) { }
+
+    public ShaderWorkerProcess(string? documentPath, string appearance, string? graphJson, bool hosted, bool surface)
     {
         this.appearance = appearance;
-        Completion = RunAsync(documentPath, graphJson);
+        Completion = RunAsync(documentPath, graphJson, hosted, surface);
     }
 
     public Task Completion { get; }
@@ -59,9 +65,21 @@ public sealed class ShaderWorkerProcess
     {
         Volatile.Write(ref closeRequested, 1);
         changes.Writer.TryWrite(true);
+        closeSignal.TrySetResult();
     }
 
-    private async Task RunAsync(string? documentPath, string? graphJson)
+    public void ConfirmGraph(string graph, string? error)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(graph);
+        if (Encoding.UTF8.GetByteCount(graph) > ShaderDocument.MaximumGraphBytes)
+            throw new InvalidDataException("The shader graph exceeds the 256 KiB transfer limit.");
+        if (Completion.IsCompleted || Volatile.Read(ref closeRequested) != 0)
+            return;
+        receipts.Enqueue(new(graph, error is { Length: > 2048 } ? error[..2048] : error));
+        changes.Writer.TryWrite(true);
+    }
+
+    private async Task RunAsync(string? documentPath, string? graphJson, bool hosted, bool surface)
     {
         string pipeName = PipeProtocol.Prefix + Guid.NewGuid().ToString("N");
         string basePath = AppContext.BaseDirectory;
@@ -104,33 +122,55 @@ public sealed class ShaderWorkerProcess
             throw new InvalidOperationException("The Project-Z shader editor worker could not start.");
         var stderr = process.StandardError.ReadToEndAsync();
         var exited = process.WaitForExitAsync();
-        var connected = pipe.WaitForConnectionAsync(stop.Token);
-        if (await Task.WhenAny(connected, exited).ConfigureAwait(false) == exited && !connected.IsCompletedSuccessfully)
-        {
-            stop.Cancel();
-            await IgnoreTransportEnd(connected).ConfigureAwait(false);
-            throw await WorkerExitError(process, stderr).ConfigureAwait(false);
-        }
-        await connected.ConfigureAwait(false);
-        var settings = new ShaderWorkerStart(documentPath, Volatile.Read(ref appearance), graphJson);
-        await PipeProtocol.WriteAsync(pipe, new(PipeMessage.Start, JsonSerializer.SerializeToUtf8Bytes(settings)), stop.Token)
-            .ConfigureAwait(false);
-        var sending = SendChangesAsync(pipe, stop.Token);
-        var receiving = ReceiveResultsAsync(pipe, stop.Token);
+        var stopping = StopAfterCloseAsync(process, exited, stop.Token);
+        Task? sending = null;
         try
         {
+            var connected = pipe.WaitForConnectionAsync(stop.Token);
+            if (await Task.WhenAny(connected, exited).ConfigureAwait(false) == exited && !connected.IsCompletedSuccessfully)
+            {
+                stop.Cancel();
+                await IgnoreTransportEnd(connected).ConfigureAwait(false);
+                if (Volatile.Read(ref closeRequested) == 0)
+                    throw await WorkerExitError(process, stderr).ConfigureAwait(false);
+                return;
+            }
+            await connected.ConfigureAwait(false);
+            var settings = new ShaderWorkerStart(documentPath, Volatile.Read(ref appearance), graphJson, hosted, surface);
+            await PipeProtocol.WriteAsync(pipe, new(PipeMessage.Start, JsonSerializer.SerializeToUtf8Bytes(settings)), stop.Token)
+                .ConfigureAwait(false);
+            sending = SendChangesAsync(pipe, stop.Token);
+            var receiving = ReceiveResultsAsync(pipe, stop.Token);
             var first = await Task.WhenAny(exited, receiving, sending).ConfigureAwait(false);
             if (first != sending)
                 await first.ConfigureAwait(false);
             await exited.ConfigureAwait(false);
             await receiving.ConfigureAwait(false);
-            if (process.ExitCode != 0)
+            if (process.ExitCode != 0 && Volatile.Read(ref closeRequested) == 0)
                 throw await WorkerExitError(process, stderr).ConfigureAwait(false);
         }
+        catch (IOException) when (Volatile.Read(ref closeRequested) != 0) { }
         finally
         {
             stop.Cancel();
-            await IgnoreTransportEnd(sending).ConfigureAwait(false);
+            if (sending is not null)
+                await IgnoreTransportEnd(sending).ConfigureAwait(false);
+            await IgnoreTransportEnd(stopping).ConfigureAwait(false);
+        }
+    }
+
+    private async Task StopAfterCloseAsync(Process process, Task exited, CancellationToken token)
+    {
+        await closeSignal.Task.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            await exited.WaitAsync(TimeSpan.FromSeconds(5), token).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) when (process.HasExited) { }
+            await exited.ConfigureAwait(false);
         }
     }
 
@@ -144,6 +184,9 @@ public sealed class ShaderWorkerProcess
                 await Task.Delay(Timeout.InfiniteTimeSpan, token).ConfigureAwait(false);
                 return;
             }
+            while (receipts.TryDequeue(out var receipt))
+                await PipeProtocol.WriteAsync(pipe, new(PipeMessage.GraphReceipt, JsonSerializer.SerializeToUtf8Bytes(receipt)), token)
+                    .ConfigureAwait(false);
             var settings = Encoding.UTF8.GetBytes(Volatile.Read(ref appearance));
             await PipeProtocol.WriteAsync(pipe, new(PipeMessage.Appearance, settings), token).ConfigureAwait(false);
         }
@@ -159,7 +202,7 @@ public sealed class ShaderWorkerProcess
                     var result = PipeProtocol.ReadRunResult(packet.Payload);
                     lock (resultLock)
                     {
-                        latestBytecode = result.Bytecode;
+                        latestBytecode = result.Bytecode.Length == 0 ? null : result.Bytecode;
                         latestGraph = result.Graph;
                     }
                     break;
@@ -217,6 +260,7 @@ internal static class ShaderWorkerEntry
     {
         using var stop = new CancellationTokenSource();
         var results = Channel.CreateBounded<PipePacket>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+        var receipts = new ConcurrentQueue<ShaderGraphReceipt>();
         string appearance = start.Appearance;
         int closeRequested = 0;
         var reading = ReadCommands();
@@ -234,8 +278,9 @@ internal static class ShaderWorkerEntry
                     ?? throw new MissingMethodException("ProjectZ.Shaders", "RunEditorWorker");
                 Func<string> currentAppearance = () => Volatile.Read(ref appearance);
                 Func<bool> shouldClose = () => Volatile.Read(ref closeRequested) != 0;
+                Func<ShaderGraphReceipt?> takeReceipt = () => receipts.TryDequeue(out var receipt) ? receipt : null;
                 Action<byte[], string?> publish = (bytes, graph) => results.Writer.TryWrite(PipeProtocol.RunResult(bytes, graph));
-                entry.Invoke(null, [start.DocumentPath, start.Graph, currentAppearance, publish, shouldClose]);
+                entry.Invoke(null, [start.DocumentPath, start.Graph, currentAppearance, publish, shouldClose, takeReceipt, start.Hosted, start.Surface]);
             }
             finally
             {
@@ -264,9 +309,16 @@ internal static class ShaderWorkerEntry
                 {
                     if (packet.Type == PipeMessage.Close)
                         break;
-                    if (packet.Type != PipeMessage.Appearance)
+                    if (packet.Type == PipeMessage.GraphReceipt)
+                    {
+                        var receipt = JsonSerializer.Deserialize<ShaderGraphReceipt>(packet.Payload) ??
+                            throw new InvalidDataException("The shader editor host sent an empty graph receipt.");
+                        receipts.Enqueue(receipt);
+                    }
+                    else if (packet.Type == PipeMessage.Appearance)
+                        Volatile.Write(ref appearance, Encoding.UTF8.GetString(packet.Payload));
+                    else
                         throw new InvalidDataException("Unexpected shader editor command.");
-                    Volatile.Write(ref appearance, Encoding.UTF8.GetString(packet.Payload));
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
@@ -294,8 +346,9 @@ internal static class ShaderWorkerEntry
     }
 }
 
-internal sealed record ShaderWorkerStart(string? DocumentPath, string Appearance, string? Graph);
-internal enum PipeMessage : byte { Start = 1, Appearance, Close, RunResult, Failure }
+public sealed record ShaderGraphReceipt(string Graph, string? Error);
+internal sealed record ShaderWorkerStart(string? DocumentPath, string Appearance, string? Graph, bool Hosted, bool Surface);
+internal enum PipeMessage : byte { Start = 1, Appearance, Close, RunResult, Failure, GraphReceipt }
 internal sealed record PipePacket(PipeMessage Type, byte[] Payload);
 
 internal static class PipeProtocol
@@ -321,7 +374,7 @@ internal static class PipeProtocol
         if (payload.Length <= sizeof(int))
             throw new InvalidDataException("The shader result is incomplete.");
         int graphBytes = BinaryPrimitives.ReadInt32LittleEndian(payload);
-        if (graphBytes < 0 || graphBytes > ShaderDocument.MaximumGraphBytes || graphBytes >= payload.Length - sizeof(int))
+        if (graphBytes < 0 || graphBytes > ShaderDocument.MaximumGraphBytes || graphBytes > payload.Length - sizeof(int))
             throw new InvalidDataException("The shader result contains an invalid graph length.");
         string? graph = graphBytes == 0 ? null : Encoding.UTF8.GetString(payload, sizeof(int), graphBytes);
         return (payload[(sizeof(int) + graphBytes)..], graph);

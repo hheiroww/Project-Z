@@ -44,6 +44,9 @@ public sealed class ShaderDocument
     public List<ShaderNode> Nodes { get; set; } = [];
     public List<ShaderConnection> Connections { get; set; } = [];
 
+    [JsonIgnore]
+    public bool IsSurface => Nodes?.Any(node => node?.Kind == "SurfaceOutput") == true;
+
     public static ShaderDocument Create()
     {
         var source = ShaderNodes.Create("Source", 100, 180);
@@ -115,13 +118,13 @@ public sealed class ShaderDocument
                 node.Values is null || node.Values.Length != definition.Parameters.Count ||
                 node.Values.Any(value => !double.IsFinite(value) || Math.Abs(value) > float.MaxValue))
                 throw new InvalidDataException($"The {definition.Label} node has invalid properties.");
-            if (node.Kind == "Output")
+            if (IsOutputKind(node.Kind))
                 outputCount++;
             incoming.Add(node.Id, 0);
             outgoing.Add(node.Id, []);
         }
         if (outputCount != 1)
-            throw new InvalidDataException("The shader graph needs exactly one XAML Output node.");
+            throw new InvalidDataException("The shader graph needs exactly one output node.");
 
         var occupiedPorts = new HashSet<(Guid Node, string Input)>();
         foreach (var wire in Connections)
@@ -151,6 +154,8 @@ public sealed class ShaderDocument
             throw new InvalidDataException("Shader connections cannot form a cycle.");
         return ordered;
     }
+
+    public static bool IsOutputKind(string kind) => kind is "Output" or "SurfaceOutput";
 
     private static bool ValidCoordinate(double value) => double.IsFinite(value) && Math.Abs(value) <= MaximumNodeCoordinate;
 }

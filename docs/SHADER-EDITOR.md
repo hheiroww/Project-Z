@@ -12,7 +12,7 @@ The **Project Z Application (Windows)** sample has a **Shader Editor** button. I
 
 - **Simple** organizes shaders into Color and Alpha channel stacks. Add an input image, color or scalar value, gradient, checkerboard, or noise. Layers can be enabled, reordered, blended and adjusted independently. The inspector has Studio number controls and RGBA/hex color controls.
 - **Advanced** opens the same graph on a node canvas. Search the palette or press **Space**, connect compatible ports, and wire the result to **XAML Output**. Use the wheel to zoom, right-drag to pan, **F** to frame, and **Alt-click** to disconnect an input. Math, channel, UV, time, procedural and custom HLSL expression nodes are available. Simple mode preserves advanced subgraphs it cannot represent as layers.
-- **Presets** opens a searchable library of editable graphs. Filter by category for specular highlights, reflections, water, terrain, grass, particles, and image effects. **Load preset** opens a fresh Advanced graph and compiles the preview. Use **Play time** to preview motion and **Run** to apply the result to the host. Specular and reflection presets use the input texture and UV coordinates to create 2D effects.
+- **Presets** opens a searchable library of editable graphs. The 57 pixel-effect presets cover reflections, water, terrain, particles, and image effects. The eight 3D material presets open in Simple with editable channels. Use **Play time** to preview motion.
 - **Run** or **Ctrl+Enter** compiles the shader and applies it to the native preview. Enable **Auto run** to compile after edits. Use **Load image** to provide a preview input and **Play time** for time-dependent effects. **Diagnostics** shows the compiler output.
 - **Save** writes the editable `.pzshader` graph. **Save .fx** exports HLSL source. **Save .mgfx** compiles and exports bytecode for the running application's DirectX backend.
 
@@ -33,13 +33,29 @@ if (session.TryTakeEffect(ref effect))
 }
 ```
 
-`session.Close()` closes the editor, and `session.Completion` reports shutdown or startup failure. A host can pass an existing `.pzshader` path to `ShowEditor`.
+`session.Close()` closes the editor when its owner is disposed. `session.Completion` reports shutdown or startup failure. The window close button and Alt+F4 prompt when the graph has unsaved changes. A host can pass an existing `.pzshader` path to `ShowEditor`.
 
 ## Reuse an authored graph
 
 Use `session.TryTakeGraph(ref graphJson)` with a string initialized to `null` to consume the graph that produced the latest successful **Run**. Graph and visual-effect results can be consumed independently. The graph contains at most 256 KiB of UTF-8 JSON. An oversized graph can still produce an XAML effect.
 
 `Shaders.ShowEditorForGraph(graphJson)` opens a draft of the graph. **Save** prompts for a destination. To compile the graph for a D3D11 video pipeline, pass `ShaderDocument.Parse(graphJson)` to `ProjectZ.ShaderEditor.ShaderGenerator.GenerateVideoShader`. The pixel entry point is `ProjectZVideoShader`. Supply the premultiplied source texture at `t0`, the sampler at `s0`, and a 16-byte `b0` constant buffer holding time, inverse texture dimensions and padding in that order. The output is premultiplied RGBA.
+
+Use `ShowEditorForVideoGraph` or `ShowSurfaceEditorForGraph` when the graph belongs to a host project. **Apply** returns the graph for host validation. The host calls `AcknowledgeGraph` with the exact accepted string or `RejectGraph` with the validation message. On acknowledgment the editor marks that revision applied. **Export graph** writes a reusable copy.
+
+## Assign a 3D surface material
+
+```csharp
+var material = new SurfaceMaterial3D
+{
+    ShaderGraph = SurfaceMaterials.CreatePreset("clear-water").ToJson()
+};
+string source = material.GenerateShaderSource();
+```
+
+Use `ProjectZ.Shared.Drawing.ThreeD.SurfaceMaterial3D` to hold the graph and `ProjectZ.ShaderEditor.SurfaceMaterials` to create presets. The material validates and snapshots its graph on assignment. Its HLSL exposes `EvaluateSurfaceMaterial(uv, time)`, which returns linear base color, absorption and emission, roughness, metallic, transmission, index of refraction, normal strength and ambient occlusion. The caller's DirectX renderer supplies geometry, lighting, scene color and depth. A material without a graph uses the existing diffuse data.
+
+Simple and Advanced edit the same nodes. When an Advanced connection drives a channel, Simple displays its linked status. Clear Water defaults to an index of refraction of 1.333 with transmission and ambient occlusion enabled. The other material presets cover Pool Water, Ocean Water, Murky Water, Glass, Glazed Ceramic, Brushed Metal and Matte Paint.
 
 ## Use an exported effect in XAML
 
@@ -55,4 +71,4 @@ Place the `.mgfx` next to the view loaded by `SceneXamlParser.ParseFile`, or cop
 
 For code-created elements or generated XAML factories, assign `XamlNativeEffect.FromCompiledShader(File.ReadAllBytes(path))` to `VisualEffect`.
 
-The Windows x64 editor ships with the pinned MonoGame compiler and uses the installed .NET 8 Desktop Runtime. Keep the Project-Z assemblies, worker runtime configuration, and `ProjectZ.ShaderCompiler` directory alongside the application. Generated shaders target a Project-Z visual's 2D pixel effect, including its source texture, UVs and alpha. Unity material assets, vertex stages and render pipelines are outside that target.
+The Windows x64 editor ships with the pinned MonoGame compiler and uses the installed .NET 8 Desktop Runtime. Keep the Project-Z assemblies, worker runtime configuration, and `ProjectZ.ShaderCompiler` directory alongside the application.

@@ -21,12 +21,29 @@ Public NotInheritable Class Shaders
         Return ShowEditorCore(Nothing, graphJson, appearance)
     End Function
 
-    Private Shared Function ShowEditorCore(documentPath As String, graphJson As String, appearance As WindowAppearance) As ShaderEditorSession
+    ''' <summary>Opens the editor for a video host that commits graphs after native validation.</summary>
+    Public Shared Function ShowEditorForVideoGraph(graphJson As String, Optional appearance As WindowAppearance = Nothing) As ShaderEditorSession
+        If graphJson IsNot Nothing AndAlso ShaderDocument.Parse(graphJson).IsSurface Then
+            Throw New IO.InvalidDataException("A video clip shader needs a pixel-effect graph.")
+        End If
+        Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True)
+    End Function
+
+    ''' <summary>Opens the 3D material editor. A null graph starts with Clear Water.</summary>
+    Public Shared Function ShowSurfaceEditorForGraph(graphJson As String, Optional appearance As WindowAppearance = Nothing) As ShaderEditorSession
+        If graphJson IsNot Nothing AndAlso Not ShaderDocument.Parse(graphJson).IsSurface Then
+            Throw New IO.InvalidDataException("A surface needs a material graph.")
+        End If
+        Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, surface:=True)
+    End Function
+
+    Private Shared Function ShowEditorCore(documentPath As String, graphJson As String, appearance As WindowAppearance,
+                                           Optional hosted As Boolean = False, Optional surface As Boolean = False) As ShaderEditorSession
 #If PROJECTZ_OPENGL Then
         Throw New PlatformNotSupportedException("The shader editor requires a DirectX build of Project-Z.")
 #Else
         Dim theme = If(appearance, WindowAppearance.Default)
-        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson)
+        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson, hosted, surface)
         Dim handler As EventHandler = Sub(sender, args) host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
         AddHandler theme.Changed, handler
         host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
@@ -38,7 +55,7 @@ Public NotInheritable Class Shaders
 
     ' Called by the editor worker in its own process. Keep MonoGame's SDL and graphics globals local to that process.
     Private Shared Sub RunEditorWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
-                                       shouldClose As Func(Of Boolean))
+                                       shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean)
         If shouldClose() Then Return
         Dim snapshot As String = Nothing
         Dim current As WindowAppearanceSettings = Nothing
@@ -51,7 +68,7 @@ Public NotInheritable Class Shaders
                 End If
                 Return current
             End Function
-        Using game As New ShaderEditorGame(documentPath, graphJson, getAppearance, publish, shouldClose)
+        Using game As New ShaderEditorGame(documentPath, graphJson, getAppearance, publish, shouldClose, takeReceipt, hosted, surface)
             game.Run()
         End Using
     End Sub
@@ -86,6 +103,16 @@ Public NotInheritable Class ShaderEditorSession
         graphJson = graph
         Return True
     End Function
+
+    ''' <summary>Confirms the host committed the exact graph returned by TryTakeGraph.</summary>
+    Public Sub AcknowledgeGraph(graphJson As String)
+        host.ConfirmGraph(graphJson, Nothing)
+    End Sub
+
+    ''' <summary>Leaves a graph editable when host validation or application fails.</summary>
+    Public Sub RejectGraph(graphJson As String, message As String)
+        host.ConfirmGraph(graphJson, If(String.IsNullOrWhiteSpace(message), "The host could not apply this graph.", message))
+    End Sub
 
     Public Sub Close()
         host.Close()

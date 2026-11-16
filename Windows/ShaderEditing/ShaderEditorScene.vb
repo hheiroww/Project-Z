@@ -31,11 +31,15 @@ Namespace Windows.ShaderEditing
         Private ReadOnly markup As SceneXamlParser
         Private ReadOnly workspace As CanvasPanel
         Private ReadOnly simple As SimpleShaderView
+        Private ReadOnly material As SimpleMaterialView
         Private ReadOnly advanced As AdvancedShaderView
         Private ReadOnly image As ImageElement
         Private ReadOnly prompt As CanvasPanel
         Private ReadOnly owner As Forms.IWin32Window
         Private ReadOnly publish As Action(Of Byte(), String)
+        Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
+        Private ReadOnly closeAction As Action
+        Private ReadOnly hosted, surface As Boolean
         Private ReadOnly playback As New Stopwatch()
         Private ReadOnly history As New List(Of String)
         Private ReadOnly staging As String = CompilerStagingDirectory()
@@ -48,6 +52,11 @@ Namespace Windows.ShaderEditing
         Private generatedSource As String = ""
         Private viewingSource As Boolean
         Private pendingAction As Action
+        Private applyingGraph, applyingSnapshot As String
+        Private applyContinuesPrompt, closeAfterSave As Boolean
+        Private saveTask As Task(Of (Name As String, Snapshot As String))
+        Private saveDestination As String
+        Private saveContinuesPrompt, exportGraphOnly As Boolean
         Private compile As Task(Of ShaderCompileResult)
         Private cancellation As CancellationTokenSource
         Private compiledPath As String
@@ -64,10 +73,15 @@ Namespace Windows.ShaderEditing
         End Function
 
         Friend Sub New(manager As SceneManager, owner As Forms.IWin32Window, path As String, graphJson As String,
-                       publish As Action(Of Byte(), String), minimize As Action, maximize As Action, close As Action)
+                       publish As Action(Of Byte(), String), minimize As Action, maximize As Action, close As Action,
+                       takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean)
             MyBase.New(manager)
             Me.owner = owner
             Me.publish = publish
+            Me.takeReceipt = takeReceipt
+            closeAction = close
+            Me.hosted = hosted
+            Me.surface = surface
             isCursorVisible = False
             EnableDesignTimeControls = False
             Dim parser As SceneXamlParser = Nothing
@@ -77,21 +91,24 @@ Namespace Windows.ShaderEditing
             prompt = Find(Of CanvasPanel)("SavePrompt")
             image = Find(Of ImageElement)("PreviewImage")
             simple = New SimpleShaderView(Me)
+            material = New SimpleMaterialView(Me)
             advanced = New AdvancedShaderView(Me)
             workspace.Children.Add(simple.Root)
+            workspace.Children.Add(material.Root)
             workspace.Children.Add(advanced.Root)
             AddElement(root)
             AddHandler simple.GraphChanged, AddressOf GraphChanged
+            AddHandler material.GraphChanged, AddressOf GraphChanged
             AddHandler advanced.GraphChanged, AddressOf GraphChanged
-            Bind("New", Sub() Confirm(Sub() SetDocument(ShaderDocument.Create(), Nothing)))
+            Bind("New", Sub() Confirm(Sub() SetDocument(CreateNewDocument(), Nothing, keepSaved:=hosted)))
             Bind("Open", Sub() Confirm(AddressOf OpenDocument))
-            Bind("Save", Sub() SaveDocument())
+            Bind("Save", Sub() StartSave(exportOnly:=hosted))
             Bind("ExportSource", AddressOf ExportSource)
             Bind("ExportEffect", AddressOf ExportEffect)
             Bind("Undo", Sub() HistoryStep(-1))
             Bind("Redo", Sub() HistoryStep(1))
-            Bind("Simple", Sub() ChangeMode(ShaderMode.Simple))
-            Bind("Advanced", Sub() ChangeMode(ShaderMode.Advanced))
+            Bind("Simple", Sub() SwitchMode(ShaderMode.Simple))
+            Bind("Advanced", Sub() SwitchMode(ShaderMode.Advanced))
             SetUpPresetBrowser()
             Bind("Run", AddressOf RunShader)
             Bind("Play", AddressOf TogglePlayback)
@@ -101,18 +118,30 @@ Namespace Windows.ShaderEditing
             Bind("SourceTab", Sub() ShowCompilerTab(True))
             Bind("Minimize", minimize)
             Bind("Maximize", maximize)
-            Bind("Close", Sub() Confirm(close))
+            Bind("Close", AddressOf RequestClose)
             Bind("PromptSave", Sub()
-                                   If SaveDocument() Then CompletePrompt(True)
+                                   If hosted Then
+                                       ApplyGraph(continuePrompt:=True)
+                                   Else
+                                       StartSave(continuePrompt:=True)
+                                   End If
                                End Sub)
             Bind("PromptDiscard", Sub() CompletePrompt(True))
             Bind("PromptCancel", Sub() CompletePrompt(False))
             AddHandler Find(Of CheckBox)("AutoRun").CheckedChanged, Sub(oldValue, newValue) QueueAutoRun()
             AddHandler OnKeyDown, AddressOf HandleShortcut
-            Find(Of TextElement)("Backend").Text = If(Backend = ShaderBackend.DirectX12, "DirectX 12", "DirectX 11") & " · XAML pixel effect"
+            If hosted Then
+                Find(Of Button)("Save").Text = "Export graph"
+                Find(Of Button)("Save").Size = New Vector2(140, 30)
+                Find(Of Button)("Run").Text = "Apply"
+                Find(Of Button)("PromptSave").Text = "Apply"
+                Find(Of TextElement)("PromptMessage").Text = "Apply changes to the clip?"
+                Find(Of CanvasPanel)("Toolbar").SetChildPosition(Find(Of Button)("ExportSource"), New Vector2(284, 6))
+                Find(Of Button)("ExportEffect").isVisible = False
+            End If
             MakeCheckerboard()
             ResetImage()
-            SetDocument(If(graphJson Is Nothing, ShaderDocument.Create(), ShaderDocument.Parse(graphJson)), Nothing)
+            SetDocument(If(graphJson Is Nothing, CreateNewDocument(), ShaderDocument.Parse(graphJson)), Nothing)
             If path Is Nothing OrElse TryOpen(path) Then StartCompile(False)
         End Sub
 
@@ -136,6 +165,7 @@ Namespace Windows.ShaderEditing
             rail.Size = New Vector2(308, workHeight)
             workspace.Size = New Vector2(workWidth, workHeight)
             simple.Root.Size = workspace.Size
+            material.Root.Size = workspace.Size
             advanced.Root.Size = workspace.Size
             root.SetChildPosition(footer, New Vector2(0, height - 26))
             footer.Size = New Vector2(width, 26)
@@ -156,6 +186,7 @@ Namespace Windows.ShaderEditing
             BackgroundColor = settings.Background(settings.BackgroundColor)
             ShaderEditorChrome.ApplyTheme(root, settings)
             simple.ApplyAppearance(settings)
+            material.ApplyAppearance(settings)
             advanced.ApplyAppearance(settings)
             StylePresetBrowser(settings)
             Find(Of TextElement)("Brand").ForegroundColor = settings.AccentColor
@@ -170,40 +201,65 @@ Namespace Windows.ShaderEditing
             Find(Of Button)("SourceTab").BackgroundColor = If(viewingSource, Color.Lerp(theme.SurfaceColor, theme.AccentColor, 0.22F), theme.SurfaceColor)
         End Sub
 
-        Private Sub SetDocument(nextDocument As ShaderDocument, path As String)
+        Private Function CreateNewDocument() As ShaderDocument
+            Return If(surface, SurfaceMaterials.CreatePreset("clear-water"), ShaderDocument.Create())
+        End Function
+
+        Private Sub SetDocument(nextDocument As ShaderDocument, path As String, Optional keepSaved As Boolean = False)
             cancellation?.Cancel()
             document = nextDocument : documentPath = path
-            saved = Snapshot()
-            history.Clear() : history.Add(saved) : historyIndex = 0
+            Dim initial = Snapshot()
+            If Not keepSaved Then saved = initial
+            history.Clear() : history.Add(initial) : historyIndex = 0
             image.VisualEffect?.Dispose() : image.VisualEffect = Nothing
             BindDocument()
             UpdateDocument()
-            SetStatus("Run to compile and preview the shader.")
+            SetStatus(If(hosted, "Apply to save the graph to the clip.", "Run to compile and preview the graph."))
             QueueAutoRun()
         End Sub
 
         Private Sub BindDocument()
             simple.SetDocument(document)
+            material.SetDocument(document)
             advanced.SetDocument(document)
+            Dim showMediaControls = Not document.IsSurface
+            Find(Of Button)("LoadImage").isVisible = showMediaControls
+            Find(Of Button)("ResetImage").isVisible = showMediaControls
+            Find(Of Button)("ExportEffect").isVisible = Not hosted AndAlso showMediaControls
+            Find(Of TextElement)("Backend").Text = If(Backend = ShaderBackend.DirectX12, "DirectX 12", "DirectX 11") &
+                If(document.IsSurface, " · Material preview", " · XAML pixel effect")
             ChangeMode(document.Mode)
         End Sub
 
         Private Sub ChangeMode(mode As ShaderMode)
             document.Mode = mode
-            simple.Root.isVisible = mode = ShaderMode.Simple
+            simple.Root.isVisible = mode = ShaderMode.Simple AndAlso Not document.IsSurface
+            material.Root.isVisible = mode = ShaderMode.Simple AndAlso document.IsSurface
             advanced.Root.isVisible = mode = ShaderMode.Advanced
-            If mode = ShaderMode.Simple Then simple.Refresh() Else advanced.Refresh()
+            If material.Root.isVisible Then
+                material.Refresh()
+            ElseIf simple.Root.isVisible Then
+                simple.Refresh()
+            Else
+                advanced.Refresh()
+            End If
             StyleSelection()
             RequestRender()
         End Sub
 
-        Private Function Snapshot() As String
-            Dim mode = document.Mode
+        Private Sub SwitchMode(mode As ShaderMode)
+            ClearEditorFocus()
+            ChangeMode(mode)
+        End Sub
+
+        Private Function Snapshot(Optional value As ShaderDocument = Nothing) As String
+            value = If(value, document)
+            Dim mode = value.Mode
             Try
-                document.Mode = ShaderMode.Simple
-                Return JsonSerializer.Serialize(document)
+                value.Mode = ShaderMode.Simple
+                Return JsonSerializer.Serialize(value)
             Finally
-                document.Mode = mode
+                value.Mode = mode
             End Try
         End Function
 
@@ -216,7 +272,7 @@ Namespace Windows.ShaderEditing
             historyIndex = history.Count - 1
             cancellation?.Cancel()
             UpdateDocument()
-            SetStatus("Graph changed · Run to update the preview")
+            SetStatus(If(hosted, "Graph changed · Apply to update the clip", "Graph changed · Run to update the preview"))
             QueueAutoRun()
         End Sub
 
@@ -237,17 +293,12 @@ Namespace Windows.ShaderEditing
             Find(Of TextElement)("DocumentTitle").Text = document.Name & If(history(historyIndex) <> saved, " •", "")
             Find(Of Button)("Undo").isEnabled = historyIndex > 0
             Find(Of Button)("Redo").isEnabled = historyIndex < history.Count - 1
-            Try
-                generatedSource = ShaderGenerator.Generate(document)
-            Catch ex As InvalidDataException
-                generatedSource = ex.Message
-            End Try
-            If viewingSource Then Find(Of Textbox)("CompilerPanel").Text = generatedSource
+            If viewingSource Then ShowCompilerTab(True)
             RequestRender()
         End Sub
 
         Private Sub QueueAutoRun()
-            pendingRunPublishes = True
+            pendingRunPublishes = Not hosted
             pendingRun = If(Find(Of CheckBox)("AutoRun").IsChecked.GetValueOrDefault(), Stopwatch.GetTimestamp() + Stopwatch.Frequency * 2 \ 5, 0L)
         End Sub
 
@@ -260,8 +311,8 @@ Namespace Windows.ShaderEditing
                 compiledGraph = If(shouldPublish, document.ToJson(), Nothing)
                 cancellation = New CancellationTokenSource()
                 compile = ShaderCompiler.CompileAsync(generatedSource, Backend, compiler, staging, cancellation.Token)
-                SetStatus("Compiling shader…")
-                Find(Of Button)("Run").isEnabled = False
+                If applyingGraph Is Nothing Then SetStatus("Compiling preview…")
+                RefreshModalState()
             Catch ex As Exception When TypeOf ex Is InvalidDataException OrElse TypeOf ex Is IOException
                 SetError("Shader compilation failed", ex.Message)
             End Try
@@ -269,10 +320,20 @@ Namespace Windows.ShaderEditing
 
         Private Sub RunShader()
             ClearEditorFocus()
-            StartCompile(True)
+            If hosted Then
+                ApplyGraph()
+            Else
+                StartCompile(True)
+            End If
         End Sub
 
         Friend Sub UpdateEditor()
+            If saveTask IsNot Nothing AndAlso saveTask.IsCompleted Then FinishSave()
+            Dim receipt = takeReceipt()
+            While receipt IsNot Nothing
+                FinishApply(receipt)
+                receipt = takeReceipt()
+            End While
             If compile IsNot Nothing AndAlso compile.IsCompleted Then FinishCompile()
             Dim now = Stopwatch.GetTimestamp()
             If compile Is Nothing AndAlso pendingRun > 0 AndAlso now >= pendingRun Then StartCompile(pendingRunPublishes)
@@ -303,7 +364,7 @@ Namespace Windows.ShaderEditing
                     replacement.TimeOverride = CSng(playback.Elapsed.TotalSeconds)
                     image.VisualEffect?.Dispose()
                     image.VisualEffect = replacement
-                    SetStatus(If(compiledGraph Is Nothing, "Preview ready · Run to apply", "Shader running"))
+                    If Not hosted Then SetStatus(If(compiledGraph Is Nothing, "Preview ready · Run to apply", "Shader running"))
                     If compiledGraph IsNot Nothing Then
                         Dim graphFits = Encoding.UTF8.GetByteCount(compiledGraph) <= ShaderDocument.MaximumGraphBytes
                         If Not graphFits Then SetStatus("Shader running · graph exceeds the 256 KiB transfer limit")
@@ -316,12 +377,19 @@ Namespace Windows.ShaderEditing
             Finally
                 cancellation.Dispose() : cancellation = Nothing : compile = Nothing
                 compiledGraph = Nothing
-                Find(Of Button)("Run").isEnabled = True
+                RefreshModalState()
             End Try
         End Sub
 
         Private Sub ShowCompilerTab(showSource As Boolean)
             viewingSource = showSource
+            If showSource Then
+                Try
+                    generatedSource = If(document.IsSurface, SurfaceMaterials.GenerateHlsl(document), ShaderGenerator.Generate(document))
+                Catch ex As InvalidDataException
+                    generatedSource = ex.Message
+                End Try
+            End If
             Find(Of Textbox)("CompilerPanel").Text = If(viewingSource, generatedSource, diagnostics)
             StyleSelection()
             RequestRender()
@@ -339,6 +407,7 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Friend Sub Confirm(action As Action)
+            If pendingAction IsNot Nothing OrElse saveTask IsNot Nothing Then Return
             ClearEditorFocus()
             If history(historyIndex) = saved Then
                 action()
@@ -346,19 +415,77 @@ Namespace Windows.ShaderEditing
             End If
             pendingAction = action
             prompt.isVisible = True
-            workspace.isEnabled = False
-            Find(Of CanvasPanel)("Toolbar").isEnabled = False
+            If applyingGraph IsNot Nothing AndAlso applyingSnapshot = history(historyIndex) Then applyContinuesPrompt = True
+            RefreshModalState()
             RequestRender()
         End Sub
 
+        Friend Sub RequestClose()
+            If saveTask IsNot Nothing Then
+                closeAfterSave = True
+                Return
+            End If
+            If presetBrowser.isVisible Then ShowPresetBrowser(False)
+            Confirm(closeAction)
+        End Sub
+
+        Private Sub RefreshModalState()
+            Dim writable = saveTask Is Nothing
+            Dim editing = writable AndAlso Not prompt.isVisible AndAlso Not presetBrowser.isVisible
+            workspace.isEnabled = editing
+            Find(Of CanvasPanel)("Toolbar").isEnabled = editing
+            Find(Of CanvasPanel)("PreviewRail").isEnabled = editing
+            Dim promptReady = writable AndAlso applyingGraph Is Nothing
+            Find(Of Button)("PromptSave").isEnabled = promptReady
+            Find(Of Button)("PromptDiscard").isEnabled = promptReady
+            Find(Of Button)("PromptCancel").isEnabled = promptReady
+            Find(Of Button)("Run").isEnabled = If(hosted, applyingGraph Is Nothing, compile Is Nothing)
+        End Sub
+
         Private Sub CompletePrompt(continueAction As Boolean)
+            If saveTask IsNot Nothing OrElse applyingGraph IsNot Nothing Then Return
             Dim action = pendingAction
             pendingAction = Nothing
             prompt.isVisible = False
-            workspace.isEnabled = True
-            Find(Of CanvasPanel)("Toolbar").isEnabled = True
+            RefreshModalState()
             If continueAction Then action?.Invoke()
             RequestRender()
+        End Sub
+
+        Private Sub ApplyGraph(Optional continuePrompt As Boolean = False)
+            If applyingGraph IsNot Nothing Then Return
+            Try
+                Dim graph = document.ToJson()
+                If Encoding.UTF8.GetByteCount(graph) > ShaderDocument.MaximumGraphBytes Then
+                    Throw New InvalidDataException("The graph exceeds the 256 KiB transfer limit.")
+                End If
+                applyingGraph = graph
+                applyingSnapshot = Snapshot()
+                applyContinuesPrompt = continuePrompt
+                publish(Array.Empty(Of Byte)(), graph)
+                SetStatus("Applying to the clip…")
+                RefreshModalState()
+                pendingRunPublishes = False
+                pendingRun = 1
+            Catch ex As InvalidDataException
+                SetError("Could not apply graph", ex.Message)
+            End Try
+        End Sub
+
+        Private Sub FinishApply(receipt As ShaderGraphReceipt)
+            If applyingGraph Is Nothing OrElse Not String.Equals(applyingGraph, receipt.Graph, StringComparison.Ordinal) Then Return
+            Dim snapshotValue = applyingSnapshot
+            Dim continuePrompt = applyContinuesPrompt
+            applyingGraph = Nothing : applyingSnapshot = Nothing : applyContinuesPrompt = False
+            RefreshModalState()
+            If receipt.Error IsNot Nothing Then
+                SetError("Could not apply graph", receipt.Error)
+                Return
+            End If
+            saved = snapshotValue
+            UpdateDocument()
+            SetStatus("Applied to the clip")
+            If continuePrompt AndAlso history(historyIndex) = saved Then CompletePrompt(True)
         End Sub
 
         Private Sub OpenDocument()
@@ -369,7 +496,11 @@ Namespace Windows.ShaderEditing
 
         Private Function TryOpen(path As String) As Boolean
             Try
-                SetDocument(ShaderDocument.Load(path), path)
+                Dim opened = ShaderDocument.Load(path)
+                If hosted AndAlso opened.IsSurface <> surface Then
+                    Throw New InvalidDataException(If(surface, "Select a material graph.", "Select a video shader graph."))
+                End If
+                SetDocument(opened, If(hosted, Nothing, path), keepSaved:=hosted)
                 Return True
             Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is JsonException OrElse TypeOf ex Is InvalidDataException
                 SetError("Could not open shader graph", ex.Message)
@@ -377,26 +508,53 @@ Namespace Windows.ShaderEditing
             End Try
         End Function
 
-        Private Function SaveDocument() As Boolean
+        Private Sub StartSave(Optional continuePrompt As Boolean = False, Optional exportOnly As Boolean = False)
+            If saveTask IsNot Nothing Then Return
             ClearEditorFocus()
-            Dim path = If(documentPath, "")
+            Dim path = If(exportOnly, "", If(documentPath, ""))
             If path.Length = 0 Then path = ChooseSave(GraphFilter, "pzshader")
-            If path Is Nothing Then Return False
-            Dim previous = document.Name
+            If path Is Nothing Then Return
+            Dim snapshotValue = history(historyIndex)
+            Dim mode = document.Mode
+            Dim name = document.Name
+            saveDestination = path
+            saveContinuesPrompt = continuePrompt
+            exportGraphOnly = exportOnly
+            saveTask = Task.Run(Function()
+                                    Dim writing = JsonSerializer.Deserialize(Of ShaderDocument)(snapshotValue)
+                                    writing.Mode = mode
+                                    writing.Name = If(exportOnly, name, IO.Path.GetFileNameWithoutExtension(path))
+                                    writing.Save(path)
+                                    Return (Name:=writing.Name, Snapshot:=Snapshot(writing))
+                                End Function)
+            SetStatus(If(exportOnly, "Exporting graph…", "Saving graph…"))
+            RefreshModalState()
+        End Sub
+
+        Private Sub FinishSave()
+            Dim finished = saveTask
+            Dim path = saveDestination
+            Dim continuePrompt = saveContinuesPrompt
+            Dim exportOnly = exportGraphOnly
+            Dim shouldClose = closeAfterSave
+            saveTask = Nothing : saveDestination = Nothing : closeAfterSave = False
+            RefreshModalState()
             Try
-                document.Name = IO.Path.GetFileNameWithoutExtension(path)
-                document.Save(path)
-                documentPath = path
-                saved = Snapshot() : history(historyIndex) = saved
-                UpdateDocument()
-                SetStatus("Saved " & IO.Path.GetFileName(path))
-                Return True
-            Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is InvalidDataException
-                document.Name = previous
+                Dim written = finished.GetAwaiter().GetResult()
+                If Not exportOnly Then
+                    document.Name = written.Name
+                    documentPath = path
+                    saved = written.Snapshot : history(historyIndex) = saved
+                    UpdateDocument()
+                End If
+                SetStatus(If(exportOnly, "Exported ", "Saved ") & IO.Path.GetFileName(path))
+                If continuePrompt Then CompletePrompt(True)
+                If shouldClose Then RequestClose()
+            Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse
+                TypeOf ex Is InvalidDataException OrElse TypeOf ex Is JsonException OrElse TypeOf ex Is ArgumentException
                 SetError("Could not save shader graph", ex.Message)
-                Return False
             End Try
-        End Function
+        End Sub
 
         Private Function ChooseSave(filter As String, extension As String) As String
             Using dialog As New Forms.SaveFileDialog With {.Filter = filter, .DefaultExt = extension, .FileName = document.Name}
@@ -406,10 +564,11 @@ Namespace Windows.ShaderEditing
 
         Private Sub ExportSource()
             ClearEditorFocus()
-            Dim path = ChooseSave("Effect source (*.fx)|*.fx", "fx")
+            Dim path = If(document.IsSurface, ChooseSave("Material source (*.hlsl)|*.hlsl", "hlsl"),
+                ChooseSave("Effect source (*.fx)|*.fx", "fx"))
             If path Is Nothing Then Return
             Try
-                File.WriteAllText(path, ShaderGenerator.Generate(document))
+                File.WriteAllText(path, If(document.IsSurface, SurfaceMaterials.GenerateHlsl(document), ShaderGenerator.Generate(document)))
                 SetStatus("Exported " & IO.Path.GetFileName(path))
             Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is InvalidDataException
                 SetError("Could not export FX source", ex.Message)
@@ -470,6 +629,7 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Private Sub HandleShortcut(key As Keys, state As KeyboardState)
+            If saveTask IsNot Nothing Then Return
             If presetBrowser.isVisible Then
                 If key = Keys.Escape Then ShowPresetBrowser(False)
                 Return
@@ -480,10 +640,11 @@ Namespace Windows.ShaderEditing
             End If
             If Not (state.IsKeyDown(Keys.LeftControl) OrElse state.IsKeyDown(Keys.RightControl)) Then Return
             Select Case key
-                Case Keys.N : Confirm(Sub() SetDocument(ShaderDocument.Create(), Nothing))
+                Case Keys.N : Confirm(Sub() SetDocument(CreateNewDocument(), Nothing, keepSaved:=hosted))
                 Case Keys.O : Confirm(AddressOf OpenDocument)
                 Case Keys.P : ShowPresetBrowser(True)
-                Case Keys.S : SaveDocument()
+                Case Keys.S
+                    If hosted Then RunShader() Else StartSave()
                 Case Keys.Enter : RunShader()
                 Case Keys.Z : HistoryStep(-1)
                 Case Keys.Y : HistoryStep(1)
@@ -491,7 +652,15 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Friend Sub CancelCompilation()
-            cancellation?.Cancel()
+            If cancellation Is Nothing Then Return
+            cancellation.Cancel()
+            Try
+                compile?.WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult()
+            Catch ex As Exception When TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is TimeoutException OrElse TypeOf ex Is IOException
+                ' Closing the worker has no diagnostics panel to receive these results.
+            Finally
+                cancellation.Dispose()
+            End Try
         End Sub
 
         Private Sub ClearEditorFocus()

@@ -30,7 +30,7 @@ Namespace Windows.ShaderEditing
         Private ReadOnly contextHint As TextElement
         Private ReadOnly contextResults As ListBox
         Private ReadOnly graphStatus As TextElement
-        Private ReadOnly catalog As ShaderNodeDefinition() = ShaderNodes.All.Where(Function(item) item.Kind <> "Output").
+        Private ReadOnly catalog As ShaderNodeDefinition() = ShaderNodes.All.Where(Function(item) Not ShaderDocument.IsOutputKind(item.Kind)).
             OrderBy(Function(item) item.Category).ThenBy(Function(item) item.Label).ToArray()
         Private ReadOnly fieldCommits As New List(Of Action)
         Private ReadOnly fieldEditors As New List(Of SceneElement)
@@ -278,7 +278,7 @@ Namespace Windows.ShaderEditing
                 Dim definition = ShaderNodes.Get(node.Kind)
                 AddCaption(definition.Label)
                 AddCaption(definition.Category, True)
-                If node.Kind <> "Output" Then
+                If Not ShaderDocument.IsOutputKind(node.Kind) Then
                     AddCaption("Name", True)
                     AddTextField(node, node.Name, False, Function() node.Name, Sub(value) node.Name = value.Trim())
                 End If
@@ -550,7 +550,7 @@ Namespace Windows.ShaderEditing
                 needsFrame = True
                 Return
             End If
-            Dim nodes = zOrder.Where(Function(node) If(outputOnly, node.Kind = "Output", fitAll OrElse selectedIds.Count = 0 OrElse selectedIds.Contains(node.Id))).ToArray()
+            Dim nodes = zOrder.Where(Function(node) If(outputOnly, ShaderDocument.IsOutputKind(node.Kind), fitAll OrElse selectedIds.Count = 0 OrElse selectedIds.Contains(node.Id))).ToArray()
             If nodes.Length = 0 Then Return
             Dim minimum = New Vector2(nodes.Min(Function(node) NodeLocation(node).X), nodes.Min(Function(node) NodeLocation(node).Y))
             Dim maximum = New Vector2(nodes.Max(Function(node) NodeLocation(node).X + NodeDimensions(node).X),
@@ -847,7 +847,7 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Private Sub DeleteSelection()
-            Dim removable = zOrder.Where(Function(node) node.Kind <> "Output" AndAlso selectedIds.Contains(node.Id)).Select(Function(node) node.Id).ToHashSet()
+            Dim removable = zOrder.Where(Function(node) Not ShaderDocument.IsOutputKind(node.Kind) AndAlso selectedIds.Contains(node.Id)).Select(Function(node) node.Id).ToHashSet()
             If removable.Count = 0 Then Return
             document.Nodes.RemoveAll(Function(node) removable.Contains(node.Id))
             document.Connections.RemoveAll(Function(item) removable.Contains(item.Source) OrElse removable.Contains(item.Target))
@@ -857,7 +857,7 @@ Namespace Windows.ShaderEditing
 
         Private Sub DuplicateSelection()
             Dim copies As New Dictionary(Of Guid, ShaderNode)
-            For Each node In zOrder.Where(Function(item) item.Kind <> "Output" AndAlso selectedIds.Contains(item.Id))
+            For Each node In zOrder.Where(Function(item) Not ShaderDocument.IsOutputKind(item.Kind) AndAlso selectedIds.Contains(item.Id))
                 Dim copy = ShaderNodes.Create(node.Kind, ClampCoordinate(node.X + 26), ClampCoordinate(node.Y + 26))
                 copy.Values = DirectCast(node.Values.Clone(), Double())
                 copy.Name = node.Name

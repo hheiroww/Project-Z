@@ -76,6 +76,8 @@ public static class ShaderNodes
 
         Add("Output", "XAML Output", "Output", null, [Port("Color", Float4, source), Port("Alpha", Float, "")],
             (input, _) => input[0]);
+        Add("SurfaceOutput", "Material Output", "Output", null, SurfaceMaterials.CreatePorts(),
+            (_, _) => throw new InvalidOperationException("A material output builds surface channels."));
         Add("Source", "Source Texture", "Inputs", Float4, [uv], (input, _) => $"SampleSource({input[0]})");
         Add("UV", "UV Coordinates", "Inputs", Float2, [], (_, _) => "uv");
         Add("PixelPosition", "Pixel Position", "Inputs", Float2, [], (_, _) => "input.Position.xy");

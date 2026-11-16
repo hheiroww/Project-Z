@@ -11,6 +11,7 @@ Namespace Windows.ShaderEditing
         Private presetSearch As Textbox
         Private presetCategory As ComboBox
         Private presetResults As ListBox
+        Private presetCatalog As IReadOnlyList(Of ShaderPreset)
         Private presetMatches As ShaderPreset() = Array.Empty(Of ShaderPreset)()
 
         Private Sub SetUpPresetBrowser()
@@ -18,8 +19,13 @@ Namespace Windows.ShaderEditing
             presetSearch = Find(Of Textbox)("PresetSearch")
             presetCategory = Find(Of ComboBox)("PresetCategory")
             presetResults = Find(Of ListBox)("PresetResults")
+            If hosted Then
+                presetCatalog = If(surface, SurfaceMaterials.Presets, ShaderPresets.All)
+            Else
+                presetCatalog = ShaderPresets.All.Concat(SurfaceMaterials.Presets).ToArray()
+            End If
             presetCategory.Items = New List(Of String) From {"All categories"}
-            presetCategory.Items.AddRange(ShaderPresets.All.Select(Function(preset) preset.Category).Distinct(StringComparer.Ordinal))
+            presetCategory.Items.AddRange(presetCatalog.Select(AddressOf PresetCategoryName).Distinct(StringComparer.Ordinal))
             presetCategory.SelectedIndex = 0
             presetCategory.ItemAppearance = Sub(index, row, label) label.ForegroundColor = theme.TextColor
             presetResults.ItemAppearance = Sub(index, row, label)
@@ -53,9 +59,7 @@ Namespace Windows.ShaderEditing
             If visible Then ClearEditorFocus() Else FocusElement(Nothing)
             If Not visible Then presetCategory.IsDropDownOpen = False
             presetBrowser.isVisible = visible
-            workspace.isEnabled = Not visible
-            Find(Of CanvasPanel)("Toolbar").isEnabled = Not visible
-            Find(Of CanvasPanel)("PreviewRail").isEnabled = Not visible
+            RefreshModalState()
             If visible Then
                 FilterPresets()
                 FocusElement(presetSearch)
@@ -67,16 +71,20 @@ Namespace Windows.ShaderEditing
             Dim category = If(presetCategory.SelectedIndex > 0, presetCategory.SelectedItem, Nothing)
             Dim query = presetSearch.Text.Trim()
             Find(Of TextElement)("PresetSearchHint").isVisible = query.Length = 0
-            presetMatches = ShaderPresets.All.Where(Function(preset) (category Is Nothing OrElse preset.Category = category) AndAlso
+            presetMatches = presetCatalog.Where(Function(preset) (category Is Nothing OrElse PresetCategoryName(preset) = category) AndAlso
                 (preset.Name.Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
-                 preset.Category.Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
+                 PresetCategoryName(preset).Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
                  preset.Description.Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray()
-            presetResults.Items = presetMatches.Select(Function(preset) preset.Name & "   ·   " & preset.Category).ToList()
+            presetResults.Items = presetMatches.Select(Function(preset) preset.Name & "   ·   " & PresetCategoryName(preset)).ToList()
             presetResults.SelectedIndex = If(presetMatches.Length > 0, 0, -1)
             If presetMatches.Length > 0 Then presetResults.ScrollIntoView(0)
-            Find(Of TextElement)("PresetCount").Text = presetMatches.Length & " of " & ShaderPresets.All.Count & " presets"
+            Find(Of TextElement)("PresetCount").Text = presetMatches.Length & " of " & presetCatalog.Count & " presets"
             DescribePreset()
         End Sub
+
+        Private Function PresetCategoryName(preset As ShaderPreset) As String
+            Return If(Not hosted AndAlso SurfaceMaterials.Presets.Contains(preset), "Material / " & preset.Category, preset.Category)
+        End Function
 
         Private Sub DescribePreset()
             Dim selected = presetMatches.ElementAtOrDefault(presetResults.SelectedIndex)
@@ -90,8 +98,8 @@ Namespace Windows.ShaderEditing
             If selected Is Nothing Then Return
             ShowPresetBrowser(False)
             Confirm(Sub()
-                        SetDocument(selected.CreateDocument.Invoke(), Nothing)
-                        SetStatus("Loaded " & selected.Name & " · Run to apply")
+                        SetDocument(selected.CreateDocument.Invoke(), Nothing, keepSaved:=hosted)
+                        SetStatus("Loaded " & selected.Name & If(hosted, " · Apply to update the clip", ""))
                         ' Preview a new preset without sending it to the host.
                         pendingRunPublishes = False
                         pendingRun = 1
