@@ -97,6 +97,26 @@ The loader takes the host's `GraphicsDevice`; create and load textures on its gr
 
 Particle `PhysicsEnabled`, `GravityEnabled`, `Gravity`, and `LinearDrag` control particle movement. Particles do not enter scene rigid-body collisions. Capacity is 1–16,000 per emitter; invalid state is sanitized and a long frame advances at most 250 ms. For a single atlas, billboards share one texture batch per effect pass. Managed frames with different textures create batches while retaining depth order. `LastDrawCallCount` exposes the actual batch count.
 
+## Water surfaces
+
+`WaterHeightfield` simulates a closed, shallow pool with one height per X/Z location. Its coordinates are normalized to a square of width one, and Y is up. Ripples travel through the mesh and reflect off the pool boundaries. Wave speed controls propagation and damping controls how long disturbances persist. The mesh supplies positions and normals for the renderer's water material.
+
+```vb
+Imports ProjectZ.Shared.Physics
+
+Dim drop As New WaterSurfaceImpact(WaterHeightfield.TickAt(0.5), 0.35F, 0.6F, 0.09F, -0.7F)
+Dim pool As New WaterHeightfield(impacts:={drop})
+pool.Seek(WaterHeightfield.TickAt(1.0))
+Dim vertex = pool.GetVertex(15, 20)
+Dim triangles = pool.CreateIndices()
+```
+
+An impact has a tick, pool-local X and Z, radius, and signed velocity strength. It drives the next fixed step. Positive strength starts an upward disturbance and negative strength starts a downward disturbance. A small impact still covers neighboring grid points, and its surrounding ring balances the change in mean height.
+
+A host can use `TryCreateSphereImpact` to resolve a descending sphere against the current sampled water surface. Pass its pool-local previous and next positions for a 120 Hz interval and the current tick. The method returns the contact coordinates and impulse strength, which the host can record for replay. The host owns the object's motion and the water surface's world transform.
+
+Use one solver per playback or export worker. Keep the ordered impact list as the authored state. Re-create the solver after edits and reuse its cached fixed steps as the timeline moves. Ask for source time when trimming clips so waves continue through a cut. The solver retains at most 256 KiB of checkpoint arrays and skips silent intervals once the pool settles. Supply a cancellation token when seeking on a worker.
+
 ## Stability and acceleration
 
 Collision integration uses bounded fixed time steps, speed limits, swept contacts, iterative contact solving, and finite-value sanitation. A swept impact conservatively stops remaining travel for that fixed step; outgoing velocity is retained for the next step. This avoids crossing a second wall after a fast reflection at the cost of up to one fixed step of travel per impact. Pointer movement is swept too. Long stalls have bounded catch-up work. No solver can satisfy an impossible arrangement such as several immovable overlapping bodies or more geometry than a container can hold; those cases remain bounded rather than receiving escalating separation velocities.
@@ -111,6 +131,6 @@ Run the numerical suite without a window or graphics device:
 dotnet run --project tests/Physics/Physics.vbproj -c Release --artifacts-path <owned-staging-directory>/physics-tests
 ```
 
-It covers mass, gravity gating, collision opt-in, nearest-exit overlap recovery, restitution, friction, frame-rate consistency, fast wall impacts, independent spaces, resting contact and stacks, crowded collisions, invalid values, impossible containment, and scalar parameter control. Graphics/backend validation and native touch acceptance are separate checks.
+It covers mass, gravity gating, collision opt-in, nearest-exit overlap recovery, restitution, friction, frame-rate consistency, fast wall impacts, independent spaces, resting contact and stacks, crowded collisions, invalid values, impossible containment, scalar parameter control, water propagation and damping, deterministic water seeking, mesh orientation, and swept sphere contacts. Graphics/backend validation and native touch acceptance are separate checks.
 
 The particle harness is `tests/Particles/Particles.vbproj`. The native XAML fixture verifies compilation of physics flags, the `RidgidBody` alias, material/motion enum literals, double coefficients, and 2D/3D vectors. The `Physics and particle regressions` workflow runs these headless checks on Windows, Linux, and macOS; it does not replace GPU or physical touchscreen acceptance.

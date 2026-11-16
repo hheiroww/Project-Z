@@ -2,6 +2,7 @@ Imports Microsoft.Xna.Framework
 Imports ProjectZ.Shared.Physics
 Imports System.Collections.Generic
 Imports System.Linq
+Imports NumericsVector = System.Numerics.Vector3
 
 Module Program
     Private passes As Integer
@@ -39,8 +40,144 @@ Module Program
         Run("scalar impulse drives an existing property", AddressOf ScalarImpulse)
         Run("stiff scalar spring stays stable with small mass", AddressOf StiffScalar)
         Run("scalar bounds and invalid values stay finite", AddressOf ScalarBounds)
+        Run("water impulses spread radially and settle", AddressOf WaterSpreadsAndDamps)
+        Run("water reflects at walls and conserves its mean height", AddressOf WaterReflectsAndConservesMean)
+        Run("water sampling is identical after forward and backward seeking", AddressOf WaterSeeksDeterministically)
+        Run("water mesh has upward winding and normalized coordinates", AddressOf WaterMeshHasUpwardWinding)
+        Run("water resolves swept sphere contact against the displaced surface", AddressOf WaterDetectsActualSphereContact)
+        Run("water bounds inputs and supports cancellation", AddressOf WaterRejectsInvalidAndCanceledRequests)
         If failures.Count > 0 Then Throw New Exception(String.Join(Environment.NewLine, failures))
         Console.WriteLine($"PASS {passes} physics regression cases without a graphics device")
+    End Sub
+
+    Private Sub WaterSpreadsAndDamps()
+        Dim pool As New WaterHeightfield(impacts:={New WaterSurfaceImpact(0, 0.5F, 0.5F, 0.12F, 1.0F)})
+        Check(pool.IsResting AndAlso pool.SampleHeight(0.5F, 0.5F) = 0, "unstepped water is flat")
+        pool.Seek(1)
+        Check(pool.SampleHeight(0.5F, 0.5F) > 0 AndAlso pool.SampleHeight(0.75F, 0.5F) = 0, "impact must begin locally")
+        pool.Seek(40)
+        Dim left = pool.SampleHeight(0.25F, 0.5F)
+        Dim right = pool.SampleHeight(0.75F, 0.5F)
+        Dim front = pool.SampleHeight(0.5F, 0.25F)
+        Check(Math.Abs(left) > 0.0001, "the wave did not reach water beyond the impact radius")
+        Near(left, right, 0.000001, "radial impulse left/right")
+        Near(left, front, 0.000001, "radial impulse X/Z")
+        pool.Seek(WaterHeightfield.TickAt(120))
+        Check(pool.IsResting AndAlso pool.SampleHeight(0.5F, 0.5F) = 0, "damping did not settle the pool")
+    End Sub
+
+    Private Sub WaterReflectsAndConservesMean()
+        Dim pool As New WaterHeightfield(64, 1.25F, 0.75F, {New WaterSurfaceImpact(0, 0.06F, 0.5F, 0.08F, -1.0F)})
+        pool.Seek(34)
+        Dim edge = pool.GetVertex(0, 32)
+        Check(Math.Abs(edge.Position.Y) > 0.00001, "a reflecting edge should move vertically")
+        Near(edge.Normal.X, 0, 0.000001, "wall-normal slope")
+        For Each tick In {34L, 360L, 1440L}
+            pool.Seek(tick)
+            Dim sum = 0.0
+            For row = 0 To pool.GridSize - 1
+                For column = 0 To pool.GridSize - 1
+                    Dim point = pool.GetVertex(column, row)
+                    Check(Single.IsFinite(point.Position.Y) AndAlso Math.Abs(point.Position.Y) < 0.1F, "edge impulse destabilized the surface")
+                    sum += point.Position.Y
+                Next
+            Next
+            Near(sum, 0, 0.00025, "height sum across the closed pool")
+        Next
+    End Sub
+
+    Private Sub WaterSeeksDeterministically()
+        Dim impacts = {New WaterSurfaceImpact(800, 0.1F, 0.82F, 0.15F, 0.65F),
+                       New WaterSurfaceImpact(19, 0.71F, 0.39F, 0.13F, -0.8F),
+                       New WaterSurfaceImpact(800, 0.5F, 0.41F, 0.19F, -0.8F),
+                       New WaterSurfaceImpact(2500000, 0.1F, 0.1F, 0.08F, 1.0F)}
+        Dim sequential As New WaterHeightfield(21, impacts:=impacts)
+        Dim randomAccess As New WaterHeightfield(21, impacts:=impacts)
+        For tick = 0L To 1500L Step 3
+            sequential.Seek(tick)
+        Next
+        For Each tick In {2500040L, 810L, 245L, 143L, 1500L}
+            randomAccess.Seek(tick)
+        Next
+        For row = 0 To sequential.GridSize - 1
+            For column = 0 To sequential.GridSize - 1
+                Dim expected = sequential.GetVertex(column, row)
+                Dim actual = randomAccess.GetVertex(column, row)
+                Check(actual.Position = expected.Position AndAlso actual.Normal = expected.Normal, "seek order changed a vertex")
+            Next
+        Next
+        randomAccess.Seek(72576000)
+        Check(randomAccess.IsResting AndAlso randomAccess.CurrentTick = 72576000, "long silent intervals must advance to the target")
+        randomAccess.Seek(19)
+        Check(randomAccess.SampleHeight(0.71F, 0.39F) = 0, "an impact should affect the following state")
+        randomAccess.Seek(20)
+        Check(randomAccess.SampleHeight(0.71F, 0.39F) < 0, "an impact must be applied once at its declared tick")
+    End Sub
+
+    Private Sub WaterMeshHasUpwardWinding()
+        Dim pool As New WaterHeightfield(9)
+        Dim indices = pool.CreateIndices()
+        Check(indices.Length = 8 * 8 * 6, "unexpected mesh topology")
+        For offset = 0 To indices.Length - 1 Step 3
+            Dim a = pool.GetVertex(indices(offset) Mod pool.GridSize, indices(offset) \ pool.GridSize)
+            Dim b = pool.GetVertex(indices(offset + 1) Mod pool.GridSize, indices(offset + 1) \ pool.GridSize)
+            Dim c = pool.GetVertex(indices(offset + 2) Mod pool.GridSize, indices(offset + 2) \ pool.GridSize)
+            Check(NumericsVector.Cross(b.Position - a.Position, c.Position - a.Position).Y > 0, "water triangles are not wound upward")
+            Check(a.Normal = NumericsVector.UnitY, "flat-water normal must be up")
+        Next
+        Check(pool.GetVertex(8, 8).Position = New NumericsVector(1, 0, 1), "last vertex is outside the unit pool")
+    End Sub
+
+    Private Sub WaterDetectsActualSphereContact()
+        Dim rising As New WaterHeightfield(21, impacts:={New WaterSurfaceImpact(0, 0.5F, 0.5F, 0.12F, 1.0F)})
+        Dim impact As WaterSurfaceImpact
+        rising.Seek(3)
+        Dim height = rising.SampleHeight(0.5F, 0.5F)
+        Check(height > 0.003, "test requires a raised water surface")
+        Dim above As New NumericsVector(0.5F, 0.1F + height + 0.01F, 0.5F)
+        Dim below As New NumericsVector(0.5F, 0.1F + height - 0.002F, 0.5F)
+        Check(rising.TryCreateSphereImpact(above, below, 0.1F, 3, impact), "descending sphere missed displaced water")
+        Check(impact.Tick = 3 AndAlso impact.Strength < 0, "sphere impulse is not recorded at contact")
+        Dim flat As New WaterHeightfield(21)
+        flat.Seek(3)
+        Check(Not flat.TryCreateSphereImpact(above, below, 0.1F, 3, impact), "sphere that stayed above flat water should not hit it")
+        Check(flat.TryCreateSphereImpact(New NumericsVector(0.1F, 0.4F, 0.5F), New NumericsVector(0.9F, -0.4F, 0.5F), 0.1F, 3, impact), "swept collision missed a fast drop")
+        Near(impact.X, 0.4, 0.0001, "swept sphere contact X")
+        Check(Not flat.TryCreateSphereImpact(New NumericsVector(1.1F, 0.4F, 0.5F), New NumericsVector(1.1F, -0.4F, 0.5F), 0.1F, 3, impact), "outside drop reported contact")
+        Check(Not flat.TryCreateSphereImpact(below, above, 0.1F, 3, impact), "upward sphere should not record a drop")
+    End Sub
+
+    Private Sub WaterRejectsInvalidAndCanceledRequests()
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterHeightfield(65)))
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterHeightfield(waveSpeed:=Single.NaN)))
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterHeightfield(damping:=0)))
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterSurfaceImpact(0, -0.2F, 0.5F, 0.1F, 1.0F)))
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterHeightfield(impacts:={New WaterSurfaceImpact()})))
+        ExpectArgumentError(Sub() GC.KeepAlive(New WaterHeightfield(impacts:=Enumerable.Repeat(New WaterSurfaceImpact(0, 0.5F, 0.5F, 0.1F, 1.0F), 33))))
+        ExpectArgumentError(Sub() GC.KeepAlive(WaterHeightfield.TickAt(Double.PositiveInfinity)))
+        Check(WaterHeightfield.TickAt(25.0 / 30) = 100, "frame time should align with the fixed tick grid")
+
+        Dim pool As New WaterHeightfield()
+        Using cancellation As New Threading.CancellationTokenSource()
+            cancellation.Cancel()
+            Try
+                pool.Seek(120, cancellation.Token)
+                Throw New Exception("canceled seek returned normally")
+            Catch ex As OperationCanceledException
+                Check(pool.CurrentTick = 0, "canceled seek changed the current state")
+            End Try
+        End Using
+        pool.Seek(120)
+        Check(pool.CurrentTick = 120, "pool is unusable after cancellation")
+    End Sub
+
+    Private Sub ExpectArgumentError(action As Action)
+        Try
+            action()
+        Catch ex As ArgumentOutOfRangeException
+            Return
+        End Try
+        Throw New Exception("expected argument validation to reject the input")
     End Sub
 
     Private Sub Run(name As String, action As Action)
