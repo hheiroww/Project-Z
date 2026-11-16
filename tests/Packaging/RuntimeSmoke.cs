@@ -90,14 +90,11 @@ internal static class Program
                 !Close(rigid.DeformVertices(midpoint).Min(v => v.Position.X), 4))
                 throw new InvalidOperationException($"{extension} did not render the hierarchy and skin at the clip midpoint.");
 
-            if (extension != "fbx")
-            {
-                if (rig.Animations.Count != 2 || !rig.Animations[1].Name.Contains("Grow", StringComparison.Ordinal))
-                    throw new InvalidOperationException($"{extension} lost the separate scale clip.");
-                var scaled = mesh.DeformVertices(rig.Sample(1, 1, false))[vertex].Position;
-                if (!Close(scaled.X, 2) || !Close(scaled.Y, 1.5f))
-                    throw new InvalidOperationException($"{extension} did not import the joint scale channel.");
-            }
+            if (rig.Animations.Count != 2 || !rig.Animations[1].Name.Contains("Grow", StringComparison.Ordinal))
+                throw new InvalidOperationException($"{extension} lost the separate scale clip.");
+            var scaled = mesh.DeformVertices(rig.Sample(1, 1, false))[vertex].Position;
+            if (!Close(scaled.X, 2) || !Close(scaled.Y, 1.5f))
+                throw new InvalidOperationException($"{extension} did not import the joint scale channel.");
         }
     }
 

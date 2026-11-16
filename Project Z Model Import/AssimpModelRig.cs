@@ -97,9 +97,11 @@ public static unsafe partial class AssimpModelBridge
 
     private static ModelAnimation3D? ReadAnimation(Animation* source, uint index, Dictionary<string, int> nameIndices)
     {
+        // Morph-only clips do not have joint data to sample.
         if (source->MNumChannels == 0)
             return null;
 
+        // Unspecified rates have no source timebase. Use 25 ticks per second.
         double ticksPerSecond = source->MTicksPerSecond > 0 && double.IsFinite(source->MTicksPerSecond)
             ? source->MTicksPerSecond : 25;
         double firstTick = 0;
