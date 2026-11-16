@@ -8,7 +8,7 @@ Namespace [Shared].Drawing.ThreeD
     End Interface
 
     Public NotInheritable Class ModelImporter3D
-        Private Shared ReadOnly supportedExtensions As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {".obj", ".fbx"}
+        Private Shared ReadOnly supportedExtensions As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {".obj", ".fbx", ".gltf", ".glb", ".dae"}
         Private Shared ReadOnly importer As New Lazy(Of IModelImporter3D)(AddressOf CreateImporter)
         ''' <summary>Optional application importer, including Linux/macOS implementations. Register at startup.</summary>
         Public Shared Property Provider As IModelImporter3D
@@ -26,7 +26,7 @@ Namespace [Shared].Drawing.ThreeD
             If String.IsNullOrWhiteSpace(path) Then Throw New ArgumentException("A model path is required.", NameOf(path))
             Dim fullPath = IO.Path.GetFullPath(path)
             If Not File.Exists(fullPath) Then Throw New FileNotFoundException("3D model file was not found.", fullPath)
-            If Not supportedExtensions.Contains(IO.Path.GetExtension(fullPath)) Then Throw New NotSupportedException("Project Z currently imports OBJ and FBX model files.")
+            If Not supportedExtensions.Contains(IO.Path.GetExtension(fullPath)) Then Throw New NotSupportedException("Select an OBJ, FBX, glTF, GLB, or Collada model.")
             Return If(Provider, importer.Value).Load(fullPath)
         End Function
 
@@ -43,7 +43,7 @@ Namespace [Shared].Drawing.ThreeD
             Dim provider = Type.GetType("ProjectZ.ModelImport.AssimpModelImporter, ProjectZ.ModelImport", throwOnError:=False)
             If provider Is Nothing Then
 #If WINDOWS Then
-                Throw New InvalidOperationException("Install the ProjectZ.ModelImport NuGet package to load OBJ and FBX files. Procedural 3D surfaces are available in the base ProjectZ package.")
+                Throw New InvalidOperationException("Install the ProjectZ.ModelImport NuGet package to load model files. Procedural 3D surfaces are available in the base ProjectZ package.")
 #Else
                 Throw New InvalidOperationException("Register ModelImporter3D.Provider with an IModelImporter3D implementation on Linux/macOS. The ProjectZ.ModelImport co-package targets Windows; procedural 3D surfaces are built in.")
 #End If

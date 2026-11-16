@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using ProjectZ.Shared.Drawing.ThreeD;
 using Silk.NET.Assimp;
 
 namespace ProjectZ.ModelImport;
@@ -8,6 +9,7 @@ public sealed class ImportedModel
 {
     public ImportedMesh[] Meshes { get; init; } = [];
     public ImportedMaterial[] Materials { get; init; } = [];
+    public ModelRig3D? Rig { get; init; }
 }
 
 public sealed class ImportedMesh
@@ -18,6 +20,9 @@ public sealed class ImportedMesh
     public Vector2[] TextureCoordinates { get; init; } = [];
     public int[] Indices { get; init; } = [];
     public int MaterialIndex { get; init; }
+    public Vector3[]? BindPositions { get; init; }
+    public Vector3[]? BindNormals { get; init; }
+    public ModelMeshBinding3D? Binding { get; init; }
 }
 
 public sealed class ImportedMaterial
@@ -31,7 +36,7 @@ public sealed class ImportedMaterial
     public int EmbeddedTextureHeight { get; init; }
 }
 
-public static unsafe class AssimpModelBridge
+public static unsafe partial class AssimpModelBridge
 {
     private const long MaximumInputBytes = 512L * 1024L * 1024L;
 
@@ -60,14 +65,17 @@ public static unsafe class AssimpModelBridge
             throw new InvalidDataException("The model exceeds Project Z's 512 MB import limit.");
 
         using var api = CreateApi();
+        bool keepHierarchy = file.Extension.ToLowerInvariant() is ".fbx" or ".gltf" or ".glb" or ".dae";
         var flags = PostProcessSteps.Triangulate |
                     PostProcessSteps.JoinIdenticalVertices |
                     PostProcessSteps.GenerateSmoothNormals |
-                    PostProcessSteps.PreTransformVertices |
                     PostProcessSteps.ImproveCacheLocality |
                     PostProcessSteps.SortByPrimitiveType |
                     PostProcessSteps.FlipUVs |
                     PostProcessSteps.ValidateDataStructure;
+        // Assimp 6 flag for the optional per-bone node pointer. Silk's enum
+        // exposes the corresponding Bone fields but omits the postprocess flag.
+        flags |= keepHierarchy ? (PostProcessSteps)0x4000 : PostProcessSteps.PreTransformVertices;
 
         Scene* scene = api.ImportFile(file.FullName, (uint)flags);
         if (scene is null)
@@ -76,46 +84,13 @@ public static unsafe class AssimpModelBridge
         try
         {
             var materials = ReadMaterials(api, scene);
+            if (keepHierarchy)
+                return ImportWithHierarchy(scene, materials);
             var meshes = new List<ImportedMesh>((int)scene->MNumMeshes);
             for (uint meshIndex = 0; meshIndex < scene->MNumMeshes; meshIndex++)
             {
-                Mesh* source = scene->MMeshes[meshIndex];
-                if (source is null || source->MNumVertices == 0 || source->MNumFaces == 0)
-                    continue;
-
-                var positions = new Vector3[source->MNumVertices];
-                var normals = new Vector3[source->MNumVertices];
-                var textureCoordinates = new Vector2[source->MNumVertices];
-                Vector3* uvChannel = source->MTextureCoords[0];
-                for (uint i = 0; i < source->MNumVertices; i++)
-                {
-                    positions[i] = source->MVertices[i];
-                    normals[i] = source->MNormals is null ? Vector3.UnitY : source->MNormals[i];
-                    textureCoordinates[i] = uvChannel is null ? Vector2.Zero : new Vector2(uvChannel[i].X, uvChannel[i].Y);
-                }
-
-                var indices = new List<int>((int)source->MNumFaces * 3);
-                for (uint i = 0; i < source->MNumFaces; i++)
-                {
-                    Face face = source->MFaces[i];
-                    if (face.MNumIndices != 3 || face.MIndices is null)
-                        continue;
-                    indices.Add(checked((int)face.MIndices[0]));
-                    indices.Add(checked((int)face.MIndices[1]));
-                    indices.Add(checked((int)face.MIndices[2]));
-                }
-                if (indices.Count == 0)
-                    continue;
-
-                meshes.Add(new ImportedMesh
-                {
-                    Name = string.IsNullOrWhiteSpace(source->MName.AsString) ? "Surface" : source->MName.AsString,
-                    Positions = positions,
-                    Normals = normals,
-                    TextureCoordinates = textureCoordinates,
-                    Indices = indices.ToArray(),
-                    MaterialIndex = checked((int)source->MMaterialIndex)
-                });
+                if (ReadMesh(scene->MMeshes[meshIndex], Matrix4x4.Identity, null) is { } mesh)
+                    meshes.Add(mesh);
             }
 
             if (meshes.Count == 0)
@@ -126,6 +101,66 @@ public static unsafe class AssimpModelBridge
         {
             api.ReleaseImport(scene);
         }
+    }
+
+    private static ImportedMesh? ReadMesh(Mesh* source, Matrix4x4 bindWorld, ModelMeshBinding3D? binding)
+    {
+        if (source is null || source->MNumVertices == 0 || source->MNumFaces == 0)
+            return null;
+        var indices = new List<int>(checked((int)source->MNumFaces * 3));
+        for (uint i = 0; i < source->MNumFaces; i++)
+        {
+            Face face = source->MFaces[i];
+            if (face.MNumIndices != 3 || face.MIndices is null)
+                continue;
+            for (int vertex = 0; vertex < 3; vertex++)
+            {
+                uint index = face.MIndices[vertex];
+                if (index >= source->MNumVertices)
+                    throw new InvalidDataException("A triangle references a missing model vertex.");
+                indices.Add(checked((int)index));
+            }
+        }
+        if (indices.Count == 0)
+            return null;
+
+        var positions = new Vector3[source->MNumVertices];
+        var normals = new Vector3[source->MNumVertices];
+        var textureCoordinates = new Vector2[source->MNumVertices];
+        var bindPositions = binding is null ? null : new Vector3[source->MNumVertices];
+        var bindNormals = binding is null ? null : new Vector3[source->MNumVertices];
+        var normalTransform = Matrix4x4.Invert(bindWorld, out var inverse) ? Matrix4x4.Transpose(inverse) : bindWorld;
+        Vector3* uvChannel = source->MTextureCoords[0];
+        for (uint i = 0; i < source->MNumVertices; i++)
+        {
+            var position = source->MVertices[i];
+            var normal = source->MNormals is null ? Vector3.UnitY : source->MNormals[i];
+            if (bindPositions is not null && bindNormals is not null)
+            {
+                bindPositions[i] = position;
+                bindNormals[i] = normal;
+                position = Vector3.Transform(position, bindWorld);
+                normal = Vector3.TransformNormal(normal, normalTransform);
+                float lengthSquared = normal.LengthSquared();
+                normal = float.IsFinite(lengthSquared) && lengthSquared > 0 ? Vector3.Normalize(normal) : Vector3.UnitY;
+            }
+            positions[i] = position;
+            normals[i] = normal;
+            textureCoordinates[i] = uvChannel is null ? Vector2.Zero : new Vector2(uvChannel[i].X, uvChannel[i].Y);
+        }
+
+        return new ImportedMesh
+        {
+            Name = string.IsNullOrWhiteSpace(source->MName.AsString) ? "Surface" : source->MName.AsString,
+            Positions = positions,
+            Normals = normals,
+            BindPositions = bindPositions,
+            BindNormals = bindNormals,
+            Binding = binding,
+            TextureCoordinates = textureCoordinates,
+            Indices = indices.ToArray(),
+            MaterialIndex = checked((int)source->MMaterialIndex)
+        };
     }
 
     private static ImportedMaterial[] ReadMaterials(Assimp api, Scene* scene)

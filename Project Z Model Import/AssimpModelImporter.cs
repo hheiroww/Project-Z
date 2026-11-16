@@ -9,27 +9,37 @@ public sealed class AssimpModelImporter : IModelImporter3D
     public Model3DAsset Load(string path)
     {
         var imported = AssimpModelBridge.Load(path);
-        var asset = new Model3DAsset { SourcePath = path };
+        var asset = new Model3DAsset { SourcePath = path, Rig = imported.Rig };
         var materials = imported.Materials.Select(source => LoadMaterial(source, path)).ToArray();
         foreach (var source in imported.Meshes)
         {
-            var vertices = new SurfaceVertex[source.Positions.Length];
-            for (var i = 0; i < vertices.Length; i++)
-            {
-                var position = source.Positions[i];
-                var normal = source.Normals[i];
-                var uv = source.TextureCoordinates[i];
-                vertices[i] = new SurfaceVertex(new Vector4(position.X, position.Y, position.Z, 1),
-                    new Vector3(normal.X, normal.Y, normal.Z), new Vector2(uv.X, uv.Y), Color.White);
-            }
             asset.Meshes.Add(new SurfaceMesh3D
             {
-                Name = source.Name, Vertices = vertices, Indices = source.Indices,
+                Name = source.Name, Indices = source.Indices,
+                Vertices = CreateVertices(source.Positions, source.Normals, source.TextureCoordinates),
+                BindVertices = source.BindPositions is { } positions && source.BindNormals is { } normals
+                    ? CreateVertices(positions, normals, source.TextureCoordinates) : null,
+                Binding = source.Binding,
                 Material = source.MaterialIndex >= 0 && source.MaterialIndex < materials.Length
                     ? materials[source.MaterialIndex] : new SurfaceMaterial3D()
             });
         }
         return asset;
+    }
+
+    private static SurfaceVertex[] CreateVertices(System.Numerics.Vector3[] positions,
+        System.Numerics.Vector3[] normals, System.Numerics.Vector2[] textureCoordinates)
+    {
+        var vertices = new SurfaceVertex[positions.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            var position = positions[i];
+            var normal = normals[i];
+            var uv = textureCoordinates[i];
+            vertices[i] = new SurfaceVertex(new Vector4(position.X, position.Y, position.Z, 1),
+                new Vector3(normal.X, normal.Y, normal.Z), new Vector2(uv.X, uv.Y), Color.White);
+        }
+        return vertices;
     }
 
     private static SurfaceMaterial3D LoadMaterial(ImportedMaterial source, string modelPath)

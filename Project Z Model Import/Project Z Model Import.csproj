@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0-windows7.0</TargetFramework>
     <PackageId>ProjectZ.ModelImport</PackageId>
-    <Description>Optional Assimp OBJ/FBX model importing for Project-Z applications.</Description>
+    <Description>Optional Assimp model importing for Project-Z applications, including FBX, glTF, and Collada joint animations.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

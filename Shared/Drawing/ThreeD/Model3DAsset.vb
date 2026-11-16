@@ -1,5 +1,7 @@
 Imports System.Collections.Generic
 Imports Microsoft.Xna.Framework
+Imports NumericsMatrix = System.Numerics.Matrix4x4
+Imports NumericsVector = System.Numerics.Vector3
 #If Not PROJECTZ_DESKTOPGL Then
 Imports ProjectZ.ShaderEditor
 #End If
@@ -62,6 +64,47 @@ Namespace [Shared].Drawing.ThreeD
         Public Property Vertices As SurfaceVertex() = Array.Empty(Of SurfaceVertex)()
         Public Property Indices As Integer() = Array.Empty(Of Integer)()
         Public Property Material As SurfaceMaterial3D = New SurfaceMaterial3D()
+        Public Property BindVertices As SurfaceVertex()
+        Public Property Binding As ModelMeshBinding3D
+
+        Public Function DeformVertices(pose As ModelRigPose3D) As SurfaceVertex()
+            If pose Is Nothing OrElse Binding Is Nothing OrElse BindVertices Is Nothing Then Return Vertices
+            Dim positions(BindVertices.Length - 1) As NumericsVector, normals(BindVertices.Length - 1) As NumericsVector
+            Dim weights(BindVertices.Length - 1) As Single
+            For Each bone In Binding.Bones
+                Dim skin = bone.Offset * pose.WorldTransforms(bone.Joint)
+                Dim normalMatrix = ComputeNormalTransform(skin)
+                For Each influence In bone.Weights
+                    Dim index = influence.Vertex
+                    Dim vertex = BindVertices(index)
+                    positions(index) += NumericsVector.Transform(New NumericsVector(vertex.Position.X, vertex.Position.Y, vertex.Position.Z), skin) * influence.Weight
+                    normals(index) += NumericsVector.TransformNormal(New NumericsVector(vertex.Normal.X, vertex.Normal.Y, vertex.Normal.Z), normalMatrix) * influence.Weight
+                    weights(index) += influence.Weight
+                Next
+            Next
+            Dim node = pose.WorldTransforms(Binding.Node), nodeNormal = ComputeNormalTransform(node)
+            Dim result(BindVertices.Length - 1) As SurfaceVertex
+            For index = 0 To result.Length - 1
+                Dim vertex = BindVertices(index)
+                Dim p = positions(index), n = normals(index)
+                If weights(index) > 0.000001F Then
+                    p /= weights(index)
+                Else
+                    p = NumericsVector.Transform(New NumericsVector(vertex.Position.X, vertex.Position.Y, vertex.Position.Z), node)
+                    n = NumericsVector.TransformNormal(New NumericsVector(vertex.Normal.X, vertex.Normal.Y, vertex.Normal.Z), nodeNormal)
+                End If
+                If n.LengthSquared() > 0.000000001F Then n = NumericsVector.Normalize(n)
+                vertex.Position = New Vector4(p.X, p.Y, p.Z, 1)
+                vertex.Normal = New Vector3(n.X, n.Y, n.Z)
+                result(index) = vertex
+            Next
+            Return result
+        End Function
+
+        Private Shared Function ComputeNormalTransform(transform As NumericsMatrix) As NumericsMatrix
+            Dim inverse As NumericsMatrix
+            Return If(NumericsMatrix.Invert(transform, inverse), NumericsMatrix.Transpose(inverse), transform)
+        End Function
 
         Public Shared Function FromXYZW(positions As IReadOnlyList(Of Vector4), indices As IReadOnlyList(Of Integer),
                                         Optional material As SurfaceMaterial3D = Nothing) As SurfaceMesh3D
@@ -134,6 +177,7 @@ Namespace [Shared].Drawing.ThreeD
 
     Public Class Model3DAsset
         Public Property SourcePath As String
+        Public Property Rig As ModelRig3D
         Public ReadOnly Property Meshes As New List(Of SurfaceMesh3D)()
 
         Public Shared Function FromSurface(surface As SurfaceMesh3D) As Model3DAsset

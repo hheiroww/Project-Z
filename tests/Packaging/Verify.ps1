@@ -122,7 +122,8 @@ if ($LASTEXITCODE -ne 0) { throw "Native runtime and shader check failed on $Run
 
 $model = New-Consumer 'Model' "<PackageReference Include=`"ProjectZ.ModelImport`" Version=`"[$version]`" />"
 Invoke-DotNet @('publish',(Join-Path $model 'Consumer.csproj'),'-c','Release','-r',$RuntimeIdentifier,'--self-contained','true','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-o',(Join-Path $model 'publish'),'--nologo')
-& (Join-Path $model 'publish/Consumer.exe') (Join-Path $model 'logs') '--model'
+$rigFixtures = Join-Path (Split-Path -Parent $PSScriptRoot) 'ModelRig/Fixtures'
+& (Join-Path $model 'publish/Consumer.exe') (Join-Path $model 'logs') '--model' $rigFixtures
 if ($LASTEXITCODE -ne 0) { throw 'Single-file model importer consumer failed.' }
 
 $browser = New-Consumer 'Browser' "<PackageReference Include=`"ProjectZ.WebView2`" Version=`"[$version]`" />"

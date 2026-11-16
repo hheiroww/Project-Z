@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset>
+    <contributor>
+      <author>Assimp</author>
+      <authoring_tool>Project-Z synthetic rig test</authoring_tool>
+    </contributor>
+    <created>2026-11-15T23:27:46</created>
+    <modified>2026-11-15T23:27:46</modified>
+    <unit name="meter" meter="1" />
+    <up_axis>Y_UP</up_axis>
+  </asset>
+  <library_images>
+  </library_images>
+  <library_effects>
+    <effect id="material_0-fx" name="">
+      <profile_COMMON>
+        <technique sid="standard">
+          <phong>
+            <emission>
+              <color sid="emission">0   0   0   1</color>
+            </emission>
+            <diffuse>
+              <color sid="diffuse">1   1   1   1</color>
+            </diffuse>
+            <shininess>
+              <float sid="shininess">0</float>
+            </shininess>
+            <transparency>
+              <float sid="transparency">1</float>
+            </transparency>
+          </phong>
+        </technique>
+      </profile_COMMON>
+    </effect>
+  </library_effects>
+  <library_materials>
+    <material id="material_0" name="">
+      <instance_effect url="#material_0-fx"/>
+    </material>
+  </library_materials>
+  <library_geometries>
+    <geometry id="SoftWTriangle" name="Soft Triangle" >
+      <mesh>
+        <source id="SoftWTriangle-positions" name="SoftWTriangle-positions">
+          <float_array id="SoftWTriangle-positions-array" count="9"> 0 0 0 1 0 0 2 1 0 </float_array>
+          <technique_common>
+            <accessor count="3" offset="0" source="#SoftWTriangle-positions-array" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="SoftWTriangle-vertices">
+          <input semantic="POSITION" source="#SoftWTriangle-positions" />
+        </vertices>
+        <polylist count="1" material="defaultMaterial">
+          <input offset="0" semantic="VERTEX" source="#SoftWTriangle-vertices" />
+          <vcount>3 </vcount>
+          <p>0 1 2 </p>
+        </polylist>
+      </mesh>
+    </geometry>
+    <geometry id="RigidWTriangle" name="Rigid Triangle" >
+      <mesh>
+        <source id="RigidWTriangle-positions" name="RigidWTriangle-positions">
+          <float_array id="RigidWTriangle-positions-array" count="9"> 0 0 0 1 0 0 2 1 0 </float_array>
+          <technique_common>
+            <accessor count="3" offset="0" source="#RigidWTriangle-positions-array" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="RigidWTriangle-vertices">
+          <input semantic="POSITION" source="#RigidWTriangle-positions" />
+        </vertices>
+        <polylist count="1" material="defaultMaterial">
+          <input offset="0" semantic="VERTEX" source="#RigidWTriangle-vertices" />
+          <vcount>3 </vcount>
+          <p>0 1 2 </p>
+        </polylist>
+      </mesh>
+    </geometry>
+  </library_geometries>
+  <library_controllers>
+    <controller id="SoftWTriangle-skin" name="skinCluster0">
+      <skin source="#SoftWTriangle">
+        <bind_shape_matrix>
+          1 0 0 0
+          0 1 0 0
+          0 0 1 0
+          0 0 0 1
+        </bind_shape_matrix>
+        <source id="SoftWTriangle-skin-joints" name="Soft Triangle-skin-joints">
+          <Name_array id="SoftWTriangle-skin-joints-array" count="3">Upper Lower Tip </Name_array>
+          <technique_common>
+            <accessor source="#SoftWTriangle-skin-joints-array" count="3" stride="1">
+              <param name="JOINT" type="Name"></param>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="SoftWTriangle-skin-bind_poses" name="SoftWTriangle-skin-bind_poses">
+          <float_array id="SoftWTriangle-skin-bind_poses-array" count="48"> 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 -1 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 -2 0 1 0 0 0 0 1 0 0 0 0 1 </float_array>
+          <technique_common>
+            <accessor count="3" offset="0" source="#SoftWTriangle-skin-bind_poses-array" stride="16">
+              <param name="TRANSFORM" type="float4x4" />
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="SoftWTriangle-skin-weights" name="SoftWTriangle-skin-weights">
+          <float_array id="SoftWTriangle-skin-weights-array" count="4"> 1 0.25 0.75 1 </float_array>
+          <technique_common>
+            <accessor count="4" offset="0" source="#SoftWTriangle-skin-weights-array" stride="1">
+              <param name="WEIGHT" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <joints>
+          <input semantic="JOINT" source="#SoftWTriangle-skin-joints"></input>
+          <input semantic="INV_BIND_MATRIX" source="#SoftWTriangle-skin-bind_poses"></input>
+        </joints>
+        <vertex_weights count="3">
+          <input semantic="JOINT" source="#SoftWTriangle-skin-joints" offset="0"></input>
+          <input semantic="WEIGHT" source="#SoftWTriangle-skin-weights" offset="1"></input>
+          <vcount>1 2 1 </vcount>
+          <v>0 0 0 1 1 2 2 3 </v>
+        </vertex_weights>
+      </skin>
+    </controller>
+  </library_controllers>
+  <library_visual_scenes>
+    <visual_scene id="ROOT" name="ROOT">
+      <node id="Upper" sid="Upper" name="Upper" type="JOINT">
+        <matrix sid="matrix">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <node id="Lower" sid="Lower" name="Lower" type="JOINT">
+          <matrix sid="matrix">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+          <node id="Tip" sid="Tip" name="Tip" type="JOINT">
+            <matrix sid="matrix">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+          </node>
+        </node>
+      </node>
+      <node id="Skinned" name="Skinned" type="NODE">
+        <matrix sid="matrix">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_controller url="#SoftWTriangle-skin">
+          <skeleton>#Upper</skeleton>
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="defaultMaterial" target="#material_0">
+              </instance_material>
+            </technique_common>
+          </bind_material>
+        </instance_controller>
+      </node>
+      <node id="Rigid" name="Rigid" type="NODE">
+        <matrix sid="matrix">1 0 0 4 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_geometry url="#RigidWTriangle">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="defaultMaterial" target="#material_0">
+              </instance_material>
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <library_animations>
+    <animation id="Swing" name="Swing">
+      <source id="Lower_matrix-input"><float_array id="Lower_matrix-input-array" count="2">0 2</float_array><technique_common><accessor source="#Lower_matrix-input-array" count="2" stride="1"><param name="TIME" type="float"/></accessor></technique_common></source>
+      <source id="Lower_matrix-output"><float_array id="Lower_matrix-output-array" count="32">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1 0 -1 0 1 1 0 0 0 0 0 1 0 0 0 0 1</float_array><technique_common><accessor source="#Lower_matrix-output-array" count="2" stride="16"><param name="TRANSFORM" type="float4x4"/></accessor></technique_common></source>
+      <source id="Lower_matrix-interpolation"><Name_array id="Lower_matrix-interpolation-array" count="2">LINEAR LINEAR</Name_array><technique_common><accessor source="#Lower_matrix-interpolation-array" count="2" stride="1"><param name="INTERPOLATION" type="Name"/></accessor></technique_common></source>
+      <sampler id="Lower_matrix-sampler">
+        <input semantic="INPUT" source="#Lower_matrix-input"/>
+        <input semantic="OUTPUT" source="#Lower_matrix-output"/>
+        <input semantic="INTERPOLATION" source="#Lower_matrix-interpolation"/>
+      </sampler>
+      <source id="Upper_matrix-input"><float_array id="Upper_matrix-input-array" count="2">0 2</float_array><technique_common><accessor source="#Upper_matrix-input-array" count="2" stride="1"><param name="TIME" type="float"/></accessor></technique_common></source>
+      <source id="Upper_matrix-output"><float_array id="Upper_matrix-output-array" count="32">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0 1 0 1 0 0 1 0 0 0 0 1</float_array><technique_common><accessor source="#Upper_matrix-output-array" count="2" stride="16"><param name="TRANSFORM" type="float4x4"/></accessor></technique_common></source>
+      <source id="Upper_matrix-interpolation"><Name_array id="Upper_matrix-interpolation-array" count="2">LINEAR LINEAR</Name_array><technique_common><accessor source="#Upper_matrix-interpolation-array" count="2" stride="1"><param name="INTERPOLATION" type="Name"/></accessor></technique_common></source>
+      <sampler id="Upper_matrix-sampler">
+        <input semantic="INPUT" source="#Upper_matrix-input"/>
+        <input semantic="OUTPUT" source="#Upper_matrix-output"/>
+        <input semantic="INTERPOLATION" source="#Upper_matrix-interpolation"/>
+      </sampler>
+      <channel source="#Lower_matrix-sampler" target="Lower/matrix"/>
+      <channel source="#Upper_matrix-sampler" target="Upper/matrix"/>
+    </animation>
+    <animation id="Grow" name="Grow">
+      <source id="Tip_matrix-input"><float_array id="Tip_matrix-input-array" count="2">0 2</float_array><technique_common><accessor source="#Tip_matrix-input-array" count="2" stride="1"><param name="TIME" type="float"/></accessor></technique_common></source>
+      <source id="Tip_matrix-output"><float_array id="Tip_matrix-output-array" count="32">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1 2 0 0 1 0 2 0 0 0 0 2 0 0 0 0 1</float_array><technique_common><accessor source="#Tip_matrix-output-array" count="2" stride="16"><param name="TRANSFORM" type="float4x4"/></accessor></technique_common></source>
+      <source id="Tip_matrix-interpolation"><Name_array id="Tip_matrix-interpolation-array" count="2">LINEAR LINEAR</Name_array><technique_common><accessor source="#Tip_matrix-interpolation-array" count="2" stride="1"><param name="INTERPOLATION" type="Name"/></accessor></technique_common></source>
+      <sampler id="Tip_matrix-sampler">
+        <input semantic="INPUT" source="#Tip_matrix-input"/>
+        <input semantic="OUTPUT" source="#Tip_matrix-output"/>
+        <input semantic="INTERPOLATION" source="#Tip_matrix-interpolation"/>
+      </sampler>
+      <channel source="#Tip_matrix-sampler" target="Tip/matrix"/>
+    </animation>
+  </library_animations>
+  <library_animation_clips>
+    <animation_clip id="SwingClip" name="Swing" start="0" end="2"><instance_animation url="#Swing"/></animation_clip>
+    <animation_clip id="GrowClip" name="Grow" start="0" end="2"><instance_animation url="#Grow"/></animation_clip>
+  </library_animation_clips>
+  <scene>
+    <instance_visual_scene url="#ROOT" />
+  </scene>
+</COLLADA>
