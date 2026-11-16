@@ -1131,6 +1131,20 @@ Namespace [Shared].Drawing.UI.Input
         Private _horizontalVisibility As Integer = 0
         Private _scrollVelocity As Vector2 = Vector2.Zero
 
+        ''' <summary>Scrollbar thickness in layout pixels, for both axes.</summary>
+        Public Property ScrollBarThickness As Single
+            Get
+                Return _scrollbarWidth
+            End Get
+            Set(value As Single)
+                If Not Single.IsFinite(value) OrElse value <= 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If _scrollbarWidth = value Then Return
+                _scrollbarWidth = value
+                AlignChildren()
+                Scene?.RequestRender()
+            End Set
+        End Property
+
         ' Values match Disabled, Auto, Hidden, Visible. Hidden retains scrolling.
         Public Property VerticalScrollBarVisibility As Integer
             Get
