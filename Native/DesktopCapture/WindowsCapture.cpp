@@ -218,16 +218,18 @@ extern "C" __declspec(dllexport) void* pz_capture_create(void* owner) {
     catch (hresult_error const& e) { error = to_string(e.message()); return nullptr; }
     catch (std::exception const& e) { error = e.what(); return nullptr; }
 }
-extern "C" __declspec(dllexport) int pz_capture_bounds(void* capture, int* x, int* y, int* width, int* height, float* scale) {
+extern "C" __declspec(dllexport) int pz_capture_window_bounds(HWND window, int* x, int* y, int* width, int* height, float* scale) {
     PhysicalCoordinates coordinates;
-    auto& value = *static_cast<Capture*>(capture);
     RECT rect{}; POINT origin{};
-    if (!IsWindow(value.owner) || IsIconic(value.owner) || !GetClientRect(value.owner, &rect) || !ClientToScreen(value.owner, &origin)) return 0;
+    if (!IsWindow(window) || IsIconic(window) || !GetClientRect(window, &rect) || !ClientToScreen(window, &origin)) return 0;
     *x = origin.x; *y = origin.y; *width = rect.right; *height = rect.bottom;
     DEVICE_SCALE_FACTOR factor = SCALE_100_PERCENT;
-    GetScaleFactorForMonitor(MonitorFromWindow(value.owner, MONITOR_DEFAULTTONEAREST), &factor);
+    GetScaleFactorForMonitor(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &factor);
     *scale = static_cast<float>(factor) / 100.0f;
     return *width > 0 && *height > 0;
+}
+extern "C" __declspec(dllexport) int pz_capture_bounds(void* capture, int* x, int* y, int* width, int* height, float* scale) {
+    return pz_capture_window_bounds(static_cast<Capture*>(capture)->owner, x, y, width, height, scale);
 }
 extern "C" __declspec(dllexport) int pz_capture_read(void* capture, int x, int y, int width, int height, int downsample, unsigned char* rgba, int capacity) {
     try {

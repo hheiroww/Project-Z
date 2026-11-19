@@ -43,7 +43,7 @@ Namespace [Shared].Composition
     End Module
 
     Friend Module DesktopCaptureFactory
-        Friend Function Create(nativeWindow As IntPtr) As IDesktopCaptureSource
+        Friend Function Create(nativeWindow As IntPtr, geometryWindow As IntPtr) As IDesktopCaptureSource
             If OperatingSystem.IsLinux() Then
                 If String.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase) OrElse
                    Not String.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) Then
@@ -58,7 +58,7 @@ Namespace [Shared].Composition
             If OperatingSystem.IsMacOS() AndAlso Not OperatingSystem.IsMacOSVersionAtLeast(13) Then
                 Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "Desktop blur requires macOS 13 or later and Screen Recording permission.")
             End If
-            If OperatingSystem.IsWindows() OrElse OperatingSystem.IsMacOS() Then Return New NativeDesktopCapture(nativeWindow)
+            If OperatingSystem.IsWindows() OrElse OperatingSystem.IsMacOS() Then Return New NativeDesktopCapture(nativeWindow, geometryWindow)
             Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "No desktop capture provider is installed for this platform.")
         End Function
     End Module
@@ -86,15 +86,18 @@ Namespace [Shared].Composition
         End Function
         Private ReadOnly read As ReadDelegate
         Private ReadOnly bounds As BoundsDelegate
+        Private ReadOnly geometryWindow As IntPtr
         Private ReadOnly destroy As DestroyDelegate
         Private ReadOnly errorText As ErrorDelegate
         Private context As IntPtr
         Private scale As Single = 1
-        Friend Sub New(window As IntPtr)
+        Friend Sub New(window As IntPtr, geometryWindow As IntPtr)
             Try
                 library = LoadLibrary()
                 read = Marshal.GetDelegateForFunctionPointer(Of ReadDelegate)(NativeLibrary.GetExport(library, "pz_capture_read"))
-                bounds = Marshal.GetDelegateForFunctionPointer(Of BoundsDelegate)(NativeLibrary.GetExport(library, "pz_capture_bounds"))
+                Me.geometryWindow = If(OperatingSystem.IsWindows() AndAlso geometryWindow <> window, geometryWindow, IntPtr.Zero)
+                Dim boundsExport = If(Me.geometryWindow = IntPtr.Zero, "pz_capture_bounds", "pz_capture_window_bounds")
+                bounds = Marshal.GetDelegateForFunctionPointer(Of BoundsDelegate)(NativeLibrary.GetExport(library, boundsExport))
                 destroy = Marshal.GetDelegateForFunctionPointer(Of DestroyDelegate)(NativeLibrary.GetExport(library, "pz_capture_destroy"))
                 errorText = Marshal.GetDelegateForFunctionPointer(Of ErrorDelegate)(NativeLibrary.GetExport(library, "pz_capture_error"))
                 Dim create = Marshal.GetDelegateForFunctionPointer(Of CreateDelegate)(NativeLibrary.GetExport(library, "pz_capture_create"))
@@ -115,7 +118,7 @@ Namespace [Shared].Composition
         Public ReadOnly Property WindowBounds As Rectangle Implements IDesktopCaptureSource.WindowBounds
             Get
                 Dim x, y, width, height As Integer
-                If context = IntPtr.Zero OrElse bounds(context, x, y, width, height, scale) = 0 Then Return Rectangle.Empty
+                If context = IntPtr.Zero OrElse bounds(If(geometryWindow = IntPtr.Zero, context, geometryWindow), x, y, width, height, scale) = 0 Then Return Rectangle.Empty
                 Return New Rectangle(x, y, width, height)
             End Get
         End Property

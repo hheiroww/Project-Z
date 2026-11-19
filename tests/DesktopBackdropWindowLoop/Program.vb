@@ -71,7 +71,28 @@ Module Program
             End Using
         End Using
         CheckSharedFrameOwner()
+        CheckGeometryFrame()
         Console.WriteLine($"DESKTOP_BACKDROP_WINDOW_LOOP_OK checks={checks}")
+    End Sub
+
+    Private Sub CheckGeometryFrame()
+        Using host As New Form With {.ShowInTaskbar = False, .StartPosition = FormStartPosition.Manual,
+                                    .Location = New System.Drawing.Point(-30000, -30000)}
+            Dim hwnd = host.Handle
+            Dim frames = 0
+            Using loopHost As New ProjectZ.Windows.Composition.DesktopBackdropWindowLoop(hwnd, Function() True, Sub() frames += 1)
+                ShowWindow(hwnd, 4)
+                SendMessage(hwnd, &H231, IntPtr.Zero, IntPtr.Zero)
+                host.Left += 1
+                host.Left += 1
+                host.Width += 1
+                Require(frames = 0, "Geometry changes queue a frame instead of reentering window layout.")
+                Application.DoEvents()
+                Require(frames = 1, "Move and resize coalesce into a frame without waiting for a modal timer.")
+                SendMessage(hwnd, &H232, IntPtr.Zero, IntPtr.Zero)
+                ShowWindow(hwnd, 0)
+            End Using
+        End Using
     End Sub
 
     Private Sub CheckSharedFrameOwner()

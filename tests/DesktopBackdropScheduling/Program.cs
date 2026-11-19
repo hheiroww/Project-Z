@@ -178,7 +178,7 @@ internal static class Program
     }
 }
 
-internal sealed class ControlledSource(bool returnPixels = true) : IDesktopCaptureSource
+internal sealed class ControlledSource(bool returnPixels = true, Func<int, byte>? redAt = null) : IDesktopCaptureSource
 {
     internal Rectangle Bounds = new(100, 100, 160, 96);
     internal readonly ConcurrentQueue<Rectangle> Requests = new();
@@ -208,7 +208,8 @@ internal sealed class ControlledSource(bool returnPixels = true) : IDesktopCaptu
             for (var y = 0; y < height; y++) for (var x = 0; x < width; x++)
             {
                 var offset = (y * width + x) * 4;
-                rgba[offset] = (byte)Math.Clamp((area.X + x * downsample) / 4, 0, 255);
+                var desktopX = area.X + x * downsample;
+                rgba[offset] = redAt?.Invoke(desktopX) ?? (byte)Math.Clamp(desktopX / 4, 0, 255);
                 rgba[offset + 1] = (byte)Math.Clamp((area.Y + y * downsample) / 4, 0, 255);
                 rgba[offset + 2] = 70;
                 rgba[offset + 3] = 255;
@@ -261,6 +262,7 @@ internal sealed class HiddenProbe : Game
         }
         Program.RetryIsolation(this);
         VerifySceneInvalidation();
+        VerifyFineMovement();
         using (var source = new ControlledSource())
         using (var backdrop = Program.Create(this, source))
         using (var target = new RenderTarget2D(GraphicsDevice, 160, 96))
@@ -311,6 +313,28 @@ internal sealed class HiddenProbe : Game
         }
         Completed = true;
         Exit();
+    }
+
+    private void VerifyFineMovement()
+    {
+        using var source = new ControlledSource(redAt: x => (byte)Math.Clamp(120 + (x - 180) * 3, 0, 255));
+        using var backdrop = Program.Create(this, source);
+        using var target = new RenderTarget2D(GraphicsDevice, 160, 96);
+        Program.Update(backdrop);
+        Program.Require(source.Started.WaitOne(5000), "fine movement fixture starts capture");
+        Program.Complete(backdrop, source);
+        var previous = Render(backdrop, target);
+        for (var offset = 1; offset <= 7; offset++)
+        {
+            source.Bounds = new Rectangle(100 + offset, 100, 160, 96);
+            var current = Render(backdrop, target);
+            Program.Require(current.R > previous.R && current.R - previous.R < 6,
+                "each pixel of window movement reprojects the cached desktop without a texture-texel jump");
+            previous = current;
+        }
+        Program.Complete(backdrop, source);
+        Program.Require(source.Started.WaitOne(1000), "fine movement coalesces into the latest capture");
+        Program.Complete(backdrop, source);
     }
 
     private void VerifySceneInvalidation()

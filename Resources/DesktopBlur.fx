@@ -21,6 +21,7 @@ sampler2D SourceTexture : register(s0);
 float2 BlurStep;
 float2 ScreenOrigin;
 float2 DesktopExtent;
+float4 ViewportUv;
 float Saturation;
 float NoiseOpacity;
 float4 MaterialTint;
@@ -37,6 +38,7 @@ float4 DesktopMaterial(SpriteInput input) : PS_TARGET {
         c += (SAMPLE(uv + BlurStep * 7.3029407) + SAMPLE(uv - BlurStep * 7.3029407)) * 0.0136205;
         return float4(c.rgb, 1);
     }
+    uv = ViewportUv.xy + uv * ViewportUv.zw;
     float3 color = SAMPLE(uv).rgb;
     float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
     color = lerp(luminance.xxx, color, Saturation);

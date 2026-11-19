@@ -1,5 +1,6 @@
 Imports System.Runtime.InteropServices
 Imports System.Runtime.CompilerServices
+Imports System.Diagnostics
 Imports System.Threading
 Imports System.Windows.Forms
 
@@ -18,7 +19,10 @@ Namespace Windows.Composition
         Private Shared ReadOnly frameOwners As New ConditionalWeakTable(Of Object, FrameGate)
         Private ReadOnly sharedFrameGate As FrameGate
         Private ReadOnly timerId As New UIntPtr(&H505A424CUI)
+        Private Shared ReadOnly geometryFrameMessage As Integer = RegisterWindowMessage("ProjectZ.DesktopBackdrop.GeometryFrame")
         Private inSizeMove, rendering, timerStarted, disposed As Boolean
+        Private geometryFramePosted As Boolean
+        Private geometryFrameDeadline As Long
 
         Friend Sub New(hwnd As IntPtr, isEnabled As Func(Of Boolean), renderFrame As Action,
                        Optional useExistingFramePump As Boolean = False, Optional frameOwner As Object = Nothing)
@@ -33,6 +37,13 @@ Namespace Windows.Composition
         End Sub
 
         Protected Overrides Sub WndProc(ByRef message As Message)
+            If geometryFrameMessage <> 0 AndAlso message.Msg = geometryFrameMessage Then
+                geometryFramePosted = False
+                Dim started = Stopwatch.GetTimestamp()
+                If TryRenderFrame() Then geometryFrameDeadline = started + Stopwatch.Frequency \ 60
+                message.Result = IntPtr.Zero
+                Return
+            End If
             Select Case message.Msg
                 Case &H231 ' WM_ENTERSIZEMOVE
                     inSizeMove = True
@@ -47,32 +58,40 @@ Namespace Windows.Composition
                     StopTimer()
                 Case &H113 ' WM_TIMER
                     If timerStarted AndAlso message.WParam.ToInt64() = CLng(timerId.ToUInt64()) Then
-                        If inSizeMove AndAlso Not rendering AndAlso Not disposed AndAlso isEnabled() AndAlso
-                           IsWindowVisible(Handle) AndAlso Not IsIconic(Handle) Then
-                            If Interlocked.CompareExchange(sharedFrameGate.Rendering, 1, 0) = 0 Then
-                                rendering = True
-                                Try
-                                    ' The timer runs on the HWND's owning thread.
-                                    ' App-owned ordinary frame entry must also opt
-                                    ' out while its Update/Draw is already active.
-                                    renderFrame()
-                                Finally
-                                    rendering = False
-                                    Volatile.Write(sharedFrameGate.Rendering, 0)
-                                End Try
-                            End If
-                        End If
+                        TryRenderFrame()
                         message.Result = IntPtr.Zero
                         Return
                     End If
             End Select
             MyBase.WndProc(message)
+            ' Geometry messages can keep low-priority WM_TIMER from surfacing
+            ' during a drag. Queue one frame after the host consumes its bounds.
+            If message.Msg = &H47 AndAlso inSizeMove AndAlso Not useExistingFramePump AndAlso Not rendering AndAlso
+               Not geometryFramePosted AndAlso geometryFrameMessage <> 0 AndAlso Stopwatch.GetTimestamp() >= geometryFrameDeadline Then
+                geometryFramePosted = PostMessage(Handle, geometryFrameMessage, IntPtr.Zero, IntPtr.Zero)
+            End If
         End Sub
+
+        Private Function TryRenderFrame() As Boolean
+            If Not inSizeMove OrElse rendering OrElse disposed OrElse Stopwatch.GetTimestamp() < geometryFrameDeadline OrElse
+               Not isEnabled() OrElse Not IsWindowVisible(Handle) OrElse IsIconic(Handle) Then Return False
+            If Interlocked.CompareExchange(sharedFrameGate.Rendering, 1, 0) <> 0 Then Return False
+            rendering = True
+            Try
+                renderFrame()
+                Return True
+            Finally
+                rendering = False
+                Volatile.Write(sharedFrameGate.Rendering, 0)
+            End Try
+        End Function
 
         Private Sub StopTimer()
             inSizeMove = False
             If timerStarted AndAlso Handle <> IntPtr.Zero Then KillTimer(Handle, timerId)
             timerStarted = False
+            geometryFramePosted = False
+            geometryFrameDeadline = 0
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
@@ -93,6 +112,12 @@ Namespace Windows.Composition
         End Function
         <DllImport("user32.dll", ExactSpelling:=True)>
         Private Shared Function IsIconic(hwnd As IntPtr) As Boolean
+        End Function
+        <DllImport("user32.dll", CharSet:=CharSet.Unicode)>
+        Private Shared Function RegisterWindowMessage(name As String) As Integer
+        End Function
+        <DllImport("user32.dll", EntryPoint:="PostMessageW", ExactSpelling:=True)>
+        Private Shared Function PostMessage(hwnd As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As Boolean
         End Function
     End Class
 End Namespace

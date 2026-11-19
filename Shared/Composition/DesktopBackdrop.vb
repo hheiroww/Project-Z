@@ -12,6 +12,8 @@ Namespace [Shared].Composition
         ''' <summary>Set before enabling, for a compositor-specific source or application integration.</summary>
         Public Property CaptureSourceFactory As Func(Of IDesktopCaptureSource)
         Public Property NativeWindowHandle As IntPtr
+        ''' <summary>On Windows, optionally track a separate owner HWND for position and size while excluding NativeWindowHandle from capture.</summary>
+        Public Property GeometryWindowHandle As IntPtr
         ''' <summary>Show the framework setup prompt when dependencies or capture permission are missing.</summary>
         Public Property ShowSetupPrompt As Boolean = True
         Public ReadOnly Property State As DesktopBackdropState = DesktopBackdropState.Disabled
@@ -103,7 +105,7 @@ Namespace [Shared].Composition
             If failed Then Return
             Try
                 If source Is Nothing Then
-                    source = If(CaptureSourceFactory Is Nothing, DesktopCaptureFactory.Create(NativeWindowHandle), CaptureSourceFactory.Invoke())
+                    source = If(CaptureSourceFactory Is Nothing, DesktopCaptureFactory.Create(NativeWindowHandle, GeometryWindowHandle), CaptureSourceFactory.Invoke())
                     If source Is Nothing OrElse Not source.ExcludesHostWindow Then Throw New DesktopCaptureUnavailableException(DesktopBackdropState.Unsupported, "The capture provider must exclude the host window without returning a black placeholder.")
                     _State = DesktopBackdropState.Starting
                 End If
@@ -269,11 +271,13 @@ Namespace [Shared].Composition
                     shader.Parameters("MaterialTint").SetValue(Settings.Tint.ToVector4())
                     shader.Parameters("ScreenOrigin").SetValue(New Vector2(frameArea.X, frameArea.Y))
                     shader.Parameters("DesktopExtent").SetValue(New Vector2(frameArea.Width, frameArea.Height))
-                    Dim sourceArea As New Rectangle(CInt((windowArea.X - frameArea.X) * (blurred.Width / CSng(frameArea.Width))),
-                        CInt((windowArea.Y - frameArea.Y) * (blurred.Height / CSng(frameArea.Height))),
-                        Math.Max(1, CInt(windowArea.Width * (blurred.Width / CSng(frameArea.Width)))), Math.Max(1, CInt(windowArea.Height * (blurred.Height / CSng(frameArea.Height)))))
+                    ' Keep the blurred image anchored in desktop pixels. Rounding
+                    ' to the reduced texture's texels makes the image jump while dragging.
+                    shader.Parameters("ViewportUv").SetValue(New Vector4(
+                        (windowArea.X - frameArea.X) / CSng(frameArea.Width), (windowArea.Y - frameArea.Y) / CSng(frameArea.Height),
+                        windowArea.Width / CSng(frameArea.Width), windowArea.Height / CSng(frameArea.Height)))
                     batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone, shader)
-                    batch.Draw(blurred, viewport.Bounds, sourceArea, Color.White)
+                    batch.Draw(blurred, viewport.Bounds, Color.White)
                     batch.End()
                 Else
                     batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque)

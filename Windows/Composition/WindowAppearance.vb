@@ -10,6 +10,18 @@ Namespace Windows.Composition
         Public Property SurfaceColor As Color = New Color(16, 40, 32)
         Public Property TextColor As Color = New Color(230, 244, 238)
         Public Property AccentColor As Color = New Color(99, 244, 80)
+        ''' <summary>Allow a host to adapt its text color to visible pixels under a translucent window.</summary>
+        Public Property AdaptiveTextContrastEnabled As Boolean = True
+        Private contrastOpacity As Integer = 25
+        ''' <summary>Highest background opacity percentage at which the host should adapt text contrast.</summary>
+        Public Property AdaptiveTextContrastOpacity As Integer
+            Get
+                Return contrastOpacity
+            End Get
+            Set(value As Integer)
+                contrastOpacity = Math.Clamp(value, 0, 100)
+            End Set
+        End Property
         Private opacity As Integer = 50
         Public Property BackgroundOpacity As Integer
             Get
@@ -21,6 +33,7 @@ Namespace Windows.Composition
         End Property
         Public Function Copy() As WindowAppearanceSettings
             Return New WindowAppearanceSettings With {.DwmBlurEnabled = DwmBlurEnabled, .BackgroundOpacity = BackgroundOpacity,
+                .AdaptiveTextContrastEnabled = AdaptiveTextContrastEnabled, .AdaptiveTextContrastOpacity = AdaptiveTextContrastOpacity,
                 .BackgroundColor = BackgroundColor, .SurfaceColor = SurfaceColor, .TextColor = TextColor, .AccentColor = AccentColor}
         End Function
         Public Function Background(color As Color) As Color
@@ -49,6 +62,8 @@ Namespace Windows.Composition
         Public Sub Update(settings As WindowAppearanceSettings)
             ArgumentNullException.ThrowIfNull(settings)
             If value.BackgroundOpacity = settings.BackgroundOpacity AndAlso value.DwmBlurEnabled = settings.DwmBlurEnabled AndAlso
+                value.AdaptiveTextContrastEnabled = settings.AdaptiveTextContrastEnabled AndAlso
+                value.AdaptiveTextContrastOpacity = settings.AdaptiveTextContrastOpacity AndAlso
                 value.BackgroundColor = settings.BackgroundColor AndAlso value.SurfaceColor = settings.SurfaceColor AndAlso
                 value.TextColor = settings.TextColor AndAlso value.AccentColor = settings.AccentColor Then Return
             value = settings.Copy()
@@ -88,7 +103,7 @@ Namespace Windows.Composition
             _Composition = WindowsComposition.ApplyToHandle(owner, New WindowCompositionOptions With {
                 .Borderless = True, .Resizable = resizable, .Backdrop = WindowBackdrop.None,
                 .FallbackAccentBlur = False, .Tint = Color.Transparent, .ExtendFrameIntoClientArea = False,
-                .Opacity = Byte.MaxValue})
+                .Opacity = If(perPixel, CByte(0), Byte.MaxValue)})
             If Backdrop IsNot Nothing Then
                 Backdrop.SetMaterial(settings.DwmBlurEnabled, Color.Transparent)
                 _BackdropComposition = Backdrop.Composition
