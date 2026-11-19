@@ -15,6 +15,7 @@ internal static class Program
     internal static int Checks;
     internal static readonly MethodInfo UpdateMethod = typeof(DesktopBackdrop).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)!;
     internal static readonly MethodInfo DrawMethod = typeof(DesktopBackdrop).GetMethod("Draw", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly FieldInfo CaptureDeadline = typeof(DesktopBackdrop).GetField("nextCaptureAt", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     [STAThread]
     private static void Main(string[] args)
@@ -101,7 +102,7 @@ internal static class Program
     {
         // A deliberately distant deadline makes this deterministic on a slow CI
         // machine: geometry must bypass cadence, rather than eventually wait it out.
-        typeof(DesktopBackdrop).GetField("nextCaptureAt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(backdrop, long.MaxValue);
+        CaptureDeadline.SetValue(backdrop, long.MaxValue);
     }
 
     internal static void Complete(DesktopBackdrop backdrop, ControlledSource source)
@@ -123,6 +124,21 @@ internal static class Program
         HoldStationaryDeadline(backdrop);
         Update(backdrop);
         Require(source.Requests.Count == initialCount, "stationary backdrop respects configured capture cadence");
+
+        var interval = Stopwatch.Frequency / backdrop.Settings.CaptureFramesPerSecond;
+        var deadline = Stopwatch.GetTimestamp() - interval / 2;
+        CaptureDeadline.SetValue(backdrop, deadline);
+        Update(backdrop);
+        Require(source.Started.WaitOne(1000), "stationary capture starts when its deadline passes");
+        Require((long)CaptureDeadline.GetValue(backdrop)! == deadline + interval, "a late render tick preserves the stationary capture phase");
+        Complete(backdrop, source);
+
+        var beforeStallRecovery = Stopwatch.GetTimestamp();
+        CaptureDeadline.SetValue(backdrop, beforeStallRecovery - interval * 3);
+        Update(backdrop);
+        Require(source.Started.WaitOne(1000), "stationary capture resumes after skipped intervals");
+        Require((long)CaptureDeadline.GetValue(backdrop)! >= beforeStallRecovery + interval, "a stall rebases cadence without a burst of catch-up reads");
+        Complete(backdrop, source);
 
         var oldRevision = (long?)typeof(DesktopBackdrop).GetProperty("RenderRevision")?.GetValue(backdrop) ?? 0;
         source.Bounds = new Rectangle(120, 110, 160, 96);
