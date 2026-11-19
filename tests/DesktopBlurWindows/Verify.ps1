@@ -1,6 +1,6 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$WorkDirectory, [switch]$SkipGraphics)
+param([Parameter(Mandatory)][string]$WorkDirectory, [switch]$SkipGraphics, [switch]$RunMotion)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $project = Join-Path $PSScriptRoot 'DesktopBlurWindows.csproj'
@@ -14,7 +14,9 @@ foreach ($backend in @('DirectX12','DirectX11','OpenGL')) {
         if (!$program) { throw "$backend executable was not built." }
         dotnet $program.FullName --graphics --desktop-blur "--backend=$backend" "--capture=$artifacts/desktop-blur.png"
         if ($LASTEXITCODE -ne 0) { throw "$backend Gaussian shader checks failed." }
-        dotnet $program.FullName --graphics --desktop-blur --native-desktop "--backend=$backend"
+        # The motion run includes the same static exclusion and foreground checks.
+        $motion = if ($RunMotion) { @('--moving-desktop') } else { @() }
+        dotnet $program.FullName --graphics --desktop-blur --native-desktop "--backend=$backend" @motion
         if ($LASTEXITCODE -ne 0) { throw "$backend desktop exclusion checks failed." }
     }
 }

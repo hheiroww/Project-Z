@@ -29,6 +29,11 @@ internal sealed class NativeBackdropFixture : IDisposable
         SetWindowPos(window.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x13);
         SetWindowPos(host, new IntPtr(-1), 0, 0, 0, 0, 0x13);
     }
+    internal void SetColor(System.Drawing.Color color)
+    {
+        window.BackColor = color;
+        window.Refresh();
+    }
     public void Dispose()
     {
         SetWindowPos(host, new IntPtr(wasTopmost ? -1 : -2), 0, 0, 0, 0, 0x13);

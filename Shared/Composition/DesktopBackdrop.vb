@@ -1,5 +1,6 @@
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
+Imports System.Diagnostics
 Imports System.Threading.Tasks
 
 Namespace [Shared].Composition
@@ -133,8 +134,9 @@ Namespace [Shared].Composition
                     End If
                 End If
                 Dim geometryChanged = windowArea <> requestedWindow OrElse dpi <> requestedDpi OrElse Settings.BlurRadius <> requestedRadius
+                Dim now = Stopwatch.GetTimestamp()
                 If windowArea.Width <= 0 OrElse windowArea.Height <= 0 OrElse
-                    (Not geometryChanged AndAlso Environment.TickCount64 < nextCaptureAt) Then Return
+                    (Not geometryChanged AndAlso now < nextCaptureAt) Then Return
                 Dim padding = CInt(Math.Ceiling(Math.Clamp(Settings.BlurRadius, 0, 100) * dpi * 3)) + 4
                 Dim required = windowArea
                 required.Inflate(padding, padding)
@@ -155,13 +157,18 @@ Namespace [Shared].Composition
                 If rgba Is Nothing OrElse rgba.Length <> length Then ReDim rgba(length - 1)
                 Dim current = source, area = captureArea, scale = captureScale, buffer = rgba
                 requestedWindow = windowArea : requestedDpi = dpi : requestedRadius = Settings.BlurRadius
-                nextCaptureAt = Environment.TickCount64 + 1000 \ Math.Clamp(Settings.CaptureFramesPerSecond, 1, 60)
+                Dim interval = Stopwatch.Frequency \ Math.Clamp(Settings.CaptureFramesPerSecond, 1, 60)
+                ' TickCount64 can advance in 15 or 16 ms steps on Windows. Use the
+                ' monotonic high-resolution clock and keep the phase through small
+                ' render-loop delays. Rebase after a missed interval or a move.
+                nextCaptureAt = If(geometryChanged OrElse nextCaptureAt = 0 OrElse now - nextCaptureAt >= interval,
+                    now + interval, nextCaptureAt + interval)
                 captureTask = Task.Run(Function()
-                                           Dim started = Diagnostics.Stopwatch.GetTimestamp()
+                                           Dim started = Stopwatch.GetTimestamp()
                                            Try
                                                Return current.TryCapture(area, scale, buffer)
                                            Finally
-                                               _LastCaptureMilliseconds = Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds
+                                               _LastCaptureMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds
                                            End Try
                                        End Function)
             Catch ex As DesktopCaptureUnavailableException

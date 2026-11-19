@@ -68,6 +68,9 @@ internal static class Program
         if (args.Contains("--graphics"))
         {
             using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"), args.FirstOrDefault(a => a.StartsWith("--capture="))?[10..]);
+#if PROJECTZ_WINDOWS_RUNTIME
+            if (args.Contains("--moving-desktop")) game.EnableMovingDesktopCheck();
+#endif
             game.Run();
             Require(game.Completed, "Graphics smoke did not complete.");
         }
@@ -91,6 +94,16 @@ internal sealed class SmokeGame : Game
     private readonly string? capturePath;
     private NativeBackdropFixture? nativeFixture;
     public bool Completed { get; private set; }
+#if PROJECTZ_WINDOWS_RUNTIME
+    private DesktopMotionCheck? motion;
+
+    internal void EnableMovingDesktopCheck()
+    {
+        Program.Require(testBackdrop && nativeBackdrop, "Moving desktop checks need --desktop-blur and --native-desktop.");
+        motion = new DesktopMotionCheck();
+        graphics.SynchronizeWithVerticalRetrace = true;
+    }
+#endif
 
     public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false, string? capturePath = null)
     {
@@ -176,6 +189,9 @@ internal sealed class SmokeGame : Game
             Window.GetType().GetMethod("OnTextInput", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(Window, [new TextInputEventArgs('é', Keys.None)]);
 #endif
         }
+#if PROJECTZ_WINDOWS_RUNTIME
+        if (motion != null) motion.UpdateSource(nativeFixture);
+#endif
         manager.Tick(gameTime);
         base.Update(gameTime);
     }
@@ -184,8 +200,19 @@ internal sealed class SmokeGame : Game
     {
         manager.Draw(gameTime);
         frames++;
-        if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active)
-            && (!nativeBackdrop || manager.DesktopBackdrop.CapturedFrameCount >= 4))
+#if PROJECTZ_WINDOWS_RUNTIME
+        if (motion?.Started == true)
+        {
+            if (motion.CheckFrame(GraphicsDevice, manager.DesktopBackdrop))
+            {
+                Completed = true;
+                Exit();
+            }
+            return;
+        }
+#endif
+        // A static desktop may deliver just one distinct capture.
+        if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active))
         {
             Program.Require(textbox.Text == "é", $"Unicode TextInput failed: {textbox.Text}");
             Program.Require(SceneElement.RenderExceptionCount == 0, SceneElement.FirstRenderException ?? "Scene rendering failed.");
@@ -211,6 +238,13 @@ internal sealed class SmokeGame : Game
                 var foreground = pixels[50 * width + 100];
                 Program.Require(foreground.R > 225 && foreground.G < 30 && foreground.B < 30, "The host foreground did not stay sharp over the native backdrop.");
                 Console.WriteLine($"NATIVE_DESKTOP_EXCLUSION_OK captureMs={manager.DesktopBackdrop.LastCaptureMilliseconds:F2}");
+#if PROJECTZ_WINDOWS_RUNTIME
+                if (motion != null)
+                {
+                    motion.Start(manager.DesktopBackdrop);
+                    return;
+                }
+#endif
             }
             if (capturePath != null && !nativeBackdrop)
             {

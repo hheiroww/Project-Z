@@ -62,14 +62,20 @@ struct Display {
     int stagingWidth = 0, stagingHeight = 0;
     RECT crop{};
     int imageX = 0, imageY = 0;
+    bool pending = false;
     ~Display() { try { if (retained) retained.Close(); if (session) session.Close(); if (pool) pool.Close(); } catch (...) {} }
 };
 struct Capture {
+    // Keep one source for recropping while leaving two slots for incoming frames.
+    static constexpr int frameCount = 3;
     HWND owner;
     com_ptr<ID3D11Device> device;
     com_ptr<ID3D11DeviceContext> context;
     IDirect3DDevice projected{nullptr};
     std::unordered_map<HMONITOR, std::unique_ptr<Display>> displays;
+    std::vector<HMONITOR> deliveredMonitors;
+    RECT deliveredArea{};
+    int deliveredDownsample = 0;
     explicit Capture(HWND hwnd) : owner(hwnd) {
         try { init_apartment(apartment_type::multi_threaded); } catch (hresult_error const& e) { if (e.code() != RPC_E_CHANGED_MODE) throw; }
         if (!GraphicsCaptureSession::IsSupported()) throw hresult_error(E_NOTIMPL, L"Windows Graphics Capture is unavailable.");
@@ -91,7 +97,7 @@ struct Capture {
         auto factory = get_activation_factory<GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         check_hresult(factory->CreateForMonitor(monitor, guid_of<GraphicsCaptureItem>(), put_abi(value->item)));
         value->pool = Direct3D11CaptureFramePool::CreateFreeThreaded(projected,
-            DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, value->item.Size());
+            DirectXPixelFormat::B8G8R8A8UIntNormalized, frameCount, value->item.Size());
         value->session = value->pool.CreateCaptureSession(value->item);
         value->session.IsCursorCaptureEnabled(false);
         try { value->session.IsBorderRequired(false); } catch (...) { /* Keep the OS capture indicator if required. */ }
@@ -149,9 +155,10 @@ struct Capture {
             std::memcpy(value.pixels.data() + size_t(y) * value.width * 4,
                 static_cast<unsigned char*>(mapped.pData) + size_t(y) * mapped.RowPitch, size_t(value.width) * 4);
         context->Unmap(value.staging.get(), 0);
+        value.pending = true;
         if (size.Width != int(sourceWidth) || size.Height != int(sourceHeight)) {
             value.retained.Close(); value.retained = nullptr;
-            value.pool.Recreate(projected, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size);
+            value.pool.Recreate(projected, DirectXPixelFormat::B8G8R8A8UIntNormalized, frameCount, size);
         }
         return true;
     }
@@ -243,11 +250,25 @@ extern "C" __declspec(dllexport) int pz_capture_read(void* capture, int x, int y
         std::vector<Display*> ready;
         for (auto monitor : monitors) {
             auto& display = value.display(monitor);
-            MONITORINFO info{sizeof(info)}; if (GetMonitorInfo(monitor, &info)) display.bounds = info.rcMonitor;
+            MONITORINFO info{sizeof(info)};
+            if (GetMonitorInfo(monitor, &info) && !EqualRect(&display.bounds, &info.rcMonitor)) {
+                display.bounds = info.rcMonitor;
+                display.pending = true;
+            }
             if (value.refresh(display, request)) ready.push_back(&display);
         }
         if (ready.size() != monitors.size() || ready.empty()) return 0;
+        const bool geometryChanged = downsample != value.deliveredDownsample ||
+            !EqualRect(&request, &value.deliveredArea) || monitors != value.deliveredMonitors;
+        // A display can refresh while another display is still starting. Leave
+        // those updates pending until the entire composite can be delivered.
+        if (!geometryChanged && std::none_of(ready.begin(), ready.end(), [](const Display* display) { return display->pending; }))
+            return 0;
         copy_pixels(ready, x, y, ow, oh, downsample, rgba);
+        for (auto display : ready) display->pending = false;
+        value.deliveredArea = request;
+        value.deliveredDownsample = downsample;
+        value.deliveredMonitors = std::move(monitors);
         return 1;
     } catch (hresult_error const& e) { error = to_string(e.message()); return -1; }
       catch (std::exception const& e) { error = e.what(); return -1; }
