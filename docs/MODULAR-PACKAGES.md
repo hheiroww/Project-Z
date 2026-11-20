@@ -18,17 +18,17 @@ flow into every application.
 Use the same version for Project-Z co-packages:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.14.1
+dotnet add package ProjectZ --version 2026.11.20.1
 # Only for applications that load model files:
-dotnet add package ProjectZ.ModelImport --version 2026.11.14.1
+dotnet add package ProjectZ.ModelImport --version 2026.11.20.1
 # Only for applications that need native crash dumps:
-dotnet add package ProjectZ.Diagnostics --version 2026.11.14.1
+dotnet add package ProjectZ.Diagnostics --version 2026.11.20.1
 ```
 
 For native scene XAML compilation:
 
 ```xml
-<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.14.1" PrivateAssets="all" />
+<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.20.1" PrivateAssets="all" />
 ```
 
 ## Migrating an application
@@ -63,7 +63,7 @@ runtime and packages both Windows architectures.
 
 ```powershell
 ./tools/Pack-RuntimePackages.ps1
-./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.14.1.nupkg
+./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.20.1.nupkg
 ```
 
 The packaging test builds consumers outside the source tree. It checks the base
