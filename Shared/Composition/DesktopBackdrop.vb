@@ -39,13 +39,17 @@ Namespace [Shared].Composition
         Private renderRevisionValue As Long = 1
         Private observedSettings As (Enabled As Boolean, Radius As Single, Saturation As Single, Noise As Single, Tint As Color, Fallback As Color)
         Private rgba As Byte()
+        Private readyPixels As Byte()
+        Private readyArea As Rectangle
+        Private readyScale As Integer
+        Private readyFrame As Boolean
         Private nextCaptureAt As Long
         Private stopped As Boolean
         Private failed As Boolean
         Private disposed As Boolean
         Private lastRequest As DesktopBackdropRequests.Request
         Private input As Texture2D
-        Private downsampled, scratch, blurred As RenderTarget2D
+        Private scratch, blurred As RenderTarget2D
         Private ReadOnly prefilterTargets As New List(Of RenderTarget2D)()
         Private shader As Effect
         Private batch As SpriteBatch
@@ -120,16 +124,14 @@ Namespace [Shared].Composition
                     Dim available = captureTask.GetAwaiter().GetResult()
                     captureTask = Nothing
                     If available Then
-                        Dim width = (captureArea.Width + captureScale - 1) \ captureScale
-                        Dim height = (captureArea.Height + captureScale - 1) \ captureScale
-                        If input Is Nothing OrElse input.Width <> width OrElse input.Height <> height Then
-                            input?.Dispose()
-                            input = New Texture2D(game.GraphicsDevice, width, height)
-                        End If
-                        input.SetData(rgba)
-                        frameArea = captureArea
-                        frameScale = captureScale
-                        dirty = True
+                        ' Keep one ready frame separate from the worker buffer. A
+                        ' newer capture can replace pixels that were never drawn.
+                        Dim spare = readyPixels
+                        readyPixels = rgba
+                        rgba = spare
+                        readyArea = captureArea
+                        readyScale = captureScale
+                        readyFrame = True
                         _CapturedFrameCount += 1
                         _State = DesktopBackdropState.Active
                         Invalidate()
@@ -206,22 +208,49 @@ Namespace [Shared].Composition
             ' A released source can still be finishing on its worker. A retry must
             ' get a separate buffer rather than race that source for the same pixels.
             rgba = Nothing
+            readyPixels = Nothing
+            readyFrame = False
             frameArea = Rectangle.Empty
             captureArea = Rectangle.Empty : requestedWindow = Rectangle.Empty
             nextCaptureAt = 0
             _State = DesktopBackdropState.Starting
+        End Sub
+        Private Sub UploadCapturedFrame(device As GraphicsDevice)
+            If Not readyFrame Then Return
+            Try
+                Dim width = (readyArea.Width + readyScale - 1) \ readyScale
+                Dim height = (readyArea.Height + readyScale - 1) \ readyScale
+                If input Is Nothing OrElse input.Width <> width OrElse input.Height <> height Then
+                    input?.Dispose()
+                    input = New Texture2D(device, width, height)
+                End If
+                ' Copy and submit the texture only when drawing the backdrop,
+                ' after the scene has processed the pending input.
+                input.SetData(readyPixels)
+                frameArea = readyArea
+                frameScale = readyScale
+                dirty = True
+                readyFrame = False
+                If rgba Is Nothing Then
+                    rgba = readyPixels
+                    readyPixels = Nothing
+                End If
+            Catch ex As Exception
+                Fail(DesktopBackdropState.Failed, ex.Message)
+            End Try
         End Sub
         Friend Function Draw(device As GraphicsDevice, overlay As Color) As Boolean
             ' Sample geometry and upload completed work at the last possible moment,
             ' including hosts that update and present on different schedules.
             Update()
             If Not Settings.Enabled OrElse disposed Then Return False
+            UploadCapturedFrame(device)
             If batch Is Nothing Then
                 batch = New SpriteBatch(device)
                 white = New Texture2D(device, 1, 1)
                 white.SetData({Color.White})
             End If
-            Dim targets = device.GetRenderTargets()
+            Dim targets As RenderTargetBinding() = Nothing
             Dim viewport = device.Viewport
             Dim scissor = device.ScissorRectangle
             Dim rasterizer = device.RasterizerState
@@ -246,26 +275,23 @@ Namespace [Shared].Composition
                     Dim width = Math.Max(1, CInt(Math.Floor(frameArea.Width / workingScale)))
                     Dim height = Math.Max(1, CInt(Math.Floor(frameArea.Height / workingScale)))
                     If blurred Is Nothing OrElse blurred.Width <> width OrElse blurred.Height <> height Then
-                        downsampled?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
-                        downsampled = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
+                        scratch?.Dispose() : blurred?.Dispose()
                         scratch = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
                         blurred = New RenderTarget2D(device, width, height, False, SurfaceFormat.Color, DepthFormat.None)
                         dirty = True
                     End If
                     If dirty OrElse radius <> renderedRadius Then
+                        targets = device.GetRenderTargets()
                         Dim filtered = Prefilter(device, width, height)
-                        device.SetRenderTarget(downsampled)
-                        batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullNone)
-                        batch.Draw(filtered, New Rectangle(0, 0, width, height), Color.White)
-                        batch.End()
-                        shader.Parameters("Mode").SetValue(0.0F)
-                        Pass(device, downsampled, scratch, New Vector2(radius / 2.94F / frameArea.Width, 0))
+                        shader.CurrentTechnique = shader.Techniques("Gaussian")
+                        Pass(device, filtered, scratch, New Vector2(radius / 2.94F / frameArea.Width, 0))
                         Pass(device, scratch, blurred, New Vector2(0, radius / 2.94F / frameArea.Height))
                         dirty = False : renderedRadius = radius
+                        RestoreTarget(device, targets)
+                        targets = Nothing
+                        device.Viewport = viewport
                     End If
-                    If targets.Length = 0 Then device.SetRenderTarget(Nothing) Else device.SetRenderTargets(targets)
-                    device.Viewport = viewport
-                    shader.Parameters("Mode").SetValue(1.0F)
+                    shader.CurrentTechnique = shader.Techniques("Material")
                     shader.Parameters("Saturation").SetValue(Math.Clamp(Settings.Saturation, 0, 2))
                     shader.Parameters("NoiseOpacity").SetValue(Math.Clamp(Settings.NoiseOpacity, 0, 0.1F))
                     shader.Parameters("MaterialTint").SetValue(Settings.Tint.ToVector4())
@@ -291,17 +317,22 @@ Namespace [Shared].Composition
                 End If
                 Return True
             Finally
-                If targets.Length = 0 Then device.SetRenderTarget(Nothing) Else device.SetRenderTargets(targets)
+                If targets IsNot Nothing Then RestoreTarget(device, targets)
                 device.Viewport = viewport : device.ScissorRectangle = scissor
                 device.RasterizerState = rasterizer : device.BlendState = blend : device.DepthStencilState = depth
             End Try
         End Function
+        Private Shared Sub RestoreTarget(device As GraphicsDevice, targets As RenderTargetBinding())
+            If targets.Length = 0 Then device.SetRenderTarget(Nothing) Else device.SetRenderTargets(targets)
+        End Sub
         Private Function Prefilter(device As GraphicsDevice, targetWidth As Integer, targetHeight As Integer) As Texture2D
             Dim current As Texture2D = input
             Dim index = 0
             ' Reduce by at most two per pass so fine desktop details are averaged
             ' before decimation instead of aliasing into the broad blur material.
-            While current.Width > targetWidth * 2 OrElse current.Height > targetHeight * 2
+            ' Use the last stage directly at the Gaussian resolution. A matching
+            ' capture texture needs no prefilter copy.
+            While current.Width <> targetWidth OrElse current.Height <> targetHeight
                 Dim width = Math.Max(targetWidth, (current.Width + 1) \ 2)
                 Dim height = Math.Max(targetHeight, (current.Height + 1) \ 2)
                 If index = prefilterTargets.Count Then
@@ -336,7 +367,7 @@ Namespace [Shared].Composition
             ReleaseCapture()
             _State = DesktopBackdropState.Disabled
             DesktopBackdropRequests.Remove(NativeWindowHandle)
-            input?.Dispose() : downsampled?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
+            input?.Dispose() : scratch?.Dispose() : blurred?.Dispose()
             For Each target In prefilterTargets
                 target.Dispose()
             Next

@@ -272,7 +272,9 @@ internal sealed class HiddenProbe : Game
             Program.Require(source.Started.WaitOne(5000), "pixel fixture begins its synthetic capture");
             var revision = Program.Revision(backdrop);
             Program.Complete(backdrop, source);
-            Program.Require(backdrop.CapturedFrameCount == 1 && Program.Revision(backdrop) != revision, "uploaded pixels invalidate presentation");
+            var inputField = typeof(DesktopBackdrop).GetField("input", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            Program.Require(backdrop.CapturedFrameCount == 1 && Program.Revision(backdrop) != revision, "ready capture invalidates presentation before drawing");
+            Program.Require(inputField.GetValue(backdrop) is null, "capture polling does not upload a GPU texture during the input update");
             var before = Render(backdrop, target);
             Program.Require(Math.Abs(before.R - 45) <= 3 && Math.Abs(before.G - 37) <= 3 && Math.Abs(before.B - 70) <= 2, "shader samples known desktop-space gradient");
 
@@ -281,8 +283,7 @@ internal sealed class HiddenProbe : Game
             Program.Require(source.Started.WaitOne(1000), "movement starts refresh without waiting for idle cadence");
             var duringMove = Render(backdrop, target);
             Program.Require(Math.Abs(duringMove.R - before.R - 10) <= 2 && Math.Abs(duringMove.B - 70) <= 2, "cached pixels reproject immediately during pending capture");
-            var oldInput = typeof(DesktopBackdrop).GetField("input", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(backdrop);
-            var oldBuffer = source.Buffers.Last();
+            var oldInput = inputField.GetValue(backdrop);
             source.Bounds = new Rectangle(140, 100, 172, 108);
             Program.Update(backdrop);
             var duringResize = Render(backdrop, target);
@@ -290,9 +291,10 @@ internal sealed class HiddenProbe : Game
             Program.Complete(backdrop, source);
             Program.Require(source.Started.WaitOne(1000), "resize coalesces after in-flight pixel capture");
             Program.Complete(backdrop, source);
-            var resizedInput = typeof(DesktopBackdrop).GetField("input", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(backdrop);
-            Program.Require(ReferenceEquals(oldInput, resizedInput) && ReferenceEquals(oldBuffer, source.Buffers.Last()), "small resize reuses the uploaded texture and worker pixel buffer");
             var after = Render(backdrop, target);
+            var resizedInput = inputField.GetValue(backdrop);
+            Program.Require(ReferenceEquals(oldInput, resizedInput) && source.Buffers.Distinct().Count() <= 2,
+                "small resize reuses the uploaded texture and keeps capture buffers bounded to one ready and one in-flight frame");
             Program.Require(Math.Abs(after.R - duringResize.R) <= 3 && Math.Abs(after.G - duringResize.G) <= 3, "fresh capture stays aligned with reprojected cached pixels");
 
             source.Bounds = new Rectangle(500, 300, 160, 96);
@@ -329,7 +331,7 @@ internal sealed class HiddenProbe : Game
             source.Bounds = new Rectangle(100 + offset, 100, 160, 96);
             var current = Render(backdrop, target);
             Program.Require(current.R > previous.R && current.R - previous.R < 6,
-                "each pixel of window movement reprojects the cached desktop without a texture-texel jump");
+                $"each pixel of window movement reprojects the cached desktop without a texture-texel jump ({previous.R} to {current.R} at {offset}px)");
             previous = current;
         }
         Program.Complete(backdrop, source);

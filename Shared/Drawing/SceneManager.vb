@@ -1296,7 +1296,7 @@ Namespace [Shared].Drawing
             End If
         End Sub
 
-        Public Sub Tick(gameTime As GameTime)
+        Private Sub UpdateDesktopBackdrop()
             DesktopBackdrop?.Update()
 #If WINDOWS Then
             Dim backdropHandle = If(ModalWindowHandle <> IntPtr.Zero, ModalWindowHandle,
@@ -1324,6 +1324,9 @@ Namespace [Shared].Drawing
                 lastBackdropRevision = DesktopBackdrop.RenderRevision
                 ActiveScene.RequestRender()
             End If
+        End Sub
+
+        Public Sub Tick(gameTime As GameTime)
             If viewportResizePending Then
                 viewportResizePending = False
                 ApplyPendingViewportResize()
@@ -1353,6 +1356,9 @@ Namespace [Shared].Drawing
                 If Not UseExternalInput AndAlso Not ProcessTouchInput() Then DetectMouseEvents(gameTime)
 #End If
                 ActiveScene.Tick(gameTime)
+            End If
+            UpdateDesktopBackdrop()
+            If ActiveScene IsNot Nothing Then
                 If desktopPromptRequest.HasValue Then
                     Dim request = desktopPromptRequest.Value
                     desktopPromptRequest = Nothing
