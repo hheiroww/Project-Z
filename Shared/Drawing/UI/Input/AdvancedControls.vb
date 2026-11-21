@@ -1,5 +1,6 @@
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
+Imports ProjectZ.Shared.Content
 Imports ProjectZ.Shared.Drawing.UI.Primitives
 Imports ProjectZ.Shared.Drawing.UI.Layout
 Imports ProjectZ.Shared.Drawing.UI.Advanced
@@ -14,11 +15,13 @@ Namespace [Shared].Drawing.UI.Input
     Public Class ComboBox
         Inherits RectangleElement
 
+        Private Const RowTextInset As Integer = 8
         Private _items As New List(Of String)
         Private _selectedIndex As Integer = -1
         Private _isDropDownOpen As Boolean = False
         Private _dropDownItems As New List(Of RectangleElement)
         Private _headerText As TextElement
+        Private _headerTextHeight As Single
         Private _dropDownButton As PolygonElement
         Private _itemHeight As Single = 28.0F
         Private Shadows ReadOnly ownerScene As Scene
@@ -26,6 +29,7 @@ Namespace [Shared].Drawing.UI.Input
         Private _dropDownScroll As ScrollViewer
         Private _dropDownContent As DropDownPanel
         Private ReadOnly _dropDownLabels As New List(Of TextElement)
+        Private ReadOnly _dropDownLabelSizes As New List(Of Vector2)
         Private ReadOnly _dropDownValues As New List(Of String)
         Private ReadOnly _rowFills As New List(Of Color)
         Private ReadOnly _rowBorders As New List(Of Color)
@@ -35,6 +39,8 @@ Namespace [Shared].Drawing.UI.Input
         Private _dropDownAppearanceDirty As Boolean = True
         Private _dropDownBounds As Rectangle
         Private _dropDownViewport As Vector2
+        Private _dropDownContentWidth As Single
+        Private _dropDownScrollBarWidth As Single
         Private _dropDownBackgroundBlur As Single?
         Private _maxDropDownHeight As Single = 320.0F
 
@@ -267,9 +273,14 @@ Namespace [Shared].Drawing.UI.Input
             _headerText = New TextElement(scene) With {
                 .Text = "",
                 .ForegroundColor = Color.White,
+                .TextWrapping = TextWrapping.NoWrap,
+                .TextTrimming = TextTrimming.CharacterEllipsis,
+                .UseXamlTextLayout = True,
+                .Padding = New Thickness(0),
                 .isMouseBypassEnabled = True
             }
             Children.Add(_headerText)
+            _headerTextHeight = _headerText.Size.Y
 
             _dropDownButton = New PolygonElement(scene, {New Vector2(0, 0), New Vector2(5, 5), New Vector2(10, 0), New Vector2(10, 3), New Vector2(5, 8), New Vector2(0, 3)}) With {
                 .Size = New Vector2(10, 8), .FillColor = New Color(210, 232, 224),
@@ -325,6 +336,7 @@ Namespace [Shared].Drawing.UI.Input
                 _headerText.Text = ""
             End If
 
+            _headerTextHeight = _headerText.Size.Y
             AlignHeader()
             If _isDropDownOpen Then UpdateDropDown()
         End Sub
@@ -334,7 +346,9 @@ Namespace [Shared].Drawing.UI.Input
                 editor.Position = Position + New Vector2(4, 2)
                 editor.Size = New Vector2(Math.Max(0, Size.X - 30), Math.Max(0, Size.Y - 4))
             End If
-            _headerText.Position = New Vector2(Position.X + 8, Position.Y + (Size.Y - _headerText.Size.Y) / 2)
+            Dim headerHeight = Math.Min(Size.Y, _headerTextHeight)
+            _headerText.Size = New Vector2(Math.Max(0, Size.X - 36), headerHeight)
+            _headerText.Position = New Vector2(Position.X + RowTextInset, Position.Y + (Size.Y - headerHeight) / 2)
             _dropDownButton.Position = New Vector2(Position.X + Size.X - 24, Position.Y + (Size.Y - _dropDownButton.Size.Y) / 2)
             _dropDownButton.RenderRotationOrigin = New Vector2(0.5F)
             _dropDownButton.RenderRotation = If(_isDropDownOpen, 180, 0)
@@ -357,23 +371,40 @@ Namespace [Shared].Drawing.UI.Input
             Dim height = Scene.graphicsDevice.Viewport.Height / scale.Y
             Dim bounds = Rectangle
             Dim viewport As New Vector2(width, height)
-            If Not _dropDownGeometryDirty AndAlso bounds = _dropDownBounds AndAlso viewport = _dropDownViewport Then Return
-            _dropDownBounds = bounds
-            _dropDownViewport = viewport
-            _dropDownGeometryDirty = False
+            Dim totalHeight = _items.Count * _itemHeight
             Dim below = Math.Max(0, height - bounds.Bottom - 4)
             Dim above = Math.Max(0, bounds.Top - 4)
-            Dim desired = Math.Min(Math.Max(_itemHeight, MaxDropDownHeight), _items.Count * _itemHeight)
+            Dim desired = Math.Min(Math.Max(_itemHeight, MaxDropDownHeight), totalHeight)
             Dim openAbove = below < desired AndAlso above > below
             Dim popupHeight = Math.Min(desired, If(openAbove, above, below))
-            Dim popupWidth = Math.Min(bounds.Width, Math.Max(0, width - 8))
-            Dim rowWidth = Math.Max(0, popupWidth - If(_items.Count * _itemHeight > popupHeight, 12, 0))
+            Dim showScrollBar = _dropDownScroll.VerticalScrollBarVisibility = 3 OrElse
+                (_dropDownScroll.VerticalScrollBarVisibility = 1 AndAlso totalHeight > popupHeight)
+            Dim scrollbarWidth = If(showScrollBar, _dropDownScroll.ScrollBarThickness, 0.0F)
+            If Not _dropDownGeometryDirty AndAlso bounds = _dropDownBounds AndAlso viewport = _dropDownViewport AndAlso
+                scrollbarWidth = _dropDownScrollBarWidth Then Return
+            _dropDownBounds = bounds
+            _dropDownViewport = viewport
+            _dropDownScrollBarWidth = scrollbarWidth
+            _dropDownGeometryDirty = False
+            Dim popupWidth = Math.Min(Math.Max(bounds.Width, MathF.Ceiling(_dropDownContentWidth) + scrollbarWidth), Math.Max(0, width - 8))
+            Dim rowWidth = Math.Max(0, popupWidth - scrollbarWidth)
             Using _dropDownContent.DeferArrangement()
                 _dropDownScroll.Position = New Vector2(Math.Clamp(CSng(bounds.Left), 4, Math.Max(4, width - popupWidth - 4)), If(openAbove, bounds.Top - popupHeight, bounds.Bottom))
                 _dropDownScroll.Size = New Vector2(popupWidth, popupHeight)
-                _dropDownContent.Size = New Vector2(rowWidth, _items.Count * _itemHeight)
-                For Each item In _dropDownItems
-                    item.Size = New Vector2(rowWidth, _itemHeight)
+                _dropDownContent.Size = New Vector2(rowWidth, totalHeight)
+                For index = 0 To _dropDownItems.Count - 1
+                    Dim label = _dropDownLabels(index)
+                    Dim item = _dropDownItems(index)
+                    Dim desiredLabel = _dropDownLabelSizes(index)
+                    Dim labelSize As New Vector2(Math.Min(desiredLabel.X, Math.Max(0, rowWidth - label.Margin.Left - label.Margin.Right)),
+                                                 Math.Min(desiredLabel.Y, _itemHeight))
+                    Dim labelSizeChanged = label.Size <> labelSize
+                    label.Size = labelSize
+                    If item.Size <> New Vector2(rowWidth, _itemHeight) Then
+                        item.Size = New Vector2(rowWidth, _itemHeight)
+                    ElseIf labelSizeChanged Then
+                        item.Invalidate()
+                    End If
                 Next
                 _dropDownScroll.ScrollTo(_dropDownScroll.ScrollOffset)
                 _dropDownContent.ArrangeChildren()
@@ -426,18 +457,33 @@ Namespace [Shared].Drawing.UI.Input
             _rowFills.Clear()
             _rowBorders.Clear()
             _rowBorderWidths.Clear()
+            Dim contentWidth As Single = 0
             For index = 0 To _dropDownItems.Count - 1
                 Dim item = _dropDownItems(index)
+                Dim label = _dropDownLabels(index)
                 item.isEnabled = IsItemEnabled(index)
                 item.BackgroundColor = Color.Transparent
-                item.BorderColor = New Color(122, 180, 161, 40)
-                item.BorderThickness = 1
-                _dropDownLabels(index).ForegroundColor = Color.White
-                If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(index, item, _dropDownLabels(index))
+                item.BorderColor = Color.Transparent
+                item.BorderThickness = 0
+                label.ForegroundColor = If(item.isEnabled, Color.White, New Color(153, 162, 158))
+                If ItemAppearance IsNot Nothing Then
+                    Dim arrangedSize = label.Size
+                    ItemAppearance.Invoke(index, item, label)
+                    Dim measured = label.XamlDesiredSize
+                    If measured <> _dropDownLabelSizes(index) OrElse arrangedSize <> label.Size Then
+                        _dropDownLabelSizes(index) = measured
+                        _dropDownGeometryDirty = True
+                    End If
+                End If
+                contentWidth = Math.Max(contentWidth, _dropDownLabelSizes(index).X + label.Margin.Left + label.Margin.Right)
                 _rowFills.Add(item.BackgroundColor)
                 _rowBorders.Add(item.BorderColor)
                 _rowBorderWidths.Add(item.BorderThickness)
             Next
+            If contentWidth <> _dropDownContentWidth Then
+                _dropDownContentWidth = contentWidth
+                _dropDownGeometryDirty = True
+            End If
             If Not IsItemEnabled(_highlightedIndex) Then _highlightedIndex = FindEnabled(-1, 1)
             _paintedHighlight = -1
             Highlight(_highlightedIndex)
@@ -539,15 +585,19 @@ Namespace [Shared].Drawing.UI.Input
                     Dim rowIndex = index
                     Dim item As New RectangleElement(Scene) With {
                         .Size = New Vector2(Rectangle.Width, _itemHeight), .BackgroundColor = Color.Transparent,
-                        .CornerRadius = 4, .KeyboardFocusTarget = Me
+                        .KeyboardFocusTarget = Me
                     }
                     Dim label As New TextElement(Scene) With {
-                        .Text = _items(index), .ForegroundColor = Color.White,
-                        .Margin = New Thickness(8, 4, 0, 0), .isMouseBypassEnabled = True
+                        .TextWrapping = TextWrapping.NoWrap, .Text = _items(index),
+                        .TextTrimming = TextTrimming.CharacterEllipsis, .UseXamlTextLayout = True,
+                        .Padding = New Thickness(0),
+                        .Margin = New Thickness(RowTextInset, 0, RowTextInset, 0), .VerticalAlign = VerticalAlignment.Center,
+                        .isMouseBypassEnabled = True
                     }
                     item.Children.Add(label)
                     _dropDownItems.Add(item)
                     _dropDownLabels.Add(label)
+                    _dropDownLabelSizes.Add(label.XamlDesiredSize)
                     _dropDownValues.Add(_items(index))
                     _dropDownContent.Children.Add(item)
                     AddHandler item.MouseEnter, Sub() Highlight(rowIndex)
@@ -568,6 +618,7 @@ Namespace [Shared].Drawing.UI.Input
             _dropDownContent = Nothing
             _dropDownItems.Clear()
             _dropDownLabels.Clear()
+            _dropDownLabelSizes.Clear()
             _dropDownValues.Clear()
             _rowFills.Clear()
             _rowBorders.Clear()
@@ -1661,8 +1712,10 @@ Namespace [Shared].Drawing.UI.Input
     Public Class ToolTip
         Inherits RectangleElement
 
+        Private Const ViewportInset As Single = 4.0F
+        Private Const MaximumWidth As Single = 320.0F
         Private _content As String = ""
-        Private _textElement As TextElement
+        Private ReadOnly _textElement As TextElement
         Private _showDelay As Single = 0.5F
         Private _hideDelay As Single = 5.0F
 
@@ -1671,11 +1724,28 @@ Namespace [Shared].Drawing.UI.Input
                 Return _content
             End Get
             Set(value As String)
-                _content = value
-                If _textElement IsNot Nothing Then
-                    _textElement.Text = _content
-                End If
+                _content = If(value, String.Empty)
+                _textElement.Text = _content
                 UpdateSize()
+            End Set
+        End Property
+
+        Public Property Font As String
+            Get
+                Return _textElement.Font
+            End Get
+            Set(value As String)
+                _textElement.Font = value
+                UpdateSize()
+            End Set
+        End Property
+
+        Public Property ForegroundColor As Color
+            Get
+                Return _textElement.ForegroundColor
+            End Get
+            Set(value As Color)
+                _textElement.ForegroundColor = value
             End Set
         End Property
 
@@ -1700,21 +1770,31 @@ Namespace [Shared].Drawing.UI.Input
         Public Sub New(scene As Scene)
             MyBase.New(scene)
             BackgroundColor = New Color(30, 30, 30, 240)
+            Padding = New Thickness(8, 5, 8, 5)
+            CornerRadius = 4
+            IsOverlay = True
             isVisible = False
             isMouseBypassEnabled = True
 
             _textElement = New TextElement(scene) With {
-                .Text = "",
-                .ForegroundColor = Color.White,
-                .Position = New Vector2(6, 4),
+                .Font = Fonts.SegoeUI.GetResourceName(10), .TextWrapping = TextWrapping.Wrap,
+                .TextTrimming = TextTrimming.CharacterEllipsis, .UseXamlTextLayout = True,
+                .Padding = New Thickness(0),
                 .isMouseBypassEnabled = True
             }
             Children.Add(_textElement)
         End Sub
 
         Public Sub Show(position As Vector2)
+            UpdateSize()
+            If Scene IsNot Nothing Then
+                Dim viewport = Scene.InputViewportSize
+                Dim insetX = Math.Min(ViewportInset, Math.Max(0, (viewport.X - Size.X) / 2))
+                Dim insetY = Math.Min(ViewportInset, Math.Max(0, (viewport.Y - Size.Y) / 2))
+                position = New Vector2(Math.Clamp(position.X, insetX, Math.Max(insetX, viewport.X - Size.X - insetX)),
+                                       Math.Clamp(position.Y, insetY, Math.Max(insetY, viewport.Y - Size.Y - insetY)))
+            End If
             Me.Position = position
-            _textElement.Position = position + New Vector2(6, 4)
             isVisible = True
         End Sub
 
@@ -1723,9 +1803,14 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Sub UpdateSize()
-            If _textElement IsNot Nothing Then
-                Size = New Vector2(_textElement.Size.X + 12, _textElement.Size.Y + 8)
-            End If
+            If Scene Is Nothing Then Return
+            Dim viewport = Scene.InputViewportSize
+            Dim maxSize As New Vector2(Math.Min(MaximumWidth, Math.Max(1, viewport.X - 2 * ViewportInset)),
+                                       Math.Max(1, viewport.Y - 2 * ViewportInset))
+            Dim paddingSize As New Vector2(Padding.Left + Padding.Right, Padding.Top + Padding.Bottom)
+            Dim textSize = _textElement.MeasureXamlText(Math.Max(1, maxSize.X - paddingSize.X))
+            Size = Vector2.Min(maxSize, New Vector2(MathF.Ceiling(textSize.X), MathF.Ceiling(textSize.Y)) + paddingSize)
+            _textElement.Size = Vector2.Max(Vector2.Zero, Size - paddingSize)
         End Sub
     End Class
 

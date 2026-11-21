@@ -235,7 +235,58 @@ sealed class OffscreenProbe : IDisposable
         combo.IsDropDownOpen = false; combo.Items[5] = "Renamed instrument"; combo.IsDropDownOpen = true; Frame();
         Check(combo.DropDownElements[5].Children.OfType<TextElement>().Single().Text == "Renamed instrument", "Same-count mutable Items edits invalidate cache");
         Tap(Keys.Escape); Frame(); Check(!combo.IsDropDownOpen && !combo.DropDownScrollViewer.isVisible, "Escape hides retained popup");
-        CheckTheme(); CheckBatching(); Check(SceneElement.RenderExceptionCount == 0, "No native rendering exceptions");
+        CheckPopupTextLayout(); CheckTheme(); CheckBatching(); Check(SceneElement.RenderExceptionCount == 0, "No native rendering exceptions");
+    }
+    void CheckPopupTextLayout()
+    {
+        using var picker = new ComboBox(scene)
+        {
+            Position = new(455, 45), Size = new(70, 30), MaxDropDownHeight = 56,
+            Items = ["Short", "Wider display preset", "Unavailable"], SelectedIndex = 0
+        };
+        picker.ItemAppearance = (i, _, label) => { if (i == 1) label.FontScale = 1.4f; };
+        picker.ItemIsEnabled = i => i != 2;
+        scene.AddElement(picker);
+        picker.IsDropDownOpen = true;
+        Frame();
+        var popup = picker.DropDownScrollViewer;
+        var row = picker.DropDownElements[1];
+        var label = row.Children.OfType<TextElement>().Single();
+        float width = scene.MeasureText(label.Font, label.Text).X * label.FontScale;
+        Check(popup.Size.X > picker.Size.X && label.Size.X >= width - 0.1f &&
+            popup.Size.X >= width + label.Margin.Left + label.Margin.Right + popup.ScrollBarThickness,
+            "Popup width includes the measured custom font, text insets and scrollbar");
+        Check(popup.Rectangle.Right <= 536 && row.BackgroundColor == Color.Transparent && row.BorderThickness == 0,
+            "Popup aligns inside the viewport and resting rows have no individual boxes");
+        picker.IsDropDownOpen = false;
+        picker.Items[1] = new string('W', 90);
+        picker.SelectedIndex = 1;
+        picker.IsDropDownOpen = true;
+        Frame();
+        row = picker.DropDownElements[1];
+        label = row.Children.OfType<TextElement>().Single();
+        var header = picker.Children.OfType<TextElement>().Single();
+        Check(picker.DropDownScrollViewer.Size.X == 532 && label.Rectangle.Right < row.Rectangle.Right &&
+            label.TextWrapping == TextWrapping.NoWrap && label.TextTrimming == TextTrimming.CharacterEllipsis &&
+            header.Size.X < picker.Size.X && header.TextTrimming == TextTrimming.CharacterEllipsis,
+            "Oversized labels and the selected header stay inside the viewport and leave room for the arrow");
+        Capture("popup-text-layout", Pixels());
+        picker.IsDropDownOpen = false;
+
+        using var tooltip = new ProjectZ.Shared.Drawing.UI.Input.ToolTip(scene) { Content = "iiiiiiii" };
+        scene.AddElement(tooltip);
+        tooltip.Show(new(20, 20));
+        var narrowSize = tooltip.Size;
+        Check(narrowSize.X == MathF.Ceiling(scene.MeasureText(tooltip.Font, tooltip.Content).X) + tooltip.Padding.Left + tooltip.Padding.Right,
+            "Tooltip width matches proportional glyph measurements and padding");
+        tooltip.Content = "WWWWWWWW";
+        Check(tooltip.Size.X > narrowSize.X, "Equal-length tooltip captions size differently for wide glyphs");
+        tooltip.Content = string.Join(' ', Enumerable.Repeat("Detailed tooltip content", 12));
+        tooltip.Show(new(535, 347));
+        Frame();
+        Check(tooltip.Size.X <= 320 && tooltip.Size.Y > narrowSize.Y && tooltip.Rectangle.Bottom <= 346 && tooltip.Rectangle.Right <= 536,
+            "Long tooltips wrap and remain visible at the lower-right viewport edge");
+        Capture("tooltip-text-layout", Pixels());
     }
     void CheckTheme()
     {

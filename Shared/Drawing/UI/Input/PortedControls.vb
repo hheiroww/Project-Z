@@ -131,6 +131,11 @@ Namespace [Shared].Drawing.UI.Input
         End Property
         Public Sub New(scene As Scene)
             MyBase.New(scene)
+            BackgroundColor = Color.Transparent
+            MouseOverBackgroundColor = New Color(47, 54, 59)
+            MouseDownBackgroundColor = New Color(59, 69, 76)
+            BorderThickness = 0
+            CornerRadius = 0
         End Sub
     End Class
 
@@ -156,6 +161,8 @@ Namespace [Shared].Drawing.UI.Input
             Orientation = Orientation.Vertical
             BackgroundColor = New Color(18, 18, 18, 245)
             Padding = New Thickness(4)
+            Spacing = 0
+            CornerRadius = 4
             IsOpen = False
             If ownerScene IsNot Nothing Then
                 AddHandler ownerScene.OnMouseMove, AddressOf HandleSceneMouseMove
