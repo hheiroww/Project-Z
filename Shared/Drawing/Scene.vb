@@ -850,7 +850,8 @@ Namespace [Shared].Drawing
             ' its descendants above ordinary content added at any later time.
             If ordered.Any(Function(element) IsEffectivelyVisible(element) AndAlso
                 ((element.BackgroundBlur > 0 AndAlso Quality.EffectsEnabled) OrElse
-                 (element.DrawingEffect IsNot Nothing AndAlso element.DrawingEffect.IsActive))) Then
+                 (element.DrawingEffect IsNot Nothing AndAlso element.DrawingEffect.IsActive) OrElse
+                 UsesBackdropTextContrast(element))) Then
                 DrawXamlEffectCanvas(ordered, gd, viewportRect, ForceClip)
             Else
                 For Each E As SceneElement In ordered
@@ -1440,6 +1441,9 @@ Namespace [Shared].Drawing
                     qualityResolve?.Dispose()
                     effectCanvas?.Dispose()
                     effectCompositeBatch?.Dispose()
+                    textContrastMask?.Dispose()
+                    textContrastResult?.Dispose()
+                    textContrastShader?.Dispose()
                     WhitePlain?.Dispose()
                     _scissorRasterizerState?.Dispose()
                 End If

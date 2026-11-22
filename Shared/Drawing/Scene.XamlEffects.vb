@@ -52,7 +52,9 @@ Namespace [Shared].Drawing
                 End If
                 Dim fx = element.DrawingEffect
                 If fx Is Nothing OrElse Not fx.IsActive OrElse element Is skipEffect Then
-                    DrawElementRecursive(element, device, viewport, forceClip)
+                    If Not DrawBackdropTextContrast(element, device, viewport, forceClip) Then
+                        DrawElementRecursive(element, device, viewport, forceClip)
+                    End If
                     index += 1
                     Continue While
                 End If

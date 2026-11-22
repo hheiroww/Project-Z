@@ -35,6 +35,7 @@ float Angle;
 float Mode;
 float4 BackdropBounds;
 float4 BackdropCorners;
+float4 BackdropTextColor;
 struct SpriteInput { float4 Position : SV_POSITION; float4 Color : COLOR0; float2 TexCoord : TEXCOORD0; };
 float4 SoftSample(float2 uv) {
     // Separable nine-tap Gaussian. Radius is expressed in arranged device pixels.
@@ -47,6 +48,23 @@ float4 SoftSample(float2 uv) {
 }
 float4 PortedEffect(SpriteInput input) : PS_TARGET {
     float2 uv = input.TexCoord;
+    if (Mode > 8.5) {
+        // Match the authored foreground in either the straight or premultiplied text path.
+        float4 glyph = SAMPLE(uv);
+        float3 straightError = abs(glyph.rgb - BackdropTextColor.rgb);
+        float3 premultipliedError = abs(glyph.rgb - BackdropTextColor.rgb * glyph.a);
+        float straightDistance = max(straightError.r, max(straightError.g, straightError.b));
+        float premultipliedDistance = max(premultipliedError.r, max(premultipliedError.g, premultipliedError.b));
+        if (glyph.a <= 0 || min(straightDistance, premultipliedDistance) > 0.008) return glyph;
+        float4 behind = ORIGINAL(BackdropBounds.xy + uv * BackdropBounds.zw);
+        // Native composition behind a transparent surface is not visible to this shader.
+        if (behind.a < 0.998) return glyph;
+        float3 srgb = saturate(behind.rgb);
+        float3 linearRgb = lerp(srgb / 12.92, pow((srgb + 0.055) / 1.055, 2.4), step(0.04045, srgb));
+        float luminance = dot(linearRgb, float3(0.2126, 0.7152, 0.0722));
+        float ink = luminance <= 0.179 ? glyph.a : 0.0;
+        return float4(ink, ink, ink, glyph.a);
+    }
     if (Mode > 7.5) {
         float2 local = uv / TexelSize - BackdropBounds.xy;
         float2 halfSize = BackdropBounds.zw * 0.5;

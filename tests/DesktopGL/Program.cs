@@ -67,7 +67,7 @@ internal static class Program
 #endif
         if (args.Contains("--graphics"))
         {
-            using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"), args.FirstOrDefault(a => a.StartsWith("--capture="))?[10..]);
+            using var game = new SmokeGame(args.Contains("--desktop-blur"), args.Contains("--native-desktop"), args.FirstOrDefault(a => a.StartsWith("--capture="))?[10..], args.Contains("--backdrop-text"));
 #if PROJECTZ_WINDOWS_RUNTIME
             if (args.Contains("--moving-desktop")) game.EnableMovingDesktopCheck();
 #endif
@@ -91,6 +91,7 @@ internal sealed class SmokeGame : Game
     private int frames;
     private readonly bool testBackdrop;
     private readonly bool nativeBackdrop;
+    private readonly bool testBackdropText;
     private readonly string? capturePath;
     private NativeBackdropFixture? nativeFixture;
     public bool Completed { get; private set; }
@@ -105,11 +106,12 @@ internal sealed class SmokeGame : Game
     }
 #endif
 
-    public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false, string? capturePath = null)
+    public SmokeGame(bool testBackdrop = false, bool nativeBackdrop = false, string? capturePath = null, bool testBackdropText = false)
     {
         this.testBackdrop = testBackdrop;
         this.nativeBackdrop = nativeBackdrop;
         this.capturePath = capturePath;
+        this.testBackdropText = testBackdropText;
         graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 480, PreferredBackBufferHeight = 320,
@@ -170,16 +172,19 @@ internal sealed class SmokeGame : Game
         var parsed = (TextElement)parser.ParseFile(markup);
         Program.Require(parsed.FontWeight == 600, "Portable XAML font-weight parsing failed.");
         parsed.Dispose();
-        textbox.SelectAll();
-        Program.Require(textbox.CopySelection(), "SDL clipboard copy failed.");
-        textbox.Text = "";
-        Program.Require(textbox.PasteClipboard() && textbox.Text == "SDL clipboard ✓", "SDL UTF-8 clipboard paste failed.");
+        if (!testBackdropText)
+        {
+            textbox.SelectAll();
+            Program.Require(textbox.CopySelection(), "SDL clipboard copy failed.");
+            textbox.Text = "";
+            Program.Require(textbox.PasteClipboard() && textbox.Text == "SDL clipboard ✓", "SDL UTF-8 clipboard paste failed.");
+        }
     }
 
     protected override void Update(GameTime gameTime)
     {
         if (testBackdrop) Thread.Sleep(2);
-        if (frames == 1)
+        if (!testBackdropText && frames == 1)
         {
             scene.FocusElement(textbox);
             textbox.SelectAll();
@@ -205,7 +210,8 @@ internal sealed class SmokeGame : Game
         {
             if (motion.CheckFrame(GraphicsDevice, manager.DesktopBackdrop))
             {
-                Completed = true;
+                if (testBackdropText) VerifyBackdropText(gameTime);
+            Completed = true;
                 Exit();
             }
             return;
@@ -214,7 +220,7 @@ internal sealed class SmokeGame : Game
         // A static desktop may deliver just one distinct capture.
         if (frames >= 4 && (!testBackdrop || manager.DesktopBackdrop.State == ProjectZ.Shared.Composition.DesktopBackdropState.Active))
         {
-            Program.Require(textbox.Text == "é", $"Unicode TextInput failed: {textbox.Text}");
+            if (!testBackdropText) Program.Require(textbox.Text == "é", $"Unicode TextInput failed: {textbox.Text}");
             Program.Require(SceneElement.RenderExceptionCount == 0, SceneElement.FirstRenderException ?? "Scene rendering failed.");
             var pixels = new Color[GraphicsDevice.PresentationParameters.BackBufferWidth * GraphicsDevice.PresentationParameters.BackBufferHeight];
             GraphicsDevice.GetBackBufferData(pixels);
@@ -254,12 +260,95 @@ internal sealed class SmokeGame : Game
                 using var file = File.Create(capturePath);
                 image.SaveAsPng(file, image.Width, image.Height);
             }
+            if (testBackdropText) VerifyBackdropText(gameTime);
             Completed = true;
             Console.WriteLine("DESKTOPGL_GRAPHICS_OK");
             Exit();
         }
         if (frames > 300) throw new Exception("Desktop backdrop never became active: " + manager.DesktopBackdrop.StatusMessage);
         base.Draw(gameTime);
+    }
+
+    private void VerifyBackdropText(GameTime gameTime)
+    {
+        const int width = 480, height = 320;
+        using var target = new RenderTarget2D(GraphicsDevice, width, height, false, SurfaceFormat.Color, DepthFormat.None);
+        var dark = new Color(20, 20, 20);
+        var light = new Color(235, 235, 235);
+        scene.BackgroundColor = Color.Transparent;
+        var darkPane = new RectangleElement(scene) { Position = new Vector2(0, 240), Size = new Vector2(101, 80), BackgroundColor = dark };
+        var lightPane = new RectangleElement(scene) { Position = new Vector2(101, 240), Size = new Vector2(109, 80), BackgroundColor = light };
+        scene.AddElement(darkPane);
+        scene.AddElement(lightPane);
+        scene.AddElement(new TextElement(scene) { Position = new Vector2(5, 250), Text = new string('M', 55), ForegroundColor = Color.Cyan });
+        scene.AddElement(new TextElement(scene) { Position = new Vector2(8, 287), Text = "Colored annotation", ForegroundColor = Color.Magenta });
+        scene.Tick(gameTime);
+
+        var before = Render();
+        int seam = Enumerable.Range(70, 40).FirstOrDefault(x => Enumerable.Range(250, 33)
+            .Any(y => before[y * width + x - 1] == Color.Cyan && before[y * width + x] == Color.Cyan));
+        Program.Require(seam != 0, "The fixture did not place any glyph stroke across the backdrop seam.");
+        darkPane.Size = new Vector2(seam, 80);
+        lightPane.Position = new Vector2(seam, 240);
+        lightPane.Size = new Vector2(210 - seam, 80);
+        scene.Tick(gameTime);
+        before = Render();
+        scene.BackdropTextContrastColor = Color.Cyan;
+        var after = Render();
+        var darkInk = 0;
+        var lightInk = 0;
+        var transparentInk = 0;
+        var separateInk = 0;
+        for (var y = 245; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+                if (before[index] == Color.Cyan)
+                {
+                    if (x < seam)
+                    {
+                        Program.Require(after[index] == Color.White, "Dark scene pixels did not turn selected glyph ink white.");
+                        darkInk++;
+                    }
+                    else if (x < 210)
+                    {
+                        Program.Require(after[index] == Color.Black, "Light scene pixels did not turn selected glyph ink black.");
+                        lightInk++;
+                    }
+                    else
+                    {
+                        Program.Require(after[index] == Color.Cyan, "Unknown compositor background changed the authored ink.");
+                        transparentInk++;
+                    }
+                }
+                else if (before[index] == Color.Magenta)
+                {
+                    Program.Require(after[index] == before[index], "A foreground color outside the opt-in changed.");
+                    separateInk++;
+                }
+            }
+        }
+
+        Program.Require(darkInk > 15 && lightInk > 15 && transparentInk > 15 && separateInk > 15,
+            $"Expected solid samples in every region, got dark={darkInk}, light={lightInk}, clear={transparentInk}, other={separateInk}.");
+        Program.Require(after[242 * width + 30] == dark && after[242 * width + 180] == light && after[242 * width + 240].A == 0,
+            "The shader changed the backdrop outside the glyph drawing.");
+        var crossing = Enumerable.Range(250, 33).Count(y =>
+            before[y * width + seam - 1] == Color.Cyan && before[y * width + seam] == Color.Cyan &&
+            after[y * width + seam - 1] == Color.White && after[y * width + seam] == Color.Black);
+        Program.Require(crossing > 0, "A single glyph stroke did not react independently on both sides of the backdrop seam.");
+        Console.WriteLine($"BACKDROP_TEXT_CONTRAST_OK dark={darkInk} light={lightInk} clear={transparentInk} other={separateInk} crossing={crossing}");
+
+        Color[] Render()
+        {
+            GraphicsDevice.SetRenderTarget(target);
+            scene.Draw(gameTime);
+            GraphicsDevice.SetRenderTarget(null);
+            var colors = new Color[width * height];
+            target.GetData(colors);
+            return colors;
+        }
     }
 
     protected override void UnloadContent()
