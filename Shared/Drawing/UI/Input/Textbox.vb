@@ -175,6 +175,7 @@ Namespace [Shared].Drawing.UI.Input
         Private inputLayout As TextInputLayout
         Private layoutText, layoutFont As String
         Private layoutWidth As Single = -1
+        Private layoutPpiPerfectText As Boolean
         Private textScroll As Vector2
         Private _wrapText As Boolean = True
         Public Property WrapText As Boolean
@@ -242,11 +243,15 @@ Namespace [Shared].Drawing.UI.Input
                 Dim available = New Vector2(Math.Max(1, Size.X - TextPadding.X * 2 - 1), Math.Max(1, Size.Y - TextPadding.Y * 2))
                 Dim wrapWidth = If(AcceptsReturn AndAlso WrapText, available.X, Single.MaxValue)
                 Dim lineHeight = CSng(Scene.TextLineSpacing(Font))
-                If inputLayout Is Nothing OrElse display <> layoutText OrElse Font <> layoutFont OrElse wrapWidth <> layoutWidth Then
-                    inputLayout = New TextInputLayout(display, wrapWidth, lineHeight, Function(line) Scene.MeasureText(Font, line).X)
+                Dim ppiPerfectText = Scene.Quality.PpiPerfectText
+                Dim sameFontMetrics = Font = layoutFont AndAlso ppiPerfectText = layoutPpiPerfectText
+                If inputLayout Is Nothing OrElse display <> layoutText OrElse Not sameFontMetrics OrElse wrapWidth <> layoutWidth Then
+                    Dim reusableLayout = If(sameFontMetrics, inputLayout, Nothing)
+                    inputLayout = New TextInputLayout(display, wrapWidth, lineHeight, Function(line) Scene.MeasureText(Font, line).X, reusableLayout)
                     layoutText = display
                     layoutFont = Font
                     layoutWidth = wrapWidth
+                    layoutPpiPerfectText = ppiPerfectText
                     TextElement.TextWrapping = TextWrapping.NoWrap
                     TextElement.Font = Font
                     TextElement.Text = inputLayout.DisplayText
