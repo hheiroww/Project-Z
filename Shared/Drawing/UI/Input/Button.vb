@@ -50,6 +50,25 @@ Namespace [Shared].Drawing.UI.Input
         End Property
         Private _AutoSizeWidthOnTextOverflow As Boolean
 
+        ''' <summary>
+        ''' Width reserved inside the left padding for leading content. The
+        ''' label is centered in the remaining space without moving children
+        ''' placed in the leading slot.
+        ''' </summary>
+        Public Property LeadingLabelSpace As Single
+            Get
+                Return _LeadingLabelSpace
+            End Get
+            Set(value As Single)
+                If Not Single.IsFinite(value) OrElse value < 0 Then Throw New ArgumentOutOfRangeException(NameOf(value))
+                If value = _LeadingLabelSpace Then Return
+                _LeadingLabelSpace = value
+                Button_Changed()
+                Invalidate()
+            End Set
+        End Property
+        Private _LeadingLabelSpace As Single
+
         Public Property isAnimated As Boolean = False
 
         Public Property Text As String
@@ -182,7 +201,7 @@ Namespace [Shared].Drawing.UI.Input
                 TextElement.TextWrapping = If(AutoSizeWidthOnTextOverflow, TextWrapping.NoWrap, TextWrapping.Wrap)
                 TextElement.Text = Text
                 If AutoSizeWidthOnTextOverflow Then
-                    Dim requiredWidth = Scene.MeasureText(Font, Text).X + Padding.Left + Padding.Right + 10
+                    Dim requiredWidth = Scene.MeasureText(Font, Text).X + Padding.Left + Padding.Right + LeadingLabelSpace + 10
                     If requiredWidth > Size.X Then Size = New Vector2(requiredWidth, Size.Y)
                 End If
                 CanChange = True
@@ -193,12 +212,24 @@ Namespace [Shared].Drawing.UI.Input
             If Scene Is Nothing Then Return
             Select Case AutoSize
                 Case ButtonAutoSize.X
-                    Size = New Vector2(Scene.MeasureText(Font, Text).X + Padding.Left + Padding.Right, Size.Y)
+                    Size = New Vector2(Scene.MeasureText(Font, Text).X + Padding.Left + Padding.Right + LeadingLabelSpace, Size.Y)
                 Case ButtonAutoSize.Y
                     Size = New Vector2(Size.X, Scene.MeasureText(Font, Text).Y + Padding.Top + Padding.Bottom)
                 Case ButtonAutoSize.XY
-                    Size = Scene.MeasureText(Font, Text)
+                    Dim measured = Scene.MeasureText(Font, Text)
+                    If LeadingLabelSpace > 0 Then measured.X += Padding.Left + Padding.Right + LeadingLabelSpace
+                    Size = measured
             End Select
+        End Sub
+
+        Protected Overrides Sub AlignChildren()
+            MyBase.AlignChildren()
+            If LeadingLabelSpace <= 0 OrElse TextElement Is Nothing Then Return
+            Dim left = Position.X + Padding.Left + LeadingLabelSpace
+            Dim right = Position.X + Size.X - Padding.Right
+            Dim labelPosition = TextElement.Position
+            labelPosition.X = left + Math.Max(0F, (right - left - TextElement.Size.X) / 2.0F)
+            If TextElement.Position <> labelPosition Then TextElement.Position = labelPosition
         End Sub
 
 #End Region
