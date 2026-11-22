@@ -10,6 +10,16 @@ Namespace [Shared].Drawing.UI.Primitives
         Private selectionEnd As Integer
         Private selectionTexture As Texture2D
         Private selectionMenu As ContextMenu
+        Private navigation As TextSelectionNavigation
+        Private wordDragStart As Integer = -1
+        Private wordDragEnd As Integer
+
+        Private ReadOnly Property SelectionNavigation As TextSelectionNavigation
+            Get
+                If navigation Is Nothing OrElse navigation.Source <> Text Then navigation = New TextSelectionNavigation(Text)
+                Return navigation
+            End Get
+        End Property
 
         ''' <summary>Opt in to selecting and copying display text. This never enables editing.</summary>
         Public Property IsTextSelectionEnabled As Boolean
@@ -50,6 +60,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Private Sub ClearTextSelection()
             selectionAnchor = 0
             selectionEnd = 0
+            wordDragStart = -1
         End Sub
         Public Sub [Select](start As Integer, length As Integer)
             If Not IsTextSelectionEnabled Then Return
@@ -115,26 +126,53 @@ Namespace [Shared].Drawing.UI.Primitives
             If UseXamlTextLayout AndAlso (TextTrimming <> TextTrimming.None OrElse MaxSize.Y < Single.MaxValue) Then content = FitXamlText(content)
             Return content
         End Function
-        Private Function SelectionHit(point As Point) As Integer
+        Private Function SelectionHit(point As Point, Optional preferCharacter As Boolean = False) As Integer
             Dim glyphs = SelectionGlyphs(SelectionContent())
             If glyphs.Count = 0 Then Return 0
             Dim closest = glyphs.OrderBy(Function(g) Math.Abs(g.Bounds.Center.Y - point.Y)).ThenBy(Function(g) Math.Abs(g.Bounds.Center.X - point.X)).First()
+            If preferCharacter Then Return closest.Index
             Dim index = closest.Index + If(point.X >= closest.Bounds.Center.X, 1, 0)
             If index > 0 AndAlso index < Text.Length AndAlso Char.IsLowSurrogate(Text(index)) Then index += 1
             Return index
         End Function
         Private Sub BeginTextSelection(point As Point) Handles Me.MouseLeftDown
             If Not IsTextSelectionEnabled Then Return
-            Dim state = Scene.CurrentKeyboardState
-            If Not state.IsKeyDown(Keys.LeftShift) AndAlso Not state.IsKeyDown(Keys.RightShift) Then selectionAnchor = SelectionHit(point)
+            wordDragStart = -1
             selectionEnd = SelectionHit(point)
+            If Not Scene.ShouldExtendPointerSelection() Then selectionAnchor = selectionEnd
+        End Sub
+        Private Sub SelectTextUnit(point As Point) Handles Me.MouseLeftDoubleClick
+            If Not IsTextSelectionEnabled Then Return
+            Dim position = SelectionHit(point, preferCharacter:=True)
+            Dim unit = SelectionNavigation.UnitAt(position)
+            If Scene.ShouldExtendPointerSelection() Then
+                selectionEnd = If(position < selectionAnchor, unit.Start, unit.Finish)
+            Else
+                wordDragStart = unit.Start
+                wordDragEnd = unit.Finish
+                selectionAnchor = unit.Start
+                selectionEnd = unit.Finish
+            End If
         End Sub
         Private Sub DragTextSelection(point As Point, start As Point) Handles Me.MouseDrag
-            If IsTextSelectionEnabled Then selectionEnd = SelectionHit(point)
+            If Not IsTextSelectionEnabled Then Return
+            If wordDragStart < 0 Then
+                selectionEnd = SelectionHit(point)
+                Return
+            End If
+            Dim position = SelectionHit(point, preferCharacter:=True)
+            Dim unit = SelectionNavigation.UnitAt(position)
+            Dim backwards = position < wordDragStart
+            selectionAnchor = If(backwards, wordDragEnd, wordDragStart)
+            selectionEnd = If(backwards, unit.Start, unit.Finish)
+        End Sub
+        Private Sub FinishTextSelection(point As Point) Handles Me.MouseLeftUp
+            wordDragStart = -1
         End Sub
         Private Sub TextSelectionKey(key As Keys, state As KeyboardState) Handles Me.OnKeyPress
             If Not IsTextSelectionEnabled Then Return
-            If state.IsKeyDown(Keys.LeftControl) OrElse state.IsKeyDown(Keys.RightControl) Then
+            Dim control = state.IsKeyDown(Keys.LeftControl) OrElse state.IsKeyDown(Keys.RightControl)
+            If control Then
                 If key = Keys.A Then
                     SelectAll()
                     Return
@@ -147,10 +185,13 @@ Namespace [Shared].Drawing.UI.Primitives
                 Select Case key
                     Case Keys.Home : destination = 0
                     Case Keys.End : destination = Text.Length
-                    Case Keys.Left : destination = If(Not extend AndAlso SelectionLength > 0, SelectionStart, Math.Max(0, selectionEnd - 1))
-                    Case Keys.Right : destination = If(Not extend AndAlso SelectionLength > 0, SelectionStart + SelectionLength, Math.Min(Text.Length, selectionEnd + 1))
+                    Case Keys.Left
+                        destination = If(Not extend AndAlso SelectionLength > 0, SelectionStart,
+                            If(control, SelectionNavigation.MoveWord(selectionEnd, True), SelectionNavigation.Previous(selectionEnd)))
+                    Case Keys.Right
+                        destination = If(Not extend AndAlso SelectionLength > 0, SelectionStart + SelectionLength,
+                            If(control, SelectionNavigation.MoveWord(selectionEnd, False), SelectionNavigation.Next(selectionEnd)))
                 End Select
-                If destination > 0 AndAlso destination < Text.Length AndAlso Char.IsLowSurrogate(Text(destination)) Then destination += If(key = Keys.Left, -1, 1)
                 selectionEnd = destination
                 If Not extend Then selectionAnchor = destination
             End If

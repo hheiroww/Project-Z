@@ -188,6 +188,16 @@ Namespace [Shared].Drawing.UI.Input
         Private selectionAnchor As Integer
         Private draggingSelection As Boolean
         Private dragPoint As Point
+        Private navigation As TextSelectionNavigation
+        Private wordDragStart As Integer = -1
+        Private wordDragEnd As Integer
+
+        Private ReadOnly Property SelectionNavigation As TextSelectionNavigation
+            Get
+                If navigation Is Nothing OrElse navigation.Source <> Text Then navigation = New TextSelectionNavigation(Text)
+                Return navigation
+            End Get
+        End Property
         Public Property SelectionColor As Color = New Color(38, 93, 160)
         Public ReadOnly Property SelectedText As String
             Get
@@ -357,7 +367,7 @@ Namespace [Shared].Drawing.UI.Input
             MyBase.Tick(gameTime)
             If draggingSelection AndAlso (dragPoint.X < TextPadding.X OrElse dragPoint.X > Size.X - TextPadding.X OrElse
                 dragPoint.Y < TextPadding.Y OrElse dragPoint.Y > Size.Y - TextPadding.Y) Then
-                MoveCaret(HitIndex(dragPoint), True)
+                DragSelectionTo(dragPoint)
             End If
             UpdateCaretVisibility()
             UpdateSpellCheck()
@@ -512,42 +522,15 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Private Function PreviousPosition(position As Integer) As Integer
-            If position <= 0 Then Return 0
-            If position >= 2 AndAlso ((Text(position - 2) = ChrW(13) AndAlso Text(position - 1) = ChrW(10)) OrElse
-                (Char.IsHighSurrogate(Text(position - 2)) AndAlso Char.IsLowSurrogate(Text(position - 1)))) Then Return position - 2
-            Return position - 1
+            Return SelectionNavigation.Previous(position)
         End Function
 
         Private Function NextPosition(position As Integer) As Integer
-            If position >= Text.Length Then Return Text.Length
-            If position + 1 < Text.Length AndAlso ((Text(position) = ChrW(13) AndAlso Text(position + 1) = ChrW(10)) OrElse
-                (Char.IsHighSurrogate(Text(position)) AndAlso Char.IsLowSurrogate(Text(position + 1)))) Then Return position + 2
-            Return position + 1
+            Return SelectionNavigation.Next(position)
         End Function
 
         Private Function WordPosition(position As Integer, backwards As Boolean) As Integer
-            If backwards Then
-                While position > 0 AndAlso Char.IsWhiteSpace(Text(position - 1))
-                    position = PreviousPosition(position)
-                End While
-                If position = 0 Then Return 0
-                Dim word = Char.IsLetterOrDigit(Text(position - 1)) OrElse Text(position - 1) = "_"c
-                While position > 0 AndAlso Not Char.IsWhiteSpace(Text(position - 1)) AndAlso
-                    (Char.IsLetterOrDigit(Text(position - 1)) OrElse Text(position - 1) = "_"c) = word
-                    position = PreviousPosition(position)
-                End While
-            Else
-                If position >= Text.Length Then Return Text.Length
-                Dim word = Char.IsLetterOrDigit(Text(position)) OrElse Text(position) = "_"c
-                While position < Text.Length AndAlso Not Char.IsWhiteSpace(Text(position)) AndAlso
-                    (Char.IsLetterOrDigit(Text(position)) OrElse Text(position) = "_"c) = word
-                    position = NextPosition(position)
-                End While
-                While position < Text.Length AndAlso Char.IsWhiteSpace(Text(position))
-                    position = NextPosition(position)
-                End While
-            End If
-            Return position
+            Return SelectionNavigation.MoveWord(position, backwards)
         End Function
 
         Private Sub Textbox_OnSubmit(Key As Keys, KeyboardState As KeyboardState) Handles Me.OnKeyDown
@@ -609,9 +592,9 @@ Namespace [Shared].Drawing.UI.Input
             End Select
         End Sub
 
-        Private Function HitIndex(point As Point) As Integer
+        Private Function HitIndex(point As Point, Optional preferCharacter As Boolean = False) As Integer
             UpdateTextbox()
-            Return inputLayout.HitTest(point.ToVector2() + Position - TextElement.Position, Scene.TextLineSpacing(Font))
+            Return inputLayout.HitTest(point.ToVector2() + Position - TextElement.Position, Scene.TextLineSpacing(Font), preferCharacter)
         End Function
 
         Public Function GetCharacterIndexFromPoint(point As Vector2, snapToText As Boolean) As Integer
@@ -628,20 +611,44 @@ Namespace [Shared].Drawing.UI.Input
         End Property
 
         Private Sub Textbox_OnMouseLeftDown(point As Point) Handles Me.MouseLeftDown
-            Dim modifiers = Scene.CurrentKeyboardState
-            Dim extend = modifiers.IsKeyDown(Keys.LeftShift) OrElse modifiers.IsKeyDown(Keys.RightShift)
-            MoveCaret(HitIndex(point), extend)
+            wordDragStart = -1
+            MoveCaret(HitIndex(point), Scene.ShouldExtendPointerSelection())
             draggingSelection = True
             dragPoint = point
         End Sub
 
+        Private Sub Textbox_OnMouseLeftDoubleClick(point As Point) Handles Me.MouseLeftDoubleClick
+            Dim position = HitIndex(point, preferCharacter:=True)
+            Dim unit = SelectionNavigation.UnitAt(position)
+            If Scene.ShouldExtendPointerSelection() Then
+                MoveCaret(If(position < selectionAnchor, unit.Start, unit.Finish), True)
+            Else
+                wordDragStart = unit.Start
+                wordDragEnd = unit.Finish
+                [Select](unit.Start, unit.Finish - unit.Start)
+            End If
+        End Sub
+
         Private Sub Textbox_OnMouseLeftUp(point As Point) Handles Me.MouseLeftUp
             draggingSelection = False
+            wordDragStart = -1
         End Sub
 
         Private Sub Textbox_OnMouseDrag(currentPoint As Point, startPoint As Point) Handles Me.MouseDrag
             dragPoint = currentPoint
-            MoveCaret(HitIndex(currentPoint), True)
+            DragSelectionTo(currentPoint)
+        End Sub
+
+        Private Sub DragSelectionTo(point As Point)
+            If wordDragStart < 0 Then
+                MoveCaret(HitIndex(point), True)
+                Return
+            End If
+            Dim position = HitIndex(point, preferCharacter:=True)
+            Dim unit = SelectionNavigation.UnitAt(position)
+            Dim backwards = position < wordDragStart
+            selectionAnchor = If(backwards, wordDragEnd, wordDragStart)
+            MoveCaret(If(backwards, unit.Start, unit.Finish), True)
         End Sub
 
         Private Sub Textbox_OnSelect() Handles Me.Selected
@@ -650,6 +657,7 @@ Namespace [Shared].Drawing.UI.Input
 
         Private Sub Textbox_OnDeselect() Handles Me.Deselected
             draggingSelection = False
+            wordDragStart = -1
             HideCaret()
         End Sub
 

@@ -236,14 +236,28 @@ Namespace [Shared].Drawing
         Private DragDropElement As SceneElement  ' Saved for DragDrop event after MouseUp
         Private ClickTargetElement As SceneElement  ' Element that should receive click event
         Private HoveredElement As SceneElement  ' Currently hovered element for reliable enter/leave
+        Private pointerShiftDown As Boolean?
+
+        Friend Function ShouldExtendPointerSelection() As Boolean
+            Return If(pointerShiftDown, CurrentKeyboardState.IsKeyDown(Keys.LeftShift) OrElse CurrentKeyboardState.IsKeyDown(Keys.RightShift))
+        End Function
 
         Protected Friend Sub MouseLeftDown(p As Point)
-            RequestRender()
-            RaiseEvent OnMouseLeftDown(p)
-            _MouseLeftDown(PointToElement(p), p)
+            MouseLeftDown(p, 1, Nothing)
         End Sub
 
-        Private Sub _MouseLeftDown(Element As SceneElement, p As Point)
+        Friend Sub MouseLeftDown(p As Point, clickCount As Integer, shiftDown As Boolean?)
+            pointerShiftDown = shiftDown
+            Try
+                RequestRender()
+                RaiseEvent OnMouseLeftDown(p)
+                _MouseLeftDown(PointToElement(p), p, clickCount, shiftDown)
+            Finally
+                pointerShiftDown = Nothing
+            End Try
+        End Sub
+
+        Private Sub _MouseLeftDown(Element As SceneElement, p As Point, clickCount As Integer, shiftDown As Boolean?)
             Element = If(CapturedPointerElement, Element)
             ' A new pointer target always releases previous capture, including a
             ' control disabled or hidden by its own action before mouse-up.
@@ -262,12 +276,14 @@ Namespace [Shared].Drawing
                 DragDropElement = Element  ' Save for potential drag-drop
                 MouseDownPoint = p
                 MouseIsDown = True
-                Element.OnMouseLeftDown(p.Subtract(Element.Position))
+                Dim location = p.Subtract(Element.Position)
+                Element.OnMouseLeftDown(location)
+                If clickCount = 2 Then Element.OnMouseLeftDoubleClick(location)
             Else
                 ClickTargetElement = Nothing
                 DragDropElement = Nothing
             End If
-            ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseLeftDown(s.Interp(p)))
+            ProjectionHosts.ForEach(Sub(s) s.TargetScene.MouseLeftDown(s.Interp(p), clickCount, shiftDown))
         End Sub
 
         Protected Friend Sub MouseLeftUp(p As Point)

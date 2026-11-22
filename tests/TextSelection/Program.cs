@@ -16,7 +16,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        using var game = new SelectionProbe(args.Length > 0 ? args[0] : "selection-results");
+        using var game = new SelectionProbe(args.Length > 0 ? args[0] : "selection-results", args.Contains("--gestures-only"));
         game.Run();
     }
 }
@@ -25,6 +25,7 @@ sealed class InputScene(SceneManager manager) : Scene(manager);
 sealed class SelectionProbe : Game
 {
     readonly string output;
+    readonly bool gesturesOnly;
     readonly GraphicsDeviceManager graphics;
     readonly List<string> checks = new();
     SceneManager manager;
@@ -33,9 +34,10 @@ sealed class SelectionProbe : Game
     ContentContainer resources;
     SpriteBatch batch;
 
-    public SelectionProbe(string directory)
+    public SelectionProbe(string directory, bool gesturesOnly)
     {
         output = Path.GetFullPath(directory);
+        this.gesturesOnly = gesturesOnly;
         Directory.CreateDirectory(output);
         graphics = new GraphicsDeviceManager(this) { PreferredBackBufferWidth = 720, PreferredBackBufferHeight = 360, GraphicsProfile = GraphicsProfile.HiDef };
         Content.RootDirectory = "Content";
@@ -85,12 +87,60 @@ sealed class SelectionProbe : Game
         manager.InjectMouseMove(end.X, end.Y, 720, 360);
         manager.InjectMouseLeftUp(end.X, end.Y, 720, 360);
     }
+    void Click(Point point, int clicks, bool? shift = null)
+    {
+        manager.InjectMouseLeftDown(point.X, point.Y, 720, 360, clicks, shift);
+        manager.InjectMouseLeftUp(point.X, point.Y, 720, 360);
+    }
+    void CheckWordSelection(GameTime time)
+    {
+        Set("alpha beta gamma");
+        var beta = At(7);
+        Click(beta, 1);
+        Require(box.SelectionLength == 0, "single press places the caret");
+        Click(beta, 2);
+        Require(box.SelectedText == "beta", "double-click selects only its word");
+        Click(At(12), 2, shift: true);
+        Require(box.SelectedText == "beta gamma", "native Shift+double-click extends the existing anchor to the whole word");
+        manager.InjectMouseLeftDown(beta.X, beta.Y, 720, 360, 2);
+        var alpha = At(1);
+        manager.InjectMouseMove(alpha.X, alpha.Y, 720, 360);
+        manager.InjectMouseLeftUp(alpha.X, alpha.Y, 720, 360);
+        Require(box.SelectedText == "alpha beta" && box.CaretPosition == 0, "dragging after double-click extends backward by whole words");
+        Set("cafe\u0301 beta");
+        Click(At(2), 2);
+        Require(box.SelectedText == "cafe\u0301", "double-click leaves combining characters with the word");
+
+        var label = new TextElement(scene) { Text = "alpha beta gamma", Position = new Vector2(460, 285), Font = box.Font, IsTextSelectionEnabled = true };
+        scene.AddElement(label);
+        manager.Tick(time);
+        var x = (int)(label.Position.X + scene.MeasureText(label.Font, "alpha be").X);
+        Click(new Point(x, 290), 2);
+        Require(label.SelectedText == "beta", "selectable display text uses the same double-click behavior");
+        manager.InjectKeyDown((Keys)17); // WinForms VK_CONTROL
+        manager.InjectKeyDown((Keys)16); // WinForms VK_SHIFT
+        Tap(Keys.Right);
+        manager.InjectKeyUp((Keys)16);
+        manager.InjectKeyUp((Keys)17);
+        Require(label.SelectedText == "beta ", "Ctrl+Shift+Right extends the display selection by a word boundary");
+        scene.RemoveElement(label);
+        label.Dispose();
+        Set(string.Empty);
+        scene.FocusElement(null);
+    }
     protected override void Draw(GameTime time)
     {
         Forms.IDataObject previousClipboard = null;
         try
         {
             manager.Tick(time);
+            CheckWordSelection(time);
+            if (gesturesOnly)
+            {
+                File.WriteAllLines(Path.Combine(output, "result.txt"), checks);
+                Exit();
+                return;
+            }
             var parser = new ProjectZ.Shared.Drawing.Designer.SceneXamlParser(scene);
             var hitRoot = parser.Parse("<Rectangle Width=\"160\" Height=\"45\"><Button Name=\"CloseProbe\" Width=\"28\" Height=\"28\" Text=\"x\"/><TextBlock Text=\"overlay\" Width=\"160\" Height=\"45\" IsHitTestVisible=\"False\"/></Rectangle>");
             scene.AddElement(hitRoot);

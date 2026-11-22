@@ -162,7 +162,7 @@ Namespace [Shared].Drawing
                 End If
                 If capturePointer Then
                     Select Case m.Msg
-                        Case &H201 : leftPressed = True
+                        Case &H201, &H203 : leftPressed = True
                         Case &H204 : rightPressed = True
                         Case &H202 : leftPressed = False
                         Case &H205 : rightPressed = False
@@ -180,7 +180,7 @@ Namespace [Shared].Drawing
                             leftPressed = False : rightPressed = False
                             Messages.Enqueue((m.Msg, 0, m.LParam.ToInt64()))
                         End If
-                    Case &H200, &H201, &H202, &H204, &H205, &H20A, &H2A3, &H1F
+                    Case &H200, &H201, &H202, &H203, &H204, &H205, &H20A, &H2A3, &H1F
                         If capturePointer Then
                             Dim value = m.WParam.ToInt64() And &HFFFFFFFFL
                             If value > Integer.MaxValue Then value -= &H100000000L
@@ -190,7 +190,7 @@ Namespace [Shared].Drawing
                 MyBase.WndProc(m)
                 ' SDL updates its capture policy in the original window procedure.
                 ' Establish ours afterward so it cannot release a new press.
-                If capturePointer AndAlso (m.Msg = &H201 OrElse m.Msg = &H204) Then SetNativeCapture(Handle)
+                If capturePointer AndAlso (m.Msg = &H201 OrElse m.Msg = &H203 OrElse m.Msg = &H204) Then SetNativeCapture(Handle)
                 If capturePointer AndAlso (m.Msg = &H202 OrElse m.Msg = &H205) AndAlso Not leftPressed AndAlso Not rightPressed AndAlso GetNativeCapture() = Handle Then ReleaseNativeCapture()
             End Sub
         End Class
@@ -264,7 +264,7 @@ Namespace [Shared].Drawing
                         Dim tracking As New NativeMouseTracking With {.Size = CUInt(Marshal.SizeOf(Of NativeMouseTracking)()), .Flags = 2, .Handle = nativeKeyboard.Handle}
                         TrackNativeMouseEvent(tracking)
                         InjectMouseMove(point.X, point.Y, width, height)
-                    Case &H201 : InjectMouseLeftDown(point.X, point.Y, width, height)
+                    Case &H201, &H203 : InjectMouseLeftDown(point.X, point.Y, width, height, If(id = &H203, 2, 1), (value And 4) <> 0)
                     Case &H202 : InjectMouseLeftUp(point.X, point.Y, width, height)
                     Case &H204 : InjectMouseRightDown(point.X, point.Y, width, height)
                     Case &H205 : InjectMouseRightUp(point.X, point.Y, width, height)
@@ -1068,6 +1068,11 @@ Namespace [Shared].Drawing
         End Sub
 
         Public Sub InjectMouseLeftDown(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)
+            InjectMouseLeftDown(x, y, clientWidth, clientHeight, 1)
+        End Sub
+
+        ''' <summary>Forward a native left-button press, including its click count and the Shift state at the time of the press.</summary>
+        Public Sub InjectMouseLeftDown(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer, clickCount As Integer, Optional shiftDown As Boolean? = Nothing)
             If (Not UseExternalInput AndAlso Not UseHardwareInput) OrElse ActiveScene Is Nothing OrElse ExternalLeftDown Then Return
             Dim point As Point = ScaleExternalMousePosition(New Point(x, y), clientWidth, clientHeight)
             ExternalLeftDown = True
@@ -1075,7 +1080,7 @@ Namespace [Shared].Drawing
             StartPoint = point
             ExternalLastPoint = point
             SetExternalMouseState(point)
-            ActiveScene.MouseLeftDown(point)
+            ActiveScene.MouseLeftDown(point, clickCount, shiftDown)
         End Sub
 
         Public Sub InjectMouseLeftUp(x As Integer, y As Integer, clientWidth As Integer, clientHeight As Integer)

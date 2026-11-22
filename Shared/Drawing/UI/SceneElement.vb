@@ -556,6 +556,7 @@ Namespace [Shared].Drawing.UI
         Public Event MouseLeave()
         Public Event MouseRightClick(p As Point)
         Public Event MouseLeftClick(p As Point)
+        Public Event MouseLeftDoubleClick(p As Point)
         Public Event MouseLeftDown(p As Point)
         Public Event MouseLeftUp(p As Point)
         Public Event MouseRightDown(p As Point)
@@ -570,6 +571,10 @@ Namespace [Shared].Drawing.UI
             _MouseDown = True
             _MouseDownPosition = Position
             RaiseEvent MouseLeftDown(p)
+        End Sub
+
+        Friend Sub OnMouseLeftDoubleClick(p As Point)
+            If Not _importedPointerSuppressed Then RaiseEvent MouseLeftDoubleClick(p)
         End Sub
 
         Protected Friend Sub OnMouseLeftUp(p As Point)

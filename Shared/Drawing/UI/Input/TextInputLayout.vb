@@ -57,7 +57,7 @@ Namespace [Shared].Drawing.UI.Input
             Height = y + lineHeight
         End Sub
 
-        Public Function HitTest(point As Vector2, lineHeight As Single) As Integer
+        Public Function HitTest(point As Vector2, lineHeight As Single, Optional preferCharacter As Boolean = False) As Integer
             Dim row = Math.Max(0, CSng(Math.Floor(point.Y / lineHeight)) * lineHeight)
             row = Math.Min(row, Points(Points.Length - 1).Y)
             Dim best As Integer
@@ -65,12 +65,16 @@ Namespace [Shared].Drawing.UI.Input
             For index = 0 To Points.Length - 1
                 If Not validStops(index) Then Continue For
                 If Math.Abs(Points(index).Y - row) > 0.5F Then Continue For
+                If preferCharacter AndAlso index < ends.Length AndAlso Not hardBreaks(index) AndAlso
+                    point.X >= Points(index).X AndAlso point.X < ends(index).X Then Return index
                 Dim delta = Math.Abs(point.X - Points(index).X)
                 If delta < distance Then
                     distance = delta
                     best = index
                 End If
             Next
+            If preferCharacter AndAlso best > 0 AndAlso (best = ends.Length OrElse hardBreaks(best) OrElse point.X < Points(best).X) AndAlso
+                Math.Abs(Points(best - 1).Y - row) <= 0.5F Then Return best - 1
             Return best
         End Function
 
