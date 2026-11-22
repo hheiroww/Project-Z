@@ -947,6 +947,7 @@ Namespace [Shared].Drawing.UI.Input
         Private _selectedIndex As Integer = -1
         Private _tabHeaderHeight As Single = 32.0F
         Private _tabHeaders As New List(Of Button)
+        Private _headersByTabIndex As Button() = Array.Empty(Of Button)()
         Private _contentArea As RectangleElement
 
         Public Event SelectionChanged(sender As TabControl, selectedIndex As Integer)
@@ -964,28 +965,45 @@ Namespace [Shared].Drawing.UI.Input
             Set(value As Integer)
                 If value = _selectedIndex Then Return
                 If value >= -1 AndAlso value < _tabs.Count Then
-                      _selectedIndex = value
-                      UpdateTabs(False)
+                    Dim previousIndex = _selectedIndex
+                    _selectedIndex = value
+                    UpdateHeaderSelection(previousIndex)
+                    UpdateHeaderSelection(_selectedIndex)
+                    MountSelectedContent()
                     RaiseEvent SelectionChanged(Me, _selectedIndex)
                 End If
             End Set
         End Property
 
         Public Sub SetTabs(tabs As IEnumerable(Of TabItem))
-            Dim previousContent = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
+            SetTabs(tabs, Nothing)
+        End Sub
+
+        Friend Sub SetTabs(tabs As IEnumerable(Of TabItem), requestedIndex As Integer?)
+            Dim previousIndex = _selectedIndex
+            Dim previousContent = SelectedContent()
             _tabs = tabs.ToList()
-            If _selectedIndex < 0 OrElse _selectedIndex >= _tabs.Count OrElse Not _tabs(_selectedIndex).IsVisible Then _selectedIndex = _tabs.FindIndex(Function(tab) tab.IsVisible)
-            UpdateTabs()
-            Dim selectedContent = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
-            If previousContent IsNot selectedContent Then RaiseEvent SelectionChanged(Me, _selectedIndex)
+            If requestedIndex.HasValue Then
+                _selectedIndex = requestedIndex.Value
+            ElseIf previousContent IsNot Nothing Then
+                Dim retainedIndex = _tabs.FindIndex(Function(tab) tab.Content Is previousContent AndAlso tab.IsVisible)
+                If retainedIndex >= 0 Then _selectedIndex = retainedIndex
+            End If
+            If _selectedIndex < 0 OrElse _selectedIndex >= _tabs.Count OrElse Not _tabs(_selectedIndex).IsVisible Then
+                _selectedIndex = _tabs.FindIndex(Function(tab) tab.IsVisible)
+            End If
+            RebuildHeaders()
+            MountSelectedContent()
+            If previousIndex <> _selectedIndex OrElse previousContent IsNot SelectedContent() Then RaiseEvent SelectionChanged(Me, _selectedIndex)
         End Sub
         Public Property TabHeaderHeight As Single
             Get
                 Return _tabHeaderHeight
             End Get
             Set(value As Single)
+                If _tabHeaderHeight = value Then Return
                 _tabHeaderHeight = value
-                UpdateTabs()
+                AlignChildren()
             End Set
         End Property
 
@@ -1011,7 +1029,8 @@ Namespace [Shared].Drawing.UI.Input
                 _selectedIndex = 0
             End If
 
-            UpdateTabs()
+            RebuildHeaders()
+            MountSelectedContent()
         End Sub
 
         Public Sub RemoveTab(index As Integer)
@@ -1020,20 +1039,20 @@ Namespace [Shared].Drawing.UI.Input
                 If _selectedIndex >= _tabs.Count Then
                     _selectedIndex = _tabs.Count - 1
                 End If
-                UpdateTabs()
+                RebuildHeaders()
+                MountSelectedContent()
             End If
         End Sub
 
-        Private Sub UpdateTabs(Optional rebuildHeaders As Boolean = True)
-            If Not rebuildHeaders Then
-                Dim visibleIndex = 0
-                For index = 0 To _tabs.Count - 1
-                    If Not _tabs(index).IsVisible Then Continue For
-                    _tabHeaders(visibleIndex).BackgroundColor = If(index = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
-                    visibleIndex += 1
-                Next
-            Else
-            ' Clear existing headers
+        Private Sub UpdateHeaderSelection(index As Integer)
+            If index < 0 OrElse index >= _headersByTabIndex.Length Then Return
+            Dim header = _headersByTabIndex(index)
+            If header IsNot Nothing Then
+                header.BackgroundColor = If(index = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
+            End If
+        End Sub
+
+        Private Sub RebuildHeaders()
             For Each header In _tabHeaders
                 For Each child In header.Children.ToArray()
                     If child IsNot header.TextElement Then header.Children.Remove(child)
@@ -1042,10 +1061,8 @@ Namespace [Shared].Drawing.UI.Input
                 header.Dispose()
             Next
             _tabHeaders.Clear()
+            _headersByTabIndex = New Button(_tabs.Count - 1) {}
 
-            ' Create tab headers
-            Dim tabWidth As Single = Size.X / Math.Max(1, _tabs.Where(Function(tab) tab.IsVisible).Count())
-            Dim visibleIndex = 0
             For i As Integer = 0 To _tabs.Count - 1
                 If Not _tabs(i).IsVisible Then Continue For
                 Dim index As Integer = i
@@ -1054,31 +1071,32 @@ Namespace [Shared].Drawing.UI.Input
                 header.AutoSize = ButtonAutoSize.None
                 header.Text = If(_tabs(i).HeaderContent Is Nothing, _tabs(i).Header, String.Empty)
                 If _tabs(i).HeaderContent IsNot Nothing Then header.Children.Add(_tabs(i).HeaderContent)
-                header.Position = New Vector2(Position.X + visibleIndex * tabWidth, Position.Y)
-                header.Size = New Vector2(tabWidth, _tabHeaderHeight)
-                visibleIndex += 1
                 header.isEnabled = _tabs(i).IsEnabled
-                header.BackgroundColor = If(i = _selectedIndex, New Color(50, 50, 50), New Color(35, 35, 35))
 
                 AddHandler header.MouseLeftClick, Sub(p)
                                                       SelectedIndex = index
                                                   End Sub
 
                 _tabHeaders.Add(header)
+                _headersByTabIndex(i) = header
+                UpdateHeaderSelection(i)
                 Children.Add(header)
             Next
-            End If
+            AlignChildren()
+        End Sub
 
-            ' Update content area
-            _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
-            _contentArea.Size = New Vector2(Size.X, Size.Y - _tabHeaderHeight)
+        Private Function SelectedContent() As SceneElement
+            Return If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
+        End Function
 
-            ' Preserve the active subtree when only a header or selection style
-            ' changes. Detaching every refresh also discards focus and input.
-            Dim content = If(_selectedIndex >= 0 AndAlso _selectedIndex < _tabs.Count, _tabs(_selectedIndex).Content, Nothing)
-            If _contentArea.Children.Count <> If(content Is Nothing, 0, 1) OrElse (content IsNot Nothing AndAlso Not _contentArea.Children.Contains(content)) Then
-                _contentArea.Children.Clear()
-                If content IsNot Nothing Then _contentArea.Children.Add(content)
+        Private Sub MountSelectedContent()
+            Dim content = SelectedContent()
+            If _contentArea.Children.Count = 1 AndAlso _contentArea.Children(0) Is content Then Return
+            If _contentArea.Children.Count > 0 Then _contentArea.Children.Clear()
+            If content IsNot Nothing Then
+                content.Position = _contentArea.Position
+                content.Size = _contentArea.Size
+                _contentArea.Children.Add(content)
             End If
         End Sub
 

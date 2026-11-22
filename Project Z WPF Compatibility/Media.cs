@@ -17,7 +17,7 @@ public sealed class FontFamily : IEquatable<FontFamily>
 
 public abstract class Brush : Animation.Animatable
 {
-    public Transform? RelativeTransform { get; set; }
+    public virtual Transform? RelativeTransform { get; set; }
     double opacity=1;
     public virtual double Opacity { get=>opacity;set {opacity=Math.Clamp(value,0,1);Changed(nameof(Opacity));} }
 }
@@ -35,6 +35,12 @@ public readonly record struct Color(byte A, byte R, byte G, byte B)
     public static Color FromRgb(byte r, byte g, byte b) => new(255, r, g, b);
     internal Microsoft.Xna.Framework.Color Native => new(R, G, B, A);
     internal static Color FromNative(Microsoft.Xna.Framework.Color c) => new(c.A, c.R, c.G, c.B);
+    internal static Color FromPremultipliedNative(Microsoft.Xna.Framework.Color color)
+    {
+        if (color.A is 0 or 255) return FromNative(color);
+        byte Channel(byte value) => (byte)Math.Clamp((value * 255 + color.A / 2) / color.A, 0, 255);
+        return new(color.A, Channel(color.R), Channel(color.G), Channel(color.B));
+    }
     public override string ToString() => $"#{A:X2}{R:X2}{G:X2}{B:X2}";
 }
 public static partial class Colors

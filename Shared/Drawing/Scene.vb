@@ -155,10 +155,12 @@ Namespace [Shared].Drawing
         Private CursorBorder As PolygonElement
 
         Private InternalFPS As Integer = 0
-        Private Property I_Elements As New SortedList(Of Integer, SceneElement)
-        Private Property GUID_INDEX As New SortedList(Of String, Integer)
-        Private Property RemoveQueue As New List(Of Integer)
-        Private Property AddQueue As New List(Of SceneElement)
+        Private ReadOnly I_Elements As New SortedList(Of Integer, SceneElement)
+        Private ReadOnly GUID_INDEX As New Dictionary(Of String, Integer)(StringComparer.Ordinal)
+        Private ReadOnly RemoveQueue As New List(Of Integer)
+        Private ReadOnly PendingRemovals As New HashSet(Of Integer)
+        Private ReadOnly AddQueue As New LinkedList(Of SceneElement)
+        Private ReadOnly PendingAdds As New Dictionary(Of SceneElement, LinkedListNode(Of SceneElement))(ReferenceEqualityComparer.Instance)
         Private Property BringToFrontQueue As New List(Of SceneElement)
         Private ReadOnly RenderOrderCache As New List(Of SceneElement)()
         Private RenderOrderDirty As Boolean = True
@@ -747,9 +749,10 @@ Namespace [Shared].Drawing
             ' A tab or container may detach and reattach a live subtree before
             ' the next frame. Its latest attachment cancels the deferred removal.
             Dim registeredIndex As Integer
-            If GUID_INDEX.TryGetValue(Element.GUID, registeredIndex) Then RemoveQueue.RemoveAll(Function(index) index = registeredIndex)
-            If Not AddQueue.Contains(Element) AndAlso Not ContainsElement(Element) Then
-                AddQueue.Add(Element)
+            If GUID_INDEX.TryGetValue(Element.GUID, registeredIndex) Then
+                PendingRemovals.Remove(registeredIndex)
+            ElseIf Not PendingAdds.ContainsKey(Element) Then
+                PendingAdds.Add(Element, AddQueue.AddLast(Element))
             End If
             For Each child As SceneElement In Element.Children
                 QueueElementTree(child)
@@ -764,13 +767,13 @@ Namespace [Shared].Drawing
                 RemoveElement(child)
             Next
             ' Use GUID_INDEX to find the actual z-index in case Element.zIndex is stale
-            If GUID_INDEX.ContainsKey(Element.GUID) Then
-                Dim actualZIndex As Integer = GUID_INDEX(Element.GUID)
+            Dim actualZIndex As Integer
+            If GUID_INDEX.TryGetValue(Element.GUID, actualZIndex) AndAlso PendingRemovals.Add(actualZIndex) Then
                 RemoveQueue.Add(actualZIndex)
             End If
-            ' Also remove from AddQueue if pending
-            If AddQueue.Contains(Element) Then
-                AddQueue.Remove(Element)
+            Dim pending As LinkedListNode(Of SceneElement) = Nothing
+            If PendingAdds.Remove(Element, pending) Then
+                AddQueue.Remove(pending)
             End If
         End Sub
 
@@ -780,17 +783,14 @@ Namespace [Shared].Drawing
 
         Friend Function IsElementAttachedOrQueued(element As SceneElement) As Boolean
             If element Is Nothing OrElse element.IsDisposed Then Return False
-            If AddQueue.Contains(element) Then Return True
+            If PendingAdds.ContainsKey(element) Then Return True
             Dim index As Integer
-            Return GUID_INDEX.TryGetValue(element.GUID, index) AndAlso Not RemoveQueue.Contains(index)
+            Return GUID_INDEX.TryGetValue(element.GUID, index) AndAlso Not PendingRemovals.Contains(index)
         End Function
 
         Public Overloads Function ContainsElement(GUID As String) As Boolean
-            If GUID_INDEX.ContainsKey(GUID) Then
-                Dim zIndex As Integer = GUID_INDEX(GUID)
-                Return I_Elements.ContainsKey(zIndex)
-            End If
-            Return False
+            Dim index As Integer
+            Return GUID_INDEX.TryGetValue(GUID, index) AndAlso I_Elements.ContainsKey(index)
         End Function
 
         Public Overloads Function GetElement(GUID As String) As SceneElement
@@ -1259,8 +1259,9 @@ Namespace [Shared].Drawing
             If AddQueue.Count > 0 Then
                 ' Process all items in the queue
                 While AddQueue.Count > 0
-                    Dim Element As SceneElement = AddQueue(0)
-                    AddQueue.RemoveAt(0)
+                    Dim Element As SceneElement = AddQueue.First.Value
+                    AddQueue.RemoveFirst()
+                    PendingAdds.Remove(Element)
                     If Element.IsDisposed Then Continue While
 
                     ' Generate GUID if missing
@@ -1277,7 +1278,7 @@ Namespace [Shared].Drawing
                     ' local Panel.ZIndex.  The previous implementation replaced
                     ' the imported value here, so z-index could never survive the
                     ' translator and late async content could cover popups.
-                    Dim nextIndex = If(I_Elements.Count = 0, 0, I_Elements.Keys.Max() + 1)
+                    Dim nextIndex = If(I_Elements.Count = 0, 0, I_Elements.Keys(I_Elements.Count - 1) + 1)
                     I_Elements.Add(nextIndex, Element)
                     GUID_INDEX.Add(Element.GUID, nextIndex)
                     InvalidateRenderOrder()
@@ -1289,10 +1290,10 @@ Namespace [Shared].Drawing
             If RemoveQueue.Count > 0 Then
                 For i As Integer = RemoveQueue.Count - 1 To 0 Step -1
                     Dim x As Integer = RemoveQueue(i)
-                    If Not I_Elements.ContainsKey(x) Then
+                    Dim e As SceneElement = Nothing
+                    If Not PendingRemovals.Remove(x) OrElse Not I_Elements.TryGetValue(x, e) Then
                         Continue For
                     End If
-                    Dim e As SceneElement = I_Elements(x)
                     If e.GetType Is GetType(SceneProjectionHost) Then
                         Dim h As SceneProjectionHost = DirectCast(e, SceneProjectionHost)
                         If ContainsProjectionHost(h) Then RemoveProjectionHost(h)
@@ -1302,6 +1303,7 @@ Namespace [Shared].Drawing
                     InvalidateRenderOrder()
                 Next
                 RemoveQueue.Clear()
+                PendingRemovals.Clear()
             End If
             If BringToFrontQueue.Count > 0 Then
                 For Each element In BringToFrontQueue.ToArray()
@@ -1407,6 +1409,11 @@ Namespace [Shared].Drawing
                     Next
                     I_Elements.Clear()
                     GUID_INDEX.Clear()
+                    AddQueue.Clear()
+                    PendingAdds.Clear()
+                    RemoveQueue.Clear()
+                    PendingRemovals.Clear()
+                    BringToFrontQueue.Clear()
 
                     Cursor?.Dispose()
                     CursorBorder?.Dispose()

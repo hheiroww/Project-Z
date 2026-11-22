@@ -34,7 +34,10 @@ try {
     if ($browserRun -notmatch 'WEBVIEW_DEPENDENCY_OK') { throw 'Compatible direct WebView2 SDK pin failed.' }
     Write-Output 'PASS compatible direct WebView2 pin and installed native browser runtime'
     & (Join-Path $PSScriptRoot 'WebViewEvents/Verify.ps1') -SkipRuntime:$SkipRuntime
-    if(!$SkipRuntime) {& (Join-Path $PSScriptRoot 'NativeWindows/Verify.ps1')}
+    if (!$SkipRuntime) {
+        & (Join-Path $PSScriptRoot 'NativeWindows/Verify.ps1')
+        Invoke-Dotnet @('run', '--project', 'tests/WpfImport/Compositor/CompositorFixture.csproj', '-c', 'Release', '-p:GeneratePackageOnBuild=false')
+    }
     Invoke-Dotnet @('run', '--project', 'tests/WpfImport/Dispatcher/Dispatcher.csproj', '-c', 'Release', '-p:GeneratePackageOnBuild=false')
     Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/DispatcherImport/DispatcherImport.csproj', '--output', 'artifacts/wpf-import/dispatcher-import')
     Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/GridImport/GridImport.csproj', '--output', 'artifacts/wpf-import/grid-import')

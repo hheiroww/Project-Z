@@ -20,8 +20,12 @@ public partial class Control : FrameworkElement
     {
         get
         {
-            if(background==null && NativeElement is NativePrimitives.RectangleElement r)
-                Background=r.BackgroundBrush!=null ? Media.GradientBrush.Wrap(r.BackgroundBrush) : new Media.SolidColorBrush(Media.Color.FromNative(r.BackgroundColor));
+            if (background == null && NativeElement is NativePrimitives.RectangleElement rectangle)
+            {
+                background = rectangle.BackgroundBrush is { } gradient ? Media.GradientBrush.Wrap(gradient)
+                    : new Media.SolidColorBrush(Media.Color.FromPremultipliedNative(rectangle.BackgroundColor));
+                TrackBackground();
+            }
             return background;
         }
         set
@@ -30,10 +34,17 @@ public partial class Control : FrameworkElement
             if (NativeElement is not NativePrimitives.RectangleElement rectangle) throw new NotSupportedException("This control has no background surface.");
             if(background!=null) background.PropertyChanged-=BackgroundChanged;
             background=value;
-            if(value!=null) {value.AnimationScene=NativeElement.OwnerScene;value.PropertyChanged+=BackgroundChanged;}
+            TrackBackground();
             ApplyBackground(rectangle);
             Changed(nameof(Background));
         }
+    }
+    void TrackBackground()
+    {
+        if (background == null) return;
+        if (background is Media.GradientBrush gradient) gradient.UseScene(NativeElement.OwnerScene);
+        else background.AnimationScene = NativeElement.OwnerScene;
+        background.PropertyChanged += BackgroundChanged;
     }
     void BackgroundChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args) { if (args.PropertyName == nameof(Media.ImageBrush.ImageSource)) loadedBackgroundImage = null; ApplyBackground((NativePrimitives.RectangleElement)NativeElement); }
     void ApplyBackground(NativePrimitives.RectangleElement rectangle)
@@ -157,33 +168,62 @@ public class Border : Decorator {
         }
     }
 
+    Media.Brush? borderBrush;
+    bool borderBrushInitialized;
     public new Media.Brush? BorderBrush
-{
-    get
     {
-        var nativeColor = ((NativePrimitives.RectangleElement)NativeElement).BorderColor;
-        return new Media.SolidColorBrush(Media.Color.FromNative(nativeColor));
+        get
+        {
+            if (!borderBrushInitialized)
+            {
+                var rectangle = (NativePrimitives.RectangleElement)NativeElement;
+                borderBrush = rectangle.BorderBrush is { } gradient ? Media.GradientBrush.Wrap(gradient)
+                    : new Media.SolidColorBrush(Media.Color.FromNative(rectangle.BorderColor));
+                borderBrushInitialized = true;
+                TrackBorderBrush();
+            }
+            return borderBrush;
+        }
+        set
+        {
+            Dispatcher.VerifyAccess();
+            if (value is not null and not Media.SolidColorBrush and not Media.GradientBrush)
+                throw new NotSupportedException("This border requires a solid or gradient brush.");
+            if (borderBrush != null) borderBrush.PropertyChanged -= BorderBrushChanged;
+            borderBrush = value;
+            borderBrushInitialized = true;
+            TrackBorderBrush();
+            ApplyBorderBrush();
+            Changed(nameof(BorderBrush));
+        }
     }
-    set
+    void TrackBorderBrush()
     {
-        if (value == null)
+        if (borderBrush == null) return;
+        if (borderBrush is Media.GradientBrush gradient) gradient.UseScene(NativeElement.OwnerScene);
+        else borderBrush.AnimationScene = NativeElement.OwnerScene;
+        borderBrush.PropertyChanged += BorderBrushChanged;
+    }
+    void BorderBrushChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args) => ApplyBorderBrush();
+    void ApplyBorderBrush()
+    {
+        var rectangle = (NativePrimitives.RectangleElement)NativeElement;
+        rectangle.BorderBrush = (borderBrush as Media.GradientBrush)?.Native;
+        if (borderBrush is Media.SolidColorBrush solid)
         {
-            ((NativePrimitives.RectangleElement)NativeElement).BorderColor = global::Microsoft.Xna.Framework.Color.Transparent;
+            var color = solid.Color.Native;
+            color.A = (byte)Math.Round(color.A * solid.Opacity);
+            rectangle.BorderColor = color;
         }
-        else if (value is Media.SolidColorBrush brush)
-        {
-            ((NativePrimitives.RectangleElement)NativeElement).BorderColor = brush.Color.Native;
-        }
-        else
-        {
-            throw new NotSupportedException();
-        }
+        else rectangle.BorderColor = global::Microsoft.Xna.Framework.Color.Transparent;
+        rectangle.OwnerScene.RequestRender();
+    }
 
-        var nativeColor = ((NativePrimitives.RectangleElement)NativeElement).BorderColor;
-        MarkupSetter?.Invoke(nameof(BorderBrush), $"#{nativeColor.A:X2}{nativeColor.R:X2}{nativeColor.G:X2}{nativeColor.B:X2}");
-        Changed(nameof(BorderBrush));
+    public override void Dispose()
+    {
+        if (borderBrush != null) borderBrush.PropertyChanged -= BorderBrushChanged;
+        base.Dispose();
     }
-}
 
     Thickness? requestedBorderThickness;
     public new Thickness BorderThickness

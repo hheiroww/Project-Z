@@ -43,7 +43,7 @@ Namespace [Shared].Drawing.Designer
                     Dim wrap = DirectCast(item, WrapPanel)
                     wrap.HorizontalSpacing = 0 : wrap.VerticalSpacing = 0
                 End If
-                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "StackPanel", "WrapPanel", "TabItem"}.Contains(xml.LocalName) Then
+                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "DockPanel", "StackPanel", "WrapPanel", "TabItem"}.Contains(xml.LocalName) Then
                     Dim lastPosition As New Vector2(Single.NaN)
                     Dim lastSize As New Vector2(Single.NaN)
                     Dim lastRevision = -1

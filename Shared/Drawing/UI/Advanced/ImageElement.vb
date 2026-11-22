@@ -239,7 +239,7 @@ Namespace [Shared].Drawing.UI.Advanced
                 End If
                 drawTexture = maskedTexture
             End If
-            spriteBatch.Draw(drawTexture, destination, source, Color.FromNonPremultiplied(ApplyOpacity(Tint).ToVector4()))
+            spriteBatch.Draw(drawTexture, destination, source, ApplyOpacity(Color.FromNonPremultiplied(Tint.ToVector4())))
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)

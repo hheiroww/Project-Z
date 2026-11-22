@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Microsoft.Xna.Framework;
+using Matrix3x2 = System.Numerics.Matrix3x2;
+using RelativePoint = System.Numerics.Vector2;
 using Native = ProjectZ.Shared.Drawing.UI.Primitives;
 
 namespace ProjectZ.WpfCompatibility.Media;
@@ -31,6 +34,41 @@ public abstract class GradientBrush : Brush
     internal Native.XamlGradientBrush Native { get; }
     protected GradientBrush(Native.XamlGradientBrush native) { Native = native; GradientStops = new(native); adapters.Add(native, this); }
     public GradientStopCollection GradientStops { get; }
+    public override Transform? RelativeTransform
+    {
+        get => base.RelativeTransform;
+        set
+        {
+            if (ReferenceEquals(base.RelativeTransform, value)) return;
+            if (base.RelativeTransform is { } previous) previous.PropertyChanged -= UpdateRelativeTransform;
+            base.RelativeTransform = value;
+            if (value != null)
+            {
+                value.AnimationScene = AnimationScene;
+                value.PropertyChanged += UpdateRelativeTransform;
+            }
+            UpdateRelativeTransform(null, null);
+        }
+    }
+    internal void UseScene(global::ProjectZ.Shared.Drawing.Scene scene)
+    {
+        AnimationScene = scene;
+        if (RelativeTransform != null) RelativeTransform.AnimationScene = scene;
+    }
+    void UpdateRelativeTransform(object? sender, PropertyChangedEventArgs? args)
+    {
+        Native.RelativeTransform = RelativeMatrix(RelativeTransform);
+        AnimationScene?.RequestRender();
+        Changed(nameof(RelativeTransform));
+    }
+    static Matrix3x2 RelativeMatrix(Transform? transform) => transform switch
+    {
+        RotateTransform rotate => Matrix3x2.CreateRotation((float)(rotate.Angle * Math.PI / 180), new RelativePoint((float)rotate.CenterX, (float)rotate.CenterY)),
+        ScaleTransform scale => Matrix3x2.CreateScale((float)scale.ScaleX, (float)scale.ScaleY, new RelativePoint((float)scale.CenterX, (float)scale.CenterY)),
+        TranslateTransform translate => Matrix3x2.CreateTranslation((float)translate.X, (float)translate.Y),
+        TransformGroup group => group.Children.Aggregate(Matrix3x2.Identity, (matrix, child) => matrix * RelativeMatrix(child)),
+        _ => Matrix3x2.Identity
+    };
     public override double Opacity { get => Native.Opacity; set { Native.Opacity = (float)value;Changed(nameof(Opacity)); } }
     public BrushMappingMode MappingMode { get => Native.AbsoluteMapping ? BrushMappingMode.Absolute : BrushMappingMode.RelativeToBoundingBox; set => Native.AbsoluteMapping = value == BrushMappingMode.Absolute; }
     public GradientSpreadMethod SpreadMethod { get => Enum.Parse<GradientSpreadMethod>(Native.SpreadMethod); set => Native.SpreadMethod = value.ToString(); }

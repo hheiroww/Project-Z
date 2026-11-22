@@ -139,6 +139,7 @@ public static class XamlLoader
         var scope = owner.NameScope = new(StringComparer.Ordinal);
         owner.ObjectNameScope = new(StringComparer.Ordinal);
         var wrappers = new Dictionary<XElement, FrameworkElement>();
+        var importedTabs = new HashSet<TabControl>();
         foreach (var node in nodes)
         {
             var name = (string)node.Attribute(X + "Name")!;
@@ -185,7 +186,11 @@ public static class XamlLoader
             {
                 var parent = wrappers[parentNode];
                 if (parent is TabItem headerTab && node.Parent?.Name.LocalName == "TabItem.Header") { headerTab.Header = wrapper; parent.LogicalChildren.Add(wrapper); wrapper.Reparent(parent); }
-                else if (parent is TabControl tabs && wrapper is TabItem tab) tabs.Items.Add(tab);
+                else if (parent is TabControl tabs && wrapper is TabItem tab)
+                {
+                    tabs.Items.AddImported(tab);
+                    importedTabs.Add(tabs);
+                }
                 else if (parent is ItemsControl items && wrapper is ListBoxItem) items.Items.Add(wrapper);
                 else if (parent is ContextMenu menu) menu.Items.AddExisting(wrapper);
                 else if (parent is MenuItem menuItem) menuItem.Items.AddExisting(wrapper);
@@ -194,6 +199,7 @@ public static class XamlLoader
                 else { parent.LogicalChildren.Add(wrapper); wrapper.Reparent(parent); }
             }
         }
+        foreach (var tabs in importedTabs) tabs.Items.CompleteImport();
         foreach (var (node, wrapper) in wrappers)
         {
             if (wrapper is Grid namedGrid)

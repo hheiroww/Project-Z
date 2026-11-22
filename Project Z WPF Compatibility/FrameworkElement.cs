@@ -410,8 +410,24 @@ public class FrameworkElement : UIElement
     }
     void ShowToolTip(object? sender, EventArgs args) { toolTipTimer?.Stop(); if (ToolTip == null || IsDisposed) return; visibleToolTip = ToolTip as Controls.ToolTip ?? new Controls.ToolTip { Content = ToolTip }; visibleToolTip.Show(new(NativeElement.Position.X, NativeElement.Position.Y + NativeElement.Size.Y + 4)); }
     protected override void SyncMarkup(string property, object? value) => MarkupSetter?.Invoke(property, value);
-    public double Width { get => NativeElement.Size.X; set { WidthSpecified = !double.IsNaN(value); if (WidthSpecified) NativeElement.Size = new((float)value, NativeElement.Size.Y); SyncMarkup(nameof(Width), value); Changed(nameof(Width)); } }
-    public double Height { get => NativeElement.Size.Y; set { HeightSpecified = !double.IsNaN(value); if (HeightSpecified) NativeElement.Size = new(NativeElement.Size.X, (float)value); SyncMarkup(nameof(Height), value); Changed(nameof(Height)); } }
+    global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize? buttonAutoSize;
+    public double Width { get => NativeElement.Size.X; set { WidthSpecified = !double.IsNaN(value); UpdateButtonAutoSize(); if (WidthSpecified) NativeElement.Size = new((float)value, NativeElement.Size.Y); SyncMarkup(nameof(Width), value); Changed(nameof(Width)); } }
+    public double Height { get => NativeElement.Size.Y; set { HeightSpecified = !double.IsNaN(value); UpdateButtonAutoSize(); if (HeightSpecified) NativeElement.Size = new(NativeElement.Size.X, (float)value); SyncMarkup(nameof(Height), value); Changed(nameof(Height)); } }
+    void UpdateButtonAutoSize()
+    {
+        if (NativeElement is not global::ProjectZ.Shared.Drawing.UI.Input.Button button) return;
+        var initial = buttonAutoSize ??= button.AutoSize;
+        bool width = !WidthSpecified && initial is global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.X or global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.XY;
+        bool height = !HeightSpecified && initial is global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.Y or global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.XY;
+        var desired = (width, height) switch
+        {
+            (true, true) => global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.XY,
+            (true, false) => global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.X,
+            (false, true) => global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.Y,
+            _ => global::ProjectZ.Shared.Drawing.UI.Input.ButtonAutoSize.None
+        };
+        if (button.AutoSize != desired) button.AutoSize = desired;
+    }
     public double ActualWidth => NativeElement.Size.X;
     public double ActualHeight => NativeElement.Size.Y;
     public double MinWidth { get => NativeElement.MinSize.X; set => NativeElement.MinSize = new((float)value, NativeElement.MinSize.Y); }

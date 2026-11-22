@@ -122,9 +122,21 @@ Namespace [Shared].Drawing.Designer
             Return value
         End Function
 
-        Private Function ReadGradientBrush(scope As XmlElement, propertyName As String) As XamlGradientBrush
+        Private Function BrushDeclaration(scope As XmlElement, propertyName As String) As XmlElement
             Dim brushXml = TryCast(scope.SelectSingleNode("*[substring-after(local-name(), '.')='" & propertyName & "']/*"), XmlElement)
-            If brushXml Is Nothing Then brushXml = Resource(scope, scope.GetAttribute(propertyName))
+            Return If(brushXml, Resource(scope, scope.GetAttribute(propertyName)))
+        End Function
+
+        Private Function ReadSolidSurfaceColor(scope As XmlElement, propertyName As String, fallback As Color) As Color
+            Dim color = GetAttributeColor(scope, propertyName, fallback)
+            Dim brush = BrushDeclaration(scope, propertyName)
+            If brush Is Nothing OrElse brush.LocalName <> "SolidColorBrush" Then Return color
+            Dim opacity = Math.Clamp(GetAttributeSingle(brush, "Opacity", 1), 0, 1)
+            Return New Color(color.R, color.G, color.B, CByte(Math.Round(color.A * opacity)))
+        End Function
+
+        Private Function ReadGradientBrush(scope As XmlElement, propertyName As String) As XamlGradientBrush
+            Dim brushXml = BrushDeclaration(scope, propertyName)
             If brushXml Is Nothing OrElse Not {"LinearGradientBrush", "RadialGradientBrush"}.Contains(brushXml.LocalName) Then Return Nothing
             Dim brush As New XamlGradientBrush With {
                 .IsRadial = brushXml.LocalName = "RadialGradientBrush",
