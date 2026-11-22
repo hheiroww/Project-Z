@@ -95,6 +95,14 @@ namespace ProjectZ.WpfCompatibility
         public Window() : this(CreateRoot()) { }
         Window(Root root) : base(root.Element) { surface=root.Surface; previousConstructionScene=root.Previous; Width=Application.Current.StartupOptions.Width; Height=Application.Current.StartupOptions.Height; }
         public IntPtr NativeHandle => surface?.Handle ?? (NativeElement.OwnerScene?.sender() is { } game ? global::ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(game) : IntPtr.Zero);
+        /// <summary>Enable the Project-Z desktop shader on this window's native surface.</summary>
+        public bool TrySetDesktopBackdrop(bool enabled, int captureFramesPerSecond)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(captureFramesPerSecond);
+            if (surface == null) return false;
+            surface.SetDesktopBackdrop(enabled, captureFramesPerSecond);
+            return true;
+        }
         public Microsoft.Xna.Framework.Color[] CaptureFrame() => surface?.CaptureFrame() ?? throw new InvalidOperationException("This window has no native surface.");
         public void SaveFrame(string path) { if(surface==null) throw new InvalidOperationException("This window has no native surface."); surface.SaveFrame(path); }
         string title="";
