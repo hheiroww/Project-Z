@@ -47,6 +47,7 @@ internal sealed class ProjectImporter
     }
     bool AllowedSettingsEdit(string relative, byte[] contents) => previousFiles.TryGetValue(relative, out var file) && file.SettingsStructureHash != null && file.SettingsStructureHash == SettingsStructureHash(relative, contents);
     readonly Dictionary<ProjectId, string> projects = new();
+    readonly HashSet<string> existingReferences = new(StringComparer.OrdinalIgnoreCase);
     string output = "", compatibility = "", codegenDirectory = "";
     string? portableTooling;
     string? rootDirectory;
@@ -111,10 +112,31 @@ internal sealed class ProjectImporter
 
     public static int Run(string[] args)
     {
-        if ((args.Length != 3 && args.Length != 5) || args[1] != "--output" || args.Length == 5 && args[3] != "--root-directory") { Console.Error.WriteLine("Usage: ProjectZ.XamlCodegen import <csproj|vbproj> --output <directory> [--root-directory <folder-name>]"); return 2; }
-        var importer = new ProjectImporter { rootDirectory = args.Length == 5 ? args[4] : null };
+        const string usage = "Usage: ProjectZ.XamlCodegen import <csproj|vbproj> --output <directory> [--root-directory <folder-name>] [--reference-existing <csproj|vbproj>]...";
+        if (args.Length < 3 || args.Length % 2 == 0 || args[1] != "--output")
+        {
+            Console.Error.WriteLine(usage);
+            return 2;
+        }
+
+        var importer = new ProjectImporter();
         try
         {
+            for (int index = 3; index < args.Length; index += 2)
+            {
+                switch (args[index])
+                {
+                    case "--root-directory" when importer.rootDirectory == null:
+                        importer.rootDirectory = args[index + 1];
+                        break;
+                    case "--reference-existing":
+                        importer.existingReferences.Add(Path.GetFullPath(args[index + 1]));
+                        break;
+                    default:
+                        Console.Error.WriteLine(usage);
+                        return 2;
+                }
+            }
             if (!MSBuildLocator.IsRegistered) MSBuildLocator.RegisterDefaults();
             if (importer.rootDirectory is { } folder && (string.IsNullOrWhiteSpace(folder) || folder is "." or ".." || folder.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || Path.IsPathRooted(folder))) throw new ArgumentException("The root directory must be a single valid folder name inside the output directory.");
             return importer.Import(Path.GetFullPath(args[0]), Path.GetFullPath(args[2])).GetAwaiter().GetResult();
@@ -188,13 +210,29 @@ internal sealed class ProjectImporter
         }
         await LoadBuildTargetProjects(workspace);
         root = workspace.CurrentSolution.GetProject(root.Id)!;
-        foreach (var project in root.Solution.Projects)
+        var sourceProjects = root.Solution.Projects.OrderBy(project => project.FilePath, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (existingReferences.Contains(root.FilePath!))
+            throw new ArgumentException("The root project must be imported.");
+        foreach (string reference in existingReferences)
         {
+            if (!sourceProjects.Any(project => string.Equals(project.FilePath, reference, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("The existing reference is not in the source project graph: " + reference);
+        }
+
+        var generatedProjects = sourceProjects.Where(project => !existingReferences.Contains(project.FilePath!)).ToArray();
+        foreach (var project in sourceProjects)
+        {
+            if (existingReferences.Contains(project.FilePath!))
+            {
+                projects[project.Id] = project.FilePath!;
+                continue;
+            }
+
             var key = Path.GetFileNameWithoutExtension(project.FilePath) + "-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(project.FilePath!)))[..8].ToLowerInvariant();
             if (project.Id == root.Id && rootDirectory != null) key = rootDirectory;
             projects[project.Id] = Path.Combine(output, key, Path.GetFileName(project.FilePath)!);
         }
-        foreach (var project in root.Solution.Projects.OrderBy(p => p.FilePath, StringComparer.OrdinalIgnoreCase))
+        foreach (var project in generatedProjects)
         {
             try { await ConvertProject(project); }
             catch (IOException) { throw; }
@@ -202,7 +240,8 @@ internal sealed class ProjectImporter
         }
         // Generated builds are gated by diagnostics. Never report an executable import while unsupported behavior remains.
         Write("ProjectZ.Import.targets", "<Project><Target Name=\"CheckProjectZImport\" BeforeTargets=\"CoreCompile\"><Error Condition=\"'$(ProjectZImportHasErrors)' == 'true'\" Text=\"Project-Z import has unsupported features; see projectz-import.report.json.\" /></Target></Project>");
-        foreach (var project in projects.Values.Where(File.Exists))
+        string[] generatedPaths = generatedProjects.Select(project => projects[project.Id]).Where(File.Exists).ToArray();
+        foreach (var project in generatedPaths)
         {
             var relative = Path.GetRelativePath(output, project);
             var xml = XDocument.Parse(File.ReadAllText(project));
@@ -214,7 +253,7 @@ internal sealed class ProjectImporter
             var result = await Command("dotnet", ["build", projects[root.Id], "-c", "Release", "-m:1", "-nodeReuse:false", "-p:UseSharedCompilation=false", "-p:BuildInParallel=false", "-p:GeneratePackageOnBuild=false", "-p:DeployVst3OnBuild=false", "-p:ProjectZCodegenAlreadyRunning=true", "--nologo", "-v:minimal"]);
             if (result.Code != 0) issues.Add(new("PZI900", input, 1, 1, "Generated compilation failed:\n" + result.Text));
         }
-        if (issues.Count != 0) foreach (var path in projects.Values.Where(File.Exists))
+        if (issues.Count != 0) foreach (var path in generatedPaths)
         {
             var xml = XDocument.Load(path);
             foreach (var flag in xml.Descendants("ProjectZImportHasErrors")) flag.Value = "true";
@@ -248,7 +287,7 @@ internal sealed class ProjectImporter
         }
         File.WriteAllText(manifest, JsonSerializer.Serialize(owned.GroupBy(x => x.Path).Select(g => g.Last()).OrderBy(x => x.Path), JsonOptions));
         foreach (var issue in issues.Distinct().Take(80)) Console.Error.WriteLine($"{issue.File}({issue.Line},{issue.Column}): error {issue.Code}: {issue.Message}");
-        Console.WriteLine($"Project-Z import: {projects.Count} project(s), {issues.Count} diagnostic(s). Report: {Path.Combine(output, "projectz-import.report.json")}");
+        Console.WriteLine($"Project-Z import: {generatedProjects.Length} generated project(s), {existingReferences.Count} existing reference(s), {issues.Count} diagnostic(s). Report: {Path.Combine(output, "projectz-import.report.json")}");
         return issues.Count == 0 ? 0 : 1;
     }
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -258,6 +297,7 @@ internal sealed class ProjectImporter
         while (workspace.CurrentSolution.Projects.FirstOrDefault(p => p.FilePath != null && !seen.Contains(p.FilePath)) is { } project)
         {
             var input = project.FilePath!; seen.Add(input);
+            if (existingReferences.Contains(input)) continue;
             var document = XDocument.Load(input, LoadOptions.SetLineInfo);
             foreach (var task in document.Descendants().Where(n => n.Name.LocalName == "MSBuild" && n.Ancestors().Any(a => a.Name.LocalName == "Target")))
             {

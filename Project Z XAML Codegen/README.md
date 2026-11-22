@@ -20,6 +20,8 @@ dotnet run --project "Project Z XAML Codegen" -c Release -- import "C:\Original\
 
 `--root-directory` is optional. It keeps the generated entry project at a stable folder name when the immutable input snapshot changes location. The importer preserves source files, protects edited or unowned output files, and removes only unchanged output files it previously generated. Compatibility fixes belong in Project-Z; regenerate application output after fixing them.
 
+Use `--reference-existing <project-file>` for a dependency that should build from its original source, such as a non-UI library shared across frontends. Repeat the argument for each dependency to preserve. The generated graph references those project files directly and needs them at build time. The entry project is always translated.
+
 `projectz-import.report.json` contains source-located diagnostics and the generated root project path. `projectz-import.unsupported.txt` groups unsupported features and includes an example location for each. An import with diagnostics keeps the generated build blocked. Successful small fixtures do not establish compatibility for a larger application.
 
 For an existing Project-Z Windows build, select `DesignerAndCodeBehind` and link the original files:
