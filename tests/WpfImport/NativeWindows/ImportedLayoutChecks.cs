@@ -3,6 +3,7 @@ using ProjectZ.WpfCompatibility;
 using ProjectZ.WpfCompatibility.Controls;
 using ProjectZ.WpfCompatibility.Data;
 using ProjectZ.WpfCompatibility.Threading;
+using NativeTextBlock = ProjectZ.Shared.Drawing.UI.Primitives.TextElement;
 
 internal static class ImportedLayoutChecks
 {
@@ -74,6 +75,18 @@ internal static class ImportedLayoutChecks
                 Require(titles.Select(item => item.Text).SequenceEqual(source.Where(item => item.Title.StartsWith("Match", StringComparison.Ordinal)).Select(item => item.Title)) &&
                     titles.All(item => item.ActualWidth > 20 && item.ActualHeight > 8),
                     "filtered native rows retain each bound title and give it a visible header");
+                foreach (var titleLabel in titles)
+                {
+                    var titlePanel = (StackPanel)titleLabel.Parent!;
+                    var titleText = (NativeTextBlock)titleLabel.NativeElement;
+                    var badge = titlePanel.Children[1].NativeElement.Rectangle;
+                    var bounds = titleText.Rectangle;
+                    var desired = titleText.MeasureXamlText(1).X;
+                    titleText.MeasureXamlText(float.MaxValue);
+                    Console.WriteLine($"Imported title: panel {titlePanel.NativeElement.Rectangle}, title {bounds}, badge {badge}, after remeasure {titleText.Rectangle}, intrinsic {desired:F1}");
+                    Require(bounds == titleText.Rectangle && bounds.Right <= badge.Left && badge.Right <= titlePanel.NativeElement.Rectangle.Right,
+                        "trimmable title measurement preserves its arranged width and leaves its badge inside the column");
+                }
                 var pixels = window.CaptureFrame();
                 int width = (int)window.Width;
                 int height = pixels.Length / width;

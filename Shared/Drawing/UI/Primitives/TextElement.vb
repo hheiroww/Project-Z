@@ -116,7 +116,11 @@ Namespace [Shared].Drawing.UI.Primitives
         End Property
 
         Public Function MeasureXamlText(availableWidth As Single) As Vector2
-            MaxWidth = Math.Max(1, availableWidth - Padding.Left - Padding.Right)
+            ' A non-wrapping label uses its arranged box for trimming at draw
+            ' time. Re-measuring it must not restore the untrimmed rectangle.
+            If TextWrapping <> TextWrapping.NoWrap OrElse TextTrimming = TextTrimming.None Then
+                MaxWidth = Math.Max(1, availableWidth - Padding.Left - Padding.Right)
+            End If
             Return Vector2.Min(XamlDesiredSize, MaxSize)
         End Function
 
