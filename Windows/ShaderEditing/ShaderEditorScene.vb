@@ -53,6 +53,7 @@ Namespace Windows.ShaderEditing
         Private viewingSource As Boolean
         Private pendingAction As Action
         Private applyingGraph, applyingSnapshot As String
+        Private applyingDeadline As Long
         Private applyContinuesPrompt, closeAfterSave As Boolean
         Private saveTask As Task(Of (Name As String, Snapshot As String))
         Private saveDestination As String
@@ -336,6 +337,9 @@ Namespace Windows.ShaderEditing
             End While
             If compile IsNot Nothing AndAlso compile.IsCompleted Then FinishCompile()
             Dim now = Stopwatch.GetTimestamp()
+            If applyingGraph IsNot Nothing AndAlso now >= applyingDeadline Then
+                FinishApply(New ShaderGraphReceipt(applyingGraph, "The host did not finish applying the shader. Try applying it again."))
+            End If
             If compile Is Nothing AndAlso pendingRun > 0 AndAlso now >= pendingRun Then StartCompile(pendingRunPublishes)
             If playback.IsRunning AndAlso now >= nextPreview Then
                 nextPreview = now + Stopwatch.Frequency \ 24
@@ -435,17 +439,17 @@ Namespace Windows.ShaderEditing
             workspace.isEnabled = editing
             Find(Of CanvasPanel)("Toolbar").isEnabled = editing
             Find(Of CanvasPanel)("PreviewRail").isEnabled = editing
-            Dim promptReady = writable AndAlso applyingGraph Is Nothing
-            Find(Of Button)("PromptSave").isEnabled = promptReady
-            Find(Of Button)("PromptDiscard").isEnabled = promptReady
-            Find(Of Button)("PromptCancel").isEnabled = promptReady
+            Find(Of Button)("PromptSave").isEnabled = writable AndAlso applyingGraph Is Nothing
+            Find(Of Button)("PromptDiscard").isEnabled = writable
+            Find(Of Button)("PromptCancel").isEnabled = writable
             Find(Of Button)("Run").isEnabled = If(hosted, applyingGraph Is Nothing, compile Is Nothing)
         End Sub
 
         Private Sub CompletePrompt(continueAction As Boolean)
-            If saveTask IsNot Nothing OrElse applyingGraph IsNot Nothing Then Return
+            If saveTask IsNot Nothing Then Return
             Dim action = pendingAction
             pendingAction = Nothing
+            applyContinuesPrompt = False
             prompt.isVisible = False
             RefreshModalState()
             If continueAction Then action?.Invoke()
@@ -461,6 +465,7 @@ Namespace Windows.ShaderEditing
                 End If
                 applyingGraph = graph
                 applyingSnapshot = Snapshot()
+                applyingDeadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 15
                 applyContinuesPrompt = continuePrompt
                 publish(Array.Empty(Of Byte)(), graph)
                 SetStatus("Applying to the clip…")
@@ -476,7 +481,7 @@ Namespace Windows.ShaderEditing
             If applyingGraph Is Nothing OrElse Not String.Equals(applyingGraph, receipt.Graph, StringComparison.Ordinal) Then Return
             Dim snapshotValue = applyingSnapshot
             Dim continuePrompt = applyContinuesPrompt
-            applyingGraph = Nothing : applyingSnapshot = Nothing : applyContinuesPrompt = False
+            applyingGraph = Nothing : applyingSnapshot = Nothing : applyContinuesPrompt = False : applyingDeadline = 0
             RefreshModalState()
             If receipt.Error IsNot Nothing Then
                 SetError("Could not apply graph", receipt.Error)

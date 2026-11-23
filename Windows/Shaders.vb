@@ -37,13 +37,32 @@ Public NotInheritable Class Shaders
         Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, surface:=True)
     End Function
 
+    ''' <summary>Opens the managed video graph editor as a modeless window owned by the host HWND.</summary>
+    Public Shared Function ShowOwnedVideoShaderEditor(graphJson As String, appearance As WindowAppearance, ownerHandle As IntPtr, title As String) As ShaderEditorSession
+        If ownerHandle = IntPtr.Zero Then Throw New ArgumentException("A host window is required.", NameOf(ownerHandle))
+        If graphJson IsNot Nothing AndAlso ShaderDocument.Parse(graphJson).IsSurface Then
+            Throw New IO.InvalidDataException("A video clip shader needs a pixel-effect graph.")
+        End If
+        Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, ownerHandle:=ownerHandle, title:=title)
+    End Function
+
+    ''' <summary>Opens the material editor as a modeless window owned by the host HWND.</summary>
+    Public Shared Function ShowOwnedSurfaceShaderEditor(graphJson As String, appearance As WindowAppearance, ownerHandle As IntPtr, title As String) As ShaderEditorSession
+        If ownerHandle = IntPtr.Zero Then Throw New ArgumentException("A host window is required.", NameOf(ownerHandle))
+        If graphJson IsNot Nothing AndAlso Not ShaderDocument.Parse(graphJson).IsSurface Then
+            Throw New IO.InvalidDataException("A surface needs a material graph.")
+        End If
+        Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, surface:=True, ownerHandle:=ownerHandle, title:=title)
+    End Function
+
     Private Shared Function ShowEditorCore(documentPath As String, graphJson As String, appearance As WindowAppearance,
-                                           Optional hosted As Boolean = False, Optional surface As Boolean = False) As ShaderEditorSession
+                                           Optional hosted As Boolean = False, Optional surface As Boolean = False,
+                                           Optional ownerHandle As IntPtr = Nothing, Optional title As String = Nothing) As ShaderEditorSession
 #If PROJECTZ_OPENGL Then
         Throw New PlatformNotSupportedException("The shader editor requires a DirectX build of Project-Z.")
 #Else
         Dim theme = If(appearance, WindowAppearance.Default)
-        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson, hosted, surface)
+        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson, hosted, surface, ownerHandle.ToInt64(), title)
         Dim handler As EventHandler = Sub(sender, args) host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
         AddHandler theme.Changed, handler
         host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
@@ -56,6 +75,13 @@ Public NotInheritable Class Shaders
     ' Called by the editor worker in its own process. Keep MonoGame's SDL and graphics globals local to that process.
     Private Shared Sub RunEditorWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
                                        shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean)
+        RunOwnedEditorWorker(documentPath, graphJson, appearanceJson, publish, shouldClose, takeReceipt, hosted, surface,
+                             0, Nothing, Sub(handle) Return, Function() False)
+    End Sub
+
+    Private Shared Sub RunOwnedEditorWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
+                                            shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean,
+                                            ownerHandle As Long, title As String, ready As Action(Of Long), takeActivation As Func(Of Boolean))
         If shouldClose() Then Return
         Dim snapshot As String = Nothing
         Dim current As WindowAppearanceSettings = Nothing
@@ -68,7 +94,8 @@ Public NotInheritable Class Shaders
                 End If
                 Return current
             End Function
-        Using game As New ShaderEditorGame(documentPath, graphJson, getAppearance, publish, shouldClose, takeReceipt, hosted, surface)
+        Using game As New ShaderEditorGame(documentPath, graphJson, getAppearance, publish, shouldClose, takeReceipt, hosted, surface,
+                                          New IntPtr(ownerHandle), title, ready, takeActivation)
             game.Run()
         End Using
     End Sub
@@ -87,6 +114,18 @@ Public NotInheritable Class ShaderEditorSession
             Return host.Completion
         End Get
     End Property
+
+    ''' <summary>Gets the visible editor HWND after its first frame. Zero means it is starting or closed.</summary>
+    Public ReadOnly Property WindowHandle As IntPtr
+        Get
+            Return New IntPtr(host.WindowHandle)
+        End Get
+    End Property
+
+    ''' <summary>Restores and activates an existing editor on behalf of a host action.</summary>
+    Public Sub Activate()
+        host.Activate()
+    End Sub
 
     ''' <summary>Consumes the newest successful Run. Call from the application's update or render thread.</summary>
     Public Function TryTakeEffect(ByRef effect As XamlNativeEffect) As Boolean

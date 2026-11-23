@@ -1,4 +1,5 @@
 Imports System.Diagnostics
+Imports System.ComponentModel
 Imports System.Runtime.InteropServices
 Imports Microsoft.Xna.Framework
 Imports Microsoft.Xna.Framework.Graphics
@@ -21,6 +22,10 @@ Namespace Windows.ShaderEditing
         Private ReadOnly shouldClose As Func(Of Boolean)
         Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
         Private ReadOnly hosted, surface As Boolean
+        Private ReadOnly ownerHandle As IntPtr
+        Private ReadOnly ownerProcess As UInteger
+        Private ReadOnly ready As Action(Of Long)
+        Private ReadOnly takeActivation As Func(Of Boolean)
         Private manager As SceneManager
         Private scene As ShaderEditorScene
         Private sprite As SpriteBatch
@@ -30,12 +35,13 @@ Namespace Windows.ShaderEditing
         Private appliedTheme As WindowAppearanceSettings
         Private revision As Long = -1
         Private nextIdleFrame As Long
-        Private frameReady, closing, promptToClose As Boolean
+        Private frameReady, closing, promptToClose, initialized As Boolean
         Private failure As Exception
 
         Friend Sub New(documentPath As String, graphJson As String, getAppearance As Func(Of WindowAppearanceSettings),
                        publish As Action(Of Byte(), String), shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt),
-                       hosted As Boolean, surface As Boolean)
+                       hosted As Boolean, surface As Boolean, ownerHandle As IntPtr, title As String,
+                       ready As Action(Of Long), takeActivation As Func(Of Boolean))
             Me.documentPath = documentPath
             Me.graphJson = graphJson
             Me.getAppearance = getAppearance
@@ -44,13 +50,30 @@ Namespace Windows.ShaderEditing
             Me.takeReceipt = takeReceipt
             Me.hosted = hosted
             Me.surface = surface
+            Me.ready = ready
+            Me.takeActivation = takeActivation
+            If ownerHandle <> IntPtr.Zero Then
+                Me.ownerHandle = GetAncestor(ownerHandle, 2UI) ' GA_ROOT
+                Dim process As UInteger
+                If Me.ownerHandle = IntPtr.Zero OrElse GetWindowThreadProcessId(Me.ownerHandle, process) = 0UI Then
+                    Throw New ArgumentException("The shader editor's host window is no longer available.", NameOf(ownerHandle))
+                End If
+                ownerProcess = process
+            End If
             Window.Title = "Project-Z shader rendering device " & Environment.ProcessId.ToString(Globalization.CultureInfo.InvariantCulture)
             IsFixedTimeStep = False
             InactiveSleepTime = TimeSpan.Zero
             IsMouseVisible = True
-            Dim work = Forms.Screen.PrimaryScreen.WorkingArea
+            Dim display = If(Me.ownerHandle = IntPtr.Zero, Forms.Screen.PrimaryScreen, Forms.Screen.FromHandle(Me.ownerHandle))
+            Dim work = display.WorkingArea
             Dim width = Math.Clamp(work.Width - 80, 1010, 1380), height = Math.Clamp(work.Height - 84, 560, 790)
-            windowSurface = New LayeredSceneWindow("Shader Editor · Project-Z", width, height, 43, 130, 1010, 560)
+            windowSurface = New LayeredSceneWindow(If(String.IsNullOrWhiteSpace(title), "Shader Editor · Project-Z", title), width, height, 43, 130, 1010, 560)
+            If Me.ownerHandle <> IntPtr.Zero Then
+                windowSurface.StartPosition = Forms.FormStartPosition.Manual
+                windowSurface.Location = New Global.System.Drawing.Point(work.Left + Math.Max(0, (work.Width - width) \ 2),
+                                                                           work.Top + Math.Max(0, (work.Height - height) \ 2))
+                windowSurface.ShowInTaskbar = False
+            End If
             graphics = New GraphicsDeviceManager(Me) With {
                 .PreferredBackBufferWidth = width, .PreferredBackBufferHeight = height, .GraphicsProfile = GraphicsProfile.HiDef,
                 .SynchronizeWithVerticalRetrace = False, .PreferMultiSampling = False}
@@ -58,11 +81,9 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Public Shadows Sub Run()
-            Dim unused = windowSurface.Handle
-            RunOneFrame()
-            Dim renderHandle = WindowsComposition.ResolveHwnd(Me)
-            If renderHandle <> IntPtr.Zero Then ShowWindow(renderHandle, 0)
-            ShowFrame()
+            If Not IsOwnerAlive() OrElse shouldClose() Then Return
+            Dim handle = windowSurface.Handle
+            If ownerHandle <> IntPtr.Zero Then BindOwner(handle)
             Using timer As New Forms.Timer With {.Interval = 16}
                 AddHandler timer.Tick, AddressOf FrameTick
                 timer.Start()
@@ -96,14 +117,29 @@ Namespace Windows.ShaderEditing
             Dim timer = DirectCast(sender, Forms.Timer)
             timer.Stop()
             Try
-                If shouldClose() Then closing = True
+                If shouldClose() OrElse Not IsOwnerAlive() Then closing = True
                 If promptToClose Then
                     promptToClose = False
-                    scene.RequestClose()
+                    If scene Is Nothing Then closing = True Else scene.RequestClose()
                 End If
                 If closing Then
                     windowSurface.Close()
                     Return
+                End If
+                If Not initialized Then
+                    ' Enter the form's message loop before starting the device.
+                    ' Do not publish readiness until the first frame is visible.
+                    RunOneFrame()
+                    Dim renderHandle = WindowsComposition.ResolveHwnd(Me)
+                    If renderHandle <> IntPtr.Zero Then ShowWindow(renderHandle, 0)
+                    ShowFrame()
+                    initialized = True
+                    ready(windowSurface.Handle.ToInt64())
+                    Return
+                End If
+                If takeActivation() Then
+                    If windowSurface.WindowState = Forms.FormWindowState.Minimized Then windowSurface.WindowState = Forms.FormWindowState.Normal
+                    windowSurface.Activate()
                 End If
                 If windowSurface.WindowState = Forms.FormWindowState.Minimized Then Return
                 RefreshAppearance()
@@ -118,6 +154,21 @@ Namespace Windows.ShaderEditing
             Finally
                 If Not closing Then timer.Start()
             End Try
+        End Sub
+
+        Private Function IsOwnerAlive() As Boolean
+            If ownerHandle = IntPtr.Zero Then Return True
+            Dim process As UInteger
+            Return GetWindowThreadProcessId(ownerHandle, process) <> 0UI AndAlso ownerProcess = process
+        End Function
+
+        Private Sub BindOwner(handle As IntPtr)
+            Const ownerIndex As Integer = -8 ' GWLP_HWNDPARENT for a top-level window
+            Marshal.SetLastPInvokeError(0)
+            Dim previous = If(IntPtr.Size = 8, SetWindowLongPtr(handle, ownerIndex, ownerHandle),
+                              New IntPtr(SetWindowLong(handle, ownerIndex, ownerHandle.ToInt32())))
+            Dim errorCode = Marshal.GetLastPInvokeError()
+            If previous = IntPtr.Zero AndAlso errorCode <> 0 Then Throw New Win32Exception(errorCode, "Could not attach the shader editor to its host window.")
         End Sub
 
         Private Sub WindowClosing(sender As Object, e As Forms.FormClosingEventArgs)
@@ -202,6 +253,22 @@ Namespace Windows.ShaderEditing
 
         <DllImport("user32.dll")>
         Private Shared Function ShowWindow(hwnd As IntPtr, command As Integer) As Boolean
+        End Function
+
+        <DllImport("user32.dll", ExactSpelling:=True)>
+        Private Shared Function GetAncestor(hwnd As IntPtr, flags As UInteger) As IntPtr
+        End Function
+
+        <DllImport("user32.dll", ExactSpelling:=True)>
+        Private Shared Function GetWindowThreadProcessId(hwnd As IntPtr, ByRef process As UInteger) As UInteger
+        End Function
+
+        <DllImport("user32.dll", EntryPoint:="SetWindowLongPtrW", SetLastError:=True)>
+        Private Shared Function SetWindowLongPtr(hwnd As IntPtr, index As Integer, value As IntPtr) As IntPtr
+        End Function
+
+        <DllImport("user32.dll", EntryPoint:="SetWindowLongW", SetLastError:=True)>
+        Private Shared Function SetWindowLong(hwnd As IntPtr, index As Integer, value As Integer) As Integer
         End Function
     End Class
 End Namespace
