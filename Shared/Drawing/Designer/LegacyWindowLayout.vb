@@ -26,6 +26,9 @@ Namespace [Shared].Drawing.Designer
                 If xml.HasAttribute("Type", "urn:projectz:import") AndAlso item.ImportedMeasure IsNot Nothing Then Continue For
                 item.ImportedMeasure = Function(width) Measure(item, width)
                 AddHandler item.VisibilityChanged, Sub() revision += 1
+                If TypeOf item Is ListBox Then
+                    AddHandler DirectCast(item, ListBox).WrappedItemsExtentChanged, Sub() revision += 1
+                End If
                 item.Padding = ThicknessValue(xml.GetAttribute("Padding"))
                 If TypeOf item Is TextElement Then
                     Dim text = DirectCast(item, TextElement)
@@ -115,12 +118,20 @@ Namespace [Shared].Drawing.Designer
                 Dim naturalWidth = If(label Is Nothing, 80, Math.Max(80, scene.MeasureText(label.Font, label.Text).X + 30))
                 desired = ControlDesired(item, available, naturalWidth, 30)
             ElseIf TypeOf item Is ScrollViewer OrElse TypeOf item Is ListBox Then
-                Dim naturalWidth As Single
+                Dim natural As Vector2
+                Dim viewer = TryCast(item, ScrollViewer)
                 For Each child In VisualChildren(item)
-                    naturalWidth = Math.Max(naturalWidth, Measure(child, available).X)
+                    Dim childSize = Measure(child, available)
+                    natural.X = Math.Max(natural.X, childSize.X)
+                    ' A bounded scroll host should reserve room for wrapped cards in an Auto row.
+                    If viewer IsNot Nothing AndAlso child Is viewer.Content AndAlso TypeOf child Is ListBox AndAlso DirectCast(child, ListBox).WrapItems Then natural.Y = childSize.Y
                 Next
-                desired = New Vector2(If(IsUnconstrained(available), naturalWidth + item.Padding.Left + item.Padding.Right, available),
-                                      item.Padding.Top + item.Padding.Bottom)
+                Dim list = TryCast(item, ListBox)
+                If list IsNot Nothing AndAlso list.WrapItems Then
+                    natural = list.MeasureWrappedItems(available - item.Padding.Left - item.Padding.Right)
+                End If
+                desired = New Vector2(If(IsUnconstrained(available), natural.X + item.Padding.Left + item.Padding.Right, available),
+                                      natural.Y + item.Padding.Top + item.Padding.Bottom)
             ElseIf TypeOf item Is GroupBox Then
                 Dim group = DirectCast(item, GroupBox)
                 Dim contentSize As Vector2

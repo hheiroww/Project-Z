@@ -644,6 +644,7 @@ Namespace [Shared].Drawing.UI.Input
         Public Property ItemsOrientation As Orientation = Orientation.Vertical
         Public Property WrapItems As Boolean
         Public Property ItemWidth As Single = 100.0F
+        Friend Event WrappedItemsExtentChanged()
         Private ReadOnly Property HeaderOffset As Single
             Get
                 Return If(_headerVisual Is Nothing, 0.0F, HeaderHeight)
@@ -651,8 +652,8 @@ Namespace [Shared].Drawing.UI.Input
         End Property
         Private Function ItemLocation(index As Integer) As Vector2
             If WrapItems Then
-                Dim columns = Math.Max(1, CInt(Math.Floor(Size.X / Math.Max(1.0F, ItemWidth))))
-                Return New Vector2((index Mod columns) * ItemWidth, (index \ columns) * _itemHeight)
+                Dim columns = WrappedColumns(Size.X)
+                Return New Vector2((index Mod columns) * WrappedItemWidth(Size.X), (index \ columns) * _itemHeight)
             End If
             If ItemsOrientation = Orientation.Horizontal Then Return New Vector2(index * ItemWidth, 0)
             Dim top As Single
@@ -660,6 +661,21 @@ Namespace [Shared].Drawing.UI.Input
                 top += _itemElements(row).Size.Y
             Next
             Return New Vector2(0, top)
+        End Function
+
+        Private Function WrappedItemWidth(availableWidth As Single) As Single
+            Return Math.Clamp(ItemWidth, 1.0F, Math.Max(1.0F, availableWidth))
+        End Function
+
+        Private Function WrappedColumns(availableWidth As Single) As Integer
+            Return CInt(Math.Clamp(Math.Floor(availableWidth / WrappedItemWidth(availableWidth)), 1.0, CDbl(Math.Max(1, _items.Count))))
+        End Function
+
+        Friend Function MeasureWrappedItems(availableWidth As Single) As Vector2
+            If _items.Count = 0 Then Return Vector2.Zero
+            Dim columns = WrappedColumns(availableWidth)
+            Dim rows = ((_items.Count - 1) \ columns) + 1
+            Return New Vector2(columns * WrappedItemWidth(availableWidth), rows * _itemHeight)
         End Function
         Private ReadOnly Property ContentHeight As Single
             Get
@@ -802,6 +818,7 @@ Namespace [Shared].Drawing.UI.Input
         Public Sub AddItem(item As String)
             _items.Add(item)
             AppendItemVisual(_items.Count - 1)
+            If WrapItems Then RaiseEvent WrappedItemsExtentChanged()
             ' Child insertion invalidates the list. Resolve the whole batch on
             ' the next scene validation instead of remeasuring every prior row.
         End Sub
@@ -842,6 +859,7 @@ Namespace [Shared].Drawing.UI.Input
                 deferredItemLayout -= 1
             End Try
             Invalidate()
+            If WrapItems Then RaiseEvent WrappedItemsExtentChanged()
         End Sub
 
         Private Sub AppendItemVisual(index As Integer)
@@ -886,7 +904,7 @@ Namespace [Shared].Drawing.UI.Input
                 _headerVisual.Size = New Vector2(Size.X, HeaderHeight)
             End If
             Dim top As Single
-            Dim rowWidth = If(WrapItems OrElse ItemsOrientation = Orientation.Horizontal, ItemWidth, Size.X)
+            Dim rowWidth = If(WrapItems, WrappedItemWidth(Size.X), If(ItemsOrientation = Orientation.Horizontal, ItemWidth, Size.X))
             Dim virtualTemplates = HasVirtualTemplates
             Dim attached = Not virtualTemplates OrElse (Scene IsNot Nothing AndAlso Scene.Elements.Contains(Me))
             Dim ancestor = Parent
@@ -920,11 +938,13 @@ Namespace [Shared].Drawing.UI.Input
                     If ReleaseItemVisual IsNot Nothing Then ReleaseItemVisual.Invoke(index, previousView)
                     previousView.Dispose()
                 End If
-                If ItemVisualFactory IsNot Nothing AndAlso Not WrapItems AndAlso ItemsOrientation = Orientation.Vertical AndAlso item.Children.Count > 0 Then
+                If ItemVisualFactory IsNot Nothing AndAlso item.Children.Count > 0 Then
                     Dim view = item.Children(0)
-                    Dim desired = If(view.ImportedMeasure Is Nothing, view.Size, view.ImportedMeasure.Invoke(Math.Max(1, rowWidth)))
-                    If Single.IsFinite(desired.Y) Then height = Math.Max(_itemHeight, desired.Y)
-                    If virtualTemplates Then estimatedTemplateHeight = height
+                    If Not WrapItems AndAlso ItemsOrientation = Orientation.Vertical Then
+                        Dim desired = If(view.ImportedMeasure Is Nothing, view.Size, view.ImportedMeasure.Invoke(Math.Max(1, rowWidth)))
+                        If Single.IsFinite(desired.Y) Then height = Math.Max(_itemHeight, desired.Y)
+                        If virtualTemplates Then estimatedTemplateHeight = height
+                    End If
                     If view.ImportedMeasure IsNot Nothing Then view.Size = New Vector2(rowWidth, height)
                 End If
                 Dim location = If(WrapItems OrElse ItemsOrientation = Orientation.Horizontal, ItemLocation(index), New Vector2(0, top))
