@@ -46,7 +46,7 @@ Namespace [Shared].Drawing.Designer
                     Dim wrap = DirectCast(item, WrapPanel)
                     wrap.HorizontalSpacing = 0 : wrap.VerticalSpacing = 0
                 End If
-                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "DockPanel", "StackPanel", "WrapPanel", "TabItem"}.Contains(xml.LocalName) Then
+                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "DockPanel", "StackPanel", "WrapPanel", "TabItem", "Menu"}.Contains(xml.LocalName) Then
                     Dim lastPosition As New Vector2(Single.NaN)
                     Dim lastSize As New Vector2(Single.NaN)
                     Dim lastRevision = -1
@@ -119,7 +119,8 @@ Namespace [Shared].Drawing.Designer
                 For Each child In VisualChildren(item)
                     naturalWidth = Math.Max(naturalWidth, Measure(child, available).X)
                 Next
-                desired = ControlDesired(item, available, naturalWidth, 0)
+                desired = New Vector2(If(IsUnconstrained(available), naturalWidth + item.Padding.Left + item.Padding.Right, available),
+                                      item.Padding.Top + item.Padding.Bottom)
             ElseIf TypeOf item Is GroupBox Then
                 Dim group = DirectCast(item, GroupBox)
                 Dim contentSize As Vector2
@@ -182,9 +183,10 @@ Namespace [Shared].Drawing.Designer
         End Function
 
         Private Shared Function ControlDesired(item As SceneElement, available As Single, naturalWidth As Single, naturalHeight As Single) As Vector2
-            ' Horizontal stacks measure their children without a width limit.
-            ' That limit is a constraint, never a requested pixel width.
-            Return New Vector2(If(IsUnconstrained(available), naturalWidth + item.Padding.Left + item.Padding.Right, available), naturalHeight + item.Padding.Top + item.Padding.Bottom)
+            ' A docked or aligned control asks for its intrinsic size. The arrange
+            ' pass still fills the available slot when the control stretches.
+            Return New Vector2(Math.Min(available, naturalWidth + item.Padding.Left + item.Padding.Right),
+                               naturalHeight + item.Padding.Top + item.Padding.Bottom)
         End Function
 
         Private Function TrackSizes(item As SceneElement, horizontal As Boolean, width As Single, height As Single, stretch As Boolean) As Single()

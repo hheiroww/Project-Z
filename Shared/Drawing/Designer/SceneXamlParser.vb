@@ -1580,6 +1580,7 @@ End Function
 
         Private Function CreateTabControl(xmlElement As XmlElement) As SceneElement
             Dim tabControl As New TabControl(_scene)
+            tabControl.SizeImportedHeadersToContent = ImportedEventRouting
             tabControl.BackgroundColor = GetAttributeColor(xmlElement, "Background", tabControl.BackgroundColor)
             tabControl.TabHeaderHeight = GetAttributeSingle(xmlElement, "TabHeaderHeight", tabControl.TabHeaderHeight)
 

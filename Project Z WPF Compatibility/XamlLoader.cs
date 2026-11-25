@@ -193,7 +193,12 @@ public static class XamlLoader
                 }
                 else if (parent is ItemsControl items && wrapper is ListBoxItem) items.Items.Add(wrapper);
                 else if (parent is ContextMenu menu) menu.Items.AddExisting(wrapper);
-                else if (parent is MenuItem menuItem) menuItem.Items.AddExisting(wrapper);
+                else if (parent is MenuItem menuItem)
+                {
+                    // Submenu visuals are mounted in the popup when it opens.
+                    menuItem.NativeElement.Children.Remove(native);
+                    menuItem.Items.AddExisting(wrapper);
+                }
                 else if (parent is RichTextBox rich) { rich.Elements.AddExisting(wrapper); ((global::ProjectZ.Shared.Drawing.UI.Input.RichTextBox)rich.NativeElement).Elements.Add(native); }
                 else if (parent is Panel panel) panel.Children.AddExisting(wrapper);
                 else { parent.LogicalChildren.Add(wrapper); wrapper.Reparent(parent); }

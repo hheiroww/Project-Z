@@ -131,9 +131,31 @@ public class MenuItem : Button
     public bool StaysOpenOnClick { get; set; }
     public bool IsHighlighted=>IsMouseOver || IsKeyboardFocused;
     public MenuItem() : this(new Native.MenuItem(Application.Current.ControlScene)) { }
-    internal MenuItem(SceneElement native) : base(native) { menuItems = new(this); Click += (_, _) => { if (IsCheckable) IsChecked = !IsChecked; if (Items.Count > 0) { if (submenu == null) { submenu = new ContextMenu(); foreach (var item in menuItems.ToArray()) { menuItems.Remove(item); submenu.Items.Add(item); } } submenu.PlacementTarget = this; submenu.Placement = Primitives.PlacementMode.Right; submenu.IsOpen = true; } }; }
+    internal MenuItem(SceneElement native) : base(native)
+    {
+        menuItems = new(this);
+        Click += (_, _) => OpenSubmenu();
+    }
     ContextMenu? submenu;
     readonly MenuItemCollection menuItems;
+    void OpenSubmenu()
+    {
+        if (IsCheckable) IsChecked = !IsChecked;
+        if (Items.Count == 0) return;
+        if (submenu == null)
+        {
+            using var construction = Application.Current.ConstructIn(NativeElement.OwnerScene);
+            submenu = new ContextMenu();
+            foreach (var item in menuItems.ToArray())
+            {
+                menuItems.Remove(item);
+                submenu.Items.Add(item);
+            }
+        }
+        submenu.PlacementTarget = this;
+        submenu.Placement = Parent is Menu ? Primitives.PlacementMode.Bottom : Primitives.PlacementMode.Right;
+        submenu.IsOpen = true;
+    }
     public object? Header { get => Content; set => Content = value; }
     public bool IsCheckable { get; set; }
     public bool IsChecked { get; set; }
@@ -146,8 +168,8 @@ public sealed class MenuItemCollection : Collection<FrameworkElement>
     readonly FrameworkElement owner;
     internal MenuItemCollection(FrameworkElement owner) => this.owner = owner;
     public void Add(object item) => base.Add(item as FrameworkElement ?? throw new ArgumentException("A menu item must be a native element."));
-    protected override void InsertItem(int index, FrameworkElement item) { if (item.Parent != null) throw new InvalidOperationException("The menu item already has a parent."); base.InsertItem(index, item); owner.LogicalChildren.Insert(index, item); item.Reparent(owner); if (owner is ContextMenu) { owner.NativeElement.Children.Add(item.NativeElement); Application.Current.ControlScene.AddElement(item.NativeElement); } }
-    protected override void RemoveItem(int index) { var item = this[index]; owner.NativeElement.Children.Remove(item.NativeElement); owner.LogicalChildren.Remove(item); item.Reparent(null); Application.Current.ControlScene.RemoveElement(item.NativeElement); base.RemoveItem(index); }
+    protected override void InsertItem(int index, FrameworkElement item) { if (item.Parent != null) throw new InvalidOperationException("The menu item already has a parent."); base.InsertItem(index, item); owner.LogicalChildren.Insert(index, item); item.Reparent(owner); if (owner is ContextMenu) { owner.NativeElement.Children.Add(item.NativeElement); owner.NativeElement.OwnerScene.AddElement(item.NativeElement); } }
+    protected override void RemoveItem(int index) { var item = this[index]; owner.NativeElement.Children.Remove(item.NativeElement); owner.LogicalChildren.Remove(item); item.Reparent(null); owner.NativeElement.OwnerScene.RemoveElement(item.NativeElement); base.RemoveItem(index); }
     protected override void ClearItems() { while (Count > 0) RemoveAt(Count - 1); }
     protected override void SetItem(int index, FrameworkElement item) { RemoveItem(index); InsertItem(index, item); }
     internal void AddExisting(FrameworkElement item) { Items.Add(item); owner.LogicalChildren.Add(item); item.Reparent(owner); }
@@ -182,10 +204,10 @@ public class ContextMenu : Control
                 if (PlacementTarget != null && Placement == Primitives.PlacementMode.Right) at.X += PlacementTarget.NativeElement.Size.X;
                 NativeElement.Position = at;
                 NativeElement.Size = new((float)Math.Max(160, Items.Select(i => i.Width).DefaultIfEmpty(0).Max()), (float)(Items.Sum(i => Math.Max(24, i.Height)) + 8));
-                Application.Current.ControlScene.AddElement(NativeElement);
+                NativeElement.OwnerScene.AddElement(NativeElement);
             }
             ((Native.ContextMenu)NativeElement).IsOpen = value;
         }
     }
-    public override void Dispose() { Application.Current.ControlScene.RemoveElement(NativeElement); base.Dispose(); }
+    public override void Dispose() { NativeElement.OwnerScene.RemoveElement(NativeElement); base.Dispose(); }
 }

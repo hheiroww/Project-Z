@@ -1,8 +1,10 @@
 #nullable enable
+using System.Runtime.InteropServices;
 using ProjectZ.WpfCompatibility;
 using ProjectZ.WpfCompatibility.Controls;
 using ProjectZ.WpfCompatibility.Data;
 using ProjectZ.WpfCompatibility.Threading;
+using NativeButton = ProjectZ.Shared.Drawing.UI.Input.Button;
 using NativeTextBlock = ProjectZ.Shared.Drawing.UI.Primitives.TextElement;
 
 internal static class ImportedLayoutChecks
@@ -60,6 +62,7 @@ internal static class ImportedLayoutChecks
             var view = CollectionViewSource.GetDefaultView(source);
             results.ItemsSource = view;
             window.Show();
+            var tabsWindow = OpenTabsFixture();
 
             int tick = 0;
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(45) };
@@ -106,11 +109,120 @@ internal static class ImportedLayoutChecks
                 Require(resetBounds.Width > 30 && resetBounds.Right <= toolbarBounds.Right && resetBounds.Right >= actionBounds.Right - 2 &&
                     titleBounds.Right <= actionBounds.Left,
                     $"right-docked actions fit inside the toolbar, leaving the remainder for its title (toolbar {toolbarBounds}, actions {actionBounds}, final button {resetBounds}, title {titleBounds})");
+                CheckImportedTabs(tabsWindow);
+                CheckNativeClientResize(tabsWindow);
+                tabsWindow.Close();
                 window.Close();
             };
             timer.Start();
         }
     }
+
+    private static Window OpenTabsFixture()
+    {
+        var markup = Path.GetFullPath("artifacts/wpf-import/continuation-imported-tabs.xaml");
+        File.WriteAllText(markup, """
+            <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    Title="Imported tabs fixture" Width="400" Height="250" WindowStyle="None" ShowActivated="False">
+                <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Menu Name="MainMenu" HorizontalAlignment="Left">
+                    <MenuItem Name="FileMenu" Header="File" Padding="8,4">
+                        <MenuItem Name="FileOpenMenu" Header="Open Web Chat"/>
+                    </MenuItem>
+                    <MenuItem Name="ViewMenu" Header="View" Padding="8,4">
+                        <MenuItem Header="Diagnostics"/>
+                    </MenuItem>
+                </Menu>
+                <TabControl Name="MainTabs" Grid.Row="1">
+                    <TabItem Header="Diagnostics" Name="DiagnosticsTab">
+                        <Grid Name="DiagnosticsBody">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <DockPanel Name="DirectToolbar">
+                                <Button Name="Refresh" DockPanel.Dock="Right" Content="Refresh" Padding="8,3"/>
+                                <TextBlock Name="DashboardTitle" Text="Workstation diagnostics" Margin="8,2,0,2" FontSize="14"/>
+                            </DockPanel>
+                            <TextBlock Grid.Row="1" Text="Service status" Margin="8"/>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Name="PhoneTab">
+                        <TabItem.Header>
+                            <StackPanel Name="PhoneHeader" Orientation="Horizontal">
+                                <TextBlock Name="PhoneCaption" Text="Link Phone" VerticalAlignment="Center"/>
+                                <Button Name="Reload" Content="↻" Width="24" Height="22" Margin="6,0,4,0"/>
+                                <Button Name="OpenExternal" Content="↗" Width="24" Height="22"/>
+                            </StackPanel>
+                        </TabItem.Header>
+                        <TextBlock Text="Connected phone"/>
+                    </TabItem>
+                    <TabItem Header="Server Management" Name="ServerTab"><TextBlock Text="Server status"/></TabItem>
+                </TabControl>
+                </Grid>
+            </Window>
+            """);
+        var window = new Window();
+        XamlLoader.Initialize(window, markup);
+        window.Show();
+        return window;
+    }
+
+    private static void CheckImportedTabs(Window window)
+    {
+        var fileMenu = (MenuItem)window.FindName("FileMenu")!;
+        var viewMenu = (MenuItem)window.FindName("ViewMenu")!;
+        var nestedMenu = (MenuItem)window.FindName("FileOpenMenu")!;
+        Require(fileMenu.NativeElement.Rectangle.Width > 20 && viewMenu.NativeElement.Rectangle.Width > 20 &&
+            fileMenu.NativeElement.Rectangle.Right <= viewMenu.NativeElement.Rectangle.Left &&
+            nestedMenu.NativeElement.RoutedParent == null && !nestedMenu.NativeElement.OwnerScene.ContainsElement(nestedMenu.NativeElement),
+            "top-level menu captions fit and detached submenu rows do not paint inside them");
+        var tabs = (TabControl)window.FindName("MainTabs")!;
+        var headers = tabs.NativeElement.Children.OfType<NativeButton>().ToArray();
+        var headerContent = ((StackPanel)window.FindName("PhoneHeader")!).NativeElement.Rectangle;
+        var externalButton = ((Button)window.FindName("OpenExternal")!).NativeElement;
+        Require(headers.Length == 3 &&
+            headers[1].Rectangle.Contains(headerContent) && headerContent.Contains(externalButton.Rectangle) &&
+            externalButton.Rectangle.Width == 24 && headers[1].Rectangle.Right <= headers[2].Rectangle.Left,
+            $"compound tab headers arrange their action buttons inside their own slot (slot {headers[1].Rectangle}, content {headerContent}, action {externalButton.Rectangle})");
+        Require(ReferenceEquals(externalButton.OwnerScene.PointToElement(externalButton.Rectangle.Center), externalButton),
+            "tab header action receives input instead of a neighboring tab");
+
+        var refresh = ((Button)window.FindName("Refresh")!).NativeElement.Rectangle;
+        var title = ((TextBlock)window.FindName("DashboardTitle")!).NativeElement.Rectangle;
+        var diagnosticsBody = ((Grid)window.FindName("DiagnosticsBody")!).NativeElement.Rectangle;
+        Require(tabs.SelectedItem == window.FindName("DiagnosticsTab") && diagnosticsBody.Width > 200 &&
+            refresh.Width > 28 && refresh.Width < 100 && title.Width > 100 && title.Right <= refresh.Left,
+            $"selected diagnostics body and direct toolbar title receive space (body {diagnosticsBody}, title {title}, action {refresh})");
+        fileMenu.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Require(nestedMenu.NativeElement.RoutedParent is ProjectZ.Shared.Drawing.UI.Input.ContextMenu popup &&
+            popup.OwnerScene == fileMenu.NativeElement.OwnerScene && popup.Rectangle.Top >= fileMenu.NativeElement.Rectangle.Bottom,
+            "opening a menu mounts its existing children beneath the header in the same native window");
+    }
+
+    private static void CheckNativeClientResize(Window window)
+    {
+        var action = (Button)window.FindName("Refresh")!;
+        var heading = (TextBlock)window.FindName("DashboardTitle")!;
+        var buttonSize = action.NativeElement.Size;
+        var glyphSize = ((NativeTextBlock)heading.NativeElement).MeasureXamlText(float.MaxValue);
+
+        foreach (var (width, height) in new[] { (356, 218), (560, 296) })
+        {
+            SendMessage(window.NativeHandle, 0x231, IntPtr.Zero, IntPtr.Zero); // WM_ENTERSIZEMOVE
+            Require(SetWindowPos(window.NativeHandle, IntPtr.Zero, 0, 0, width, height, 0x16), "native resize reaches the HWND");
+            SendMessage(window.NativeHandle, 0x232, IntPtr.Zero, IntPtr.Zero); // WM_EXITSIZEMOVE
+            var pixels = window.CaptureFrame().Length;
+            Require(GetClientRect(window.NativeHandle, out var client) && client.Right == width && client.Bottom == height &&
+                window.ActualWidth == width && window.ActualHeight == height && pixels == width * height,
+                $"native client size {width}x{height} becomes the layout and backbuffer size (client {client.Right}x{client.Bottom}, layout {window.ActualWidth}x{window.ActualHeight}, frame pixels {pixels})");
+            Require(action.NativeElement.Size == buttonSize && ((NativeTextBlock)heading.NativeElement).MeasureXamlText(float.MaxValue) == glyphSize,
+                "native resizing reflows the available space while preserving the button and glyph dimensions");
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)] private struct Bounds { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr window, out Bounds bounds);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     private sealed record Result(string Title);
 

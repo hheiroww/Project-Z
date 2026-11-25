@@ -970,6 +970,7 @@ Namespace [Shared].Drawing.UI.Input
         Private _tabs As New List(Of TabItem)
         Private _selectedIndex As Integer = -1
         Private _tabHeaderHeight As Single = 32.0F
+        Friend Property SizeImportedHeadersToContent As Boolean
         Private _tabHeaders As New List(Of Button)
         Private _headersByTabIndex As Button() = Array.Empty(Of Button)()
         Private _contentArea As RectangleElement
@@ -1094,7 +1095,14 @@ Namespace [Shared].Drawing.UI.Input
                 header.CornerRadii = New CornerRadii(4, 4, 0, 0)
                 header.AutoSize = ButtonAutoSize.None
                 header.Text = If(_tabs(i).HeaderContent Is Nothing, _tabs(i).Header, String.Empty)
-                If _tabs(i).HeaderContent IsNot Nothing Then header.Children.Add(_tabs(i).HeaderContent)
+                Dim customHeader = _tabs(i).HeaderContent
+                If customHeader IsNot Nothing Then header.Children.Add(customHeader)
+                If SizeImportedHeadersToContent Then
+                    header.TextElement.UseXamlTextLayout = True
+                    header.TextElement.TextTrimming = TextTrimming.CharacterEllipsis
+                    header.TextElement.TextAlignment = HorizontalAlignment.Center
+                    header.ImportedLayout = Sub() ArrangeImportedHeader(header, customHeader)
+                End If
                 header.isEnabled = _tabs(i).IsEnabled
 
                 AddHandler header.MouseLeftClick, Sub(p)
@@ -1125,6 +1133,20 @@ Namespace [Shared].Drawing.UI.Input
         End Sub
 
         Protected Overrides Sub AlignChildren()
+            If SizeImportedHeadersToContent Then
+                ArrangeImportedHeaders()
+            Else
+                ArrangeUniformHeaders()
+            End If
+            _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
+            _contentArea.Size = New Vector2(Size.X, Math.Max(0, Size.Y - _tabHeaderHeight))
+            For Each child In _contentArea.Children
+                child.Position = _contentArea.Position
+                child.Size = _contentArea.Size
+            Next
+        End Sub
+
+        Private Sub ArrangeUniformHeaders()
             Dim tabWidth As Single = If(_tabHeaders.Count = 0, Size.X, Size.X / _tabHeaders.Count)
             For index = 0 To _tabHeaders.Count - 1
                 _tabHeaders(index).Position = New Vector2(Position.X + index * tabWidth, Position.Y)
@@ -1134,12 +1156,48 @@ Namespace [Shared].Drawing.UI.Input
                     child.Position = header.Position + New Vector2(6, 2)
                 Next
             Next
-            _contentArea.Position = New Vector2(Position.X, Position.Y + _tabHeaderHeight)
-            _contentArea.Size = New Vector2(Size.X, Math.Max(0, Size.Y - _tabHeaderHeight))
-            For Each child In _contentArea.Children
-                child.Position = _contentArea.Position
-                child.Size = _contentArea.Size
+        End Sub
+
+        Private Sub ArrangeImportedHeaders()
+            If _tabHeaders.Count = 0 Then Return
+            Dim widths(_tabHeaders.Count - 1) As Single
+            Dim totalWidth As Single
+            For index = 0 To _tabHeaders.Count - 1
+                Dim header = _tabHeaders(index)
+                Dim custom = header.Children.FirstOrDefault(Function(child) child IsNot header.TextElement)
+                Dim desired = MeasureHeader(header, custom)
+                widths(index) = Math.Max(1.0F, desired.X + 12)
+                totalWidth += widths(index)
             Next
+            Dim scale = Math.Min(1.0F, Math.Max(0.0F, Size.X) / totalWidth)
+            Dim left = Position.X
+            For index = 0 To _tabHeaders.Count - 1
+                Dim header = _tabHeaders(index)
+                Dim width = widths(index) * scale
+                header.Position = New Vector2(left, Position.Y)
+                header.Size = New Vector2(width, _tabHeaderHeight)
+                left += width
+            Next
+        End Sub
+
+        Private Function MeasureHeader(header As Button, custom As SceneElement) As Vector2
+            If custom IsNot Nothing Then
+                Return If(custom.ImportedMeasure Is Nothing, custom.Size, custom.ImportedMeasure.Invoke(Single.MaxValue))
+            End If
+            Return Scene.MeasureText(header.Font, header.Text) * header.TextElement.FontScale
+        End Function
+
+        Private Sub ArrangeImportedHeader(header As Button, custom As SceneElement)
+            Const horizontalPadding As Single = 6
+            Const verticalPadding As Single = 2
+            Dim width = Math.Max(0.0F, header.Size.X - horizontalPadding * 2)
+            Dim height = Math.Max(0.0F, header.Size.Y - verticalPadding * 2)
+            Dim child = If(custom, header.TextElement)
+            Dim desired = MeasureHeader(header, custom)
+            Dim childHeight = Math.Min(height, desired.Y)
+            If custom Is Nothing Then header.TextElement.TextWrapping = TextWrapping.NoWrap
+            child.Position = header.Position + New Vector2(horizontalPadding, Math.Max(verticalPadding, (header.Size.Y - childHeight) / 2))
+            child.Size = New Vector2(width, childHeight)
         End Sub
     End Class
 
