@@ -673,6 +673,10 @@ Namespace [Shared].Drawing.UI.Input
         Private _itemElements As New List(Of RectangleElement)
         Private deferredItemLayout As Integer
         Private estimatedTemplateHeight As Single = 24
+        Private templateFrame As Long = Long.MinValue
+        Private templateMilliseconds As Double
+        Private Const TemplateBudgetMilliseconds As Double = 3
+        Private scrollingItemIntoView As Boolean
         Private ReadOnly Property HasVirtualTemplates As Boolean
             Get
                 Return VirtualizeItemTemplates AndAlso ItemVisualFactory IsNot Nothing AndAlso _items.Count > 64 AndAlso Not WrapItems AndAlso ItemsOrientation = Orientation.Vertical
@@ -843,24 +847,22 @@ Namespace [Shared].Drawing.UI.Input
         Private Sub AppendItemVisual(index As Integer)
             deferredItemLayout += 1
             Try
-                Dim itemBg As New RectangleElement(Scene) With {
+                Dim itemBg As New RectangleElement(Scene, newSpritebatch:=False) With {
                     .Position = New Vector2(0, index * _itemHeight),
                     .Size = New Vector2(Size.X, _itemHeight),
                     .BackgroundColor = If(selectedIndices.Contains(index), _selectionColor, Color.Transparent)
                 }
                 itemBg.isEnabled = ItemIsEnabled Is Nothing OrElse ItemIsEnabled(index)
 
-                Dim itemText As New TextElement(Scene) With {
-                    .Text = _items(index),
-                    .ForegroundColor = Color.White,
-                    .Margin = New Thickness(6, 2, 0, 0),
-                    .isMouseBypassEnabled = True
-                }
-
                 If ItemVisualFactory IsNot Nothing Then
                     If Not HasVirtualTemplates Then itemBg.Children.Add(ItemVisualFactory(index))
-                    itemText.Dispose()
                 Else
+                    Dim itemText As New TextElement(Scene, newSpriteBatch:=False) With {
+                        .Text = _items(index),
+                        .ForegroundColor = Color.White,
+                        .Margin = New Thickness(6, 2, 0, 0),
+                        .isMouseBypassEnabled = True
+                    }
                     itemBg.Children.Add(itemText)
                     If ItemAppearance IsNot Nothing Then ItemAppearance.Invoke(index, itemBg, itemText)
                 End If
@@ -892,12 +894,26 @@ Namespace [Shared].Drawing.UI.Input
                 attached = ancestor.isVisible
                 ancestor = ancestor.Parent
             End While
+            If virtualTemplates AndAlso attached Then
+                Dim frame = Scene.gameTime.TotalGameTime.Ticks
+                If templateFrame <> frame Then
+                    templateFrame = frame
+                    templateMilliseconds = 0
+                End If
+            End If
+            Dim pendingTemplates = False
             For index = 0 To _itemElements.Count - 1
                 Dim item = _itemElements(index)
                 Dim height = If(virtualTemplates, Math.Max(_itemHeight, estimatedTemplateHeight), _itemHeight)
                 Dim nearViewport = attached AndAlso top + height >= _scrollOffset - 64 AndAlso top <= _scrollOffset + Size.Y + 64
                 If virtualTemplates AndAlso nearViewport AndAlso item.Children.Count = 0 Then
-                    item.Children.Add(ItemVisualFactory(index))
+                    If scrollingItemIntoView OrElse templateMilliseconds < TemplateBudgetMilliseconds Then
+                        Dim started = Diagnostics.Stopwatch.GetTimestamp()
+                        item.Children.Add(ItemVisualFactory(index))
+                        templateMilliseconds += Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds
+                    Else
+                        pendingTemplates = True
+                    End If
                 ElseIf virtualTemplates AndAlso Not nearViewport AndAlso item.Children.Count > 0 Then
                     Dim previousView = item.Children(0)
                     item.Children.Remove(previousView)
@@ -916,18 +932,26 @@ Namespace [Shared].Drawing.UI.Input
                 item.Size = New Vector2(rowWidth, height)
                 top += height
             Next
+            If pendingTemplates Then Scene.RequestRender()
         End Sub
 
         Public Sub ScrollIntoView(index As Integer)
             If index < 0 OrElse index >= _items.Count Then Throw New ArgumentOutOfRangeException(NameOf(index))
-            AlignChildren()
-            Dim top = ItemLocation(index).Y
-            If top < _scrollOffset Then _scrollOffset = top
-            Dim viewportHeight = Math.Max(0.0F, Size.Y - HeaderOffset)
-            Dim height = If(index < _itemElements.Count, _itemElements(index).Size.Y, _itemHeight)
-            If top + height > _scrollOffset + viewportHeight Then _scrollOffset = top + height - viewportHeight
-            _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, Math.Max(0, ContentHeight - viewportHeight)))
-            AlignChildren()
+            ' Explicit scroll requests rely on both layout passes to measure their destination.
+            Dim wasScrolling = scrollingItemIntoView
+            scrollingItemIntoView = True
+            Try
+                AlignChildren()
+                Dim top = ItemLocation(index).Y
+                If top < _scrollOffset Then _scrollOffset = top
+                Dim viewportHeight = Math.Max(0.0F, Size.Y - HeaderOffset)
+                Dim height = If(index < _itemElements.Count, _itemElements(index).Size.Y, _itemHeight)
+                If top + height > _scrollOffset + viewportHeight Then _scrollOffset = top + height - viewportHeight
+                _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, Math.Max(0, ContentHeight - viewportHeight)))
+                AlignChildren()
+            Finally
+                scrollingItemIntoView = wasScrolling
+            End Try
         End Sub
 
         Private Sub UpdateItemColors()
