@@ -104,7 +104,7 @@ Namespace Windows.ShaderEditing
             scene = New ShaderEditorScene(manager, windowSurface, documentPath, graphJson, publish,
                 Sub() windowSurface.WindowState = Forms.FormWindowState.Minimized,
                 Sub() windowSurface.WindowState = If(windowSurface.WindowState = Forms.FormWindowState.Maximized, Forms.FormWindowState.Normal, Forms.FormWindowState.Maximized),
-                Sub() closing = True, takeReceipt, hosted, surface)
+                Sub() closing = True, takeReceipt, hosted, surface, windowSurface.Text)
             scene.Quality.AntiAliasingSamples = 4
             scene.Quality.PpiPerfectText = True
             manager.AddScene("shader-editor", scene)

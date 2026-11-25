@@ -5,6 +5,14 @@ public sealed record ShaderPreset(string Id, string Name, string Category, strin
 
 public static partial class ShaderPresets
 {
+    /// <summary>Matches every search term across a shader library entry's labels.</summary>
+    public static bool MatchesSearch(string query, params string[] labels)
+    {
+        var terms = string.Concat(query.Select(character => char.IsLetterOrDigit(character) ? character : ' '))
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return terms.All(term => labels.Any(label => label.Contains(term, StringComparison.OrdinalIgnoreCase)));
+    }
+
     public static IReadOnlyList<ShaderPreset> All { get; } = Array.AsReadOnly(
         Materials().Concat(Particles()).Concat(ImageEffects())
             .OrderBy(preset => preset.Category, StringComparer.Ordinal)

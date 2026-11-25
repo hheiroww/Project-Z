@@ -5,6 +5,7 @@ Imports Microsoft.Xna.Framework
 Imports ProjectZ.Shared.Drawing
 Imports ProjectZ.Shared.Drawing.Designer
 Imports ProjectZ.Shared.Drawing.UI
+Imports ProjectZ.Shared.Drawing.UI.Advanced
 Imports ProjectZ.Shared.Drawing.UI.Input
 Imports ProjectZ.Shared.Drawing.UI.Layout
 Imports ProjectZ.Shared.Drawing.UI.Primitives
@@ -101,6 +102,35 @@ Namespace Windows.ShaderEditing
             End If
             For Each child In root.Children
                 ApplyTheme(child, theme)
+            Next
+        End Sub
+
+        Friend Shared Sub DrawCommandSymbol(scene As Scene, button As Button, command As String, ink As Color)
+            Dim paths As Vector2()()
+            Select Case command
+                Case "New"
+                    paths = {New Vector2() {New Vector2(8, 3), New Vector2(8, 13)}, New Vector2() {New Vector2(3, 8), New Vector2(13, 8)}}
+                Case "Open"
+                    paths = {New Vector2() {New Vector2(2, 13), New Vector2(2, 4), New Vector2(7, 4), New Vector2(9, 6), New Vector2(14, 6), New Vector2(14, 13), New Vector2(2, 13)}}
+                Case "Save", "ExportSource"
+                    paths = {New Vector2() {New Vector2(3, 10), New Vector2(3, 14), New Vector2(13, 14), New Vector2(13, 10)},
+                        New Vector2() {New Vector2(8, 2), New Vector2(8, 10), New Vector2(5, 7)}, New Vector2() {New Vector2(8, 10), New Vector2(11, 7)}}
+                Case Else
+                    Dim flip = command = "Redo"
+                    Dim stem As Vector2() = {New Vector2(4, 7), New Vector2(10, 7), New Vector2(13, 10), New Vector2(13, 13)}
+                    Dim head As Vector2() = {New Vector2(7, 4), New Vector2(4, 7), New Vector2(7, 10)}
+                    paths = {stem, head}
+                    If flip Then paths = paths.Select(Function(path) path.Select(Function(point) New Vector2(16 - point.X, point.Y)).ToArray()).ToArray()
+            End Select
+            For Each path In paths
+                For index = 1 To path.Length - 1
+                    Dim a = path(index - 1) + New Vector2(8, 7)
+                    Dim b = path(index) + New Vector2(8, 7)
+                    Dim delta = b - a
+                    Dim perpendicular = New Vector2(-delta.Y, delta.X) / delta.Length()
+                    button.Children.Add(New PolygonElement(scene, {a + perpendicular, b + perpendicular, b - perpendicular, a - perpendicular}) With {
+                        .Size = button.Size, .FillColor = ink, .isMouseBypassEnabled = True})
+                Next
             Next
         End Sub
     End Class

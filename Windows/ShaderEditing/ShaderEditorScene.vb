@@ -40,6 +40,8 @@ Namespace Windows.ShaderEditing
         Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
         Private ReadOnly closeAction As Action
         Private ReadOnly hosted, surface As Boolean
+        Private ReadOnly saveTarget As String
+        Private toolbarHelp As ToolTip
         Private ReadOnly playback As New Stopwatch()
         Private ReadOnly history As New List(Of String)
         Private ReadOnly staging As String = CompilerStagingDirectory()
@@ -75,7 +77,7 @@ Namespace Windows.ShaderEditing
 
         Friend Sub New(manager As SceneManager, owner As Forms.IWin32Window, path As String, graphJson As String,
                        publish As Action(Of Byte(), String), minimize As Action, maximize As Action, close As Action,
-                       takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean)
+                       takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean, title As String)
             MyBase.New(manager)
             Me.owner = owner
             Me.publish = publish
@@ -83,6 +85,7 @@ Namespace Windows.ShaderEditing
             closeAction = close
             Me.hosted = hosted
             Me.surface = surface
+            saveTarget = If(String.IsNullOrWhiteSpace(title) OrElse title = "Shader Editor · Project-Z", "layer", title)
             isCursorVisible = False
             EnableDesignTimeControls = False
             Dim parser As SceneXamlParser = Nothing
@@ -132,13 +135,7 @@ Namespace Windows.ShaderEditing
             AddHandler Find(Of CheckBox)("AutoRun").CheckedChanged, Sub(oldValue, newValue) QueueAutoRun()
             AddHandler OnKeyDown, AddressOf HandleShortcut
             If hosted Then
-                Find(Of Button)("Save").Text = "Export graph"
-                Find(Of Button)("Save").Size = New Vector2(140, 30)
-                Find(Of Button)("Run").Text = "Apply"
-                Find(Of Button)("PromptSave").Text = "Apply"
-                Find(Of TextElement)("PromptMessage").Text = "Apply changes to the clip?"
-                Find(Of CanvasPanel)("Toolbar").SetChildPosition(Find(Of Button)("ExportSource"), New Vector2(284, 6))
-                Find(Of Button)("ExportEffect").isVisible = False
+                SetUpHostedToolbar()
             End If
             MakeCheckerboard()
             ResetImage()
@@ -152,6 +149,55 @@ Namespace Windows.ShaderEditing
 
         Private Sub Bind(name As String, action As Action)
             AddHandler Find(Of Button)(name).MouseLeftClick, Sub(point) action()
+        End Sub
+
+        Private Sub SetUpHostedToolbar()
+            Dim toolbar = Find(Of CanvasPanel)("Toolbar")
+            Find(Of Button)("ExportEffect").isVisible = False
+            toolbarHelp = New ToolTip(Me) With {.zIndex = 10000}
+            AddElement(toolbarHelp)
+            Dim names = {"New", "Open", "Save", "ExportSource", "Undo", "Redo"}
+            Dim help = {"New graph", "Open graph…", "Export graph…", "Export HLSL…", "Undo", "Redo"}
+            Dim inks = {Color.MediumAquamarine, Color.SkyBlue, Color.MediumAquamarine, Color.Khaki, Color.Plum, Color.Plum}
+            For index = 0 To names.Length - 1
+                Dim button = Find(Of Button)(names(index))
+                Dim label = help(index)
+                button.Text = ""
+                button.Size = New Vector2(32, 30)
+                toolbar.SetChildPosition(button, New Vector2(10 + index * 36 + If(index >= 4, 8, 0), 6))
+                ShaderEditorChrome.DrawCommandSymbol(Me, button, names(index), inks(index))
+                BindToolbarHelp(button, label)
+            Next
+            toolbar.SetChildPosition(Find(Of Button)("Simple"), New Vector2(248, 6))
+            toolbar.SetChildPosition(Find(Of Button)("Advanced"), New Vector2(330, 6))
+            toolbar.SetChildPosition(Find(Of Button)("Presets"), New Vector2(440, 6))
+            Find(Of Button)("Presets").Text = "Browse presets"
+            Find(Of Button)("Presets").Size = New Vector2(128, 30)
+            Dim targetButton = Find(Of Button)("Run")
+            Dim targetText As New StringInfo(saveTarget)
+            targetButton.Text = "Save to " & If(targetText.LengthInTextElements > 24, targetText.SubstringByTextElements(0, 23) & "…", saveTarget)
+            targetButton.Size = New Vector2(248, 30)
+            BindToolbarHelp(targetButton, "Save to " & saveTarget)
+            Find(Of Button)("PromptSave").Text = "Save"
+            Find(Of TextElement)("PromptMessage").Text = "Save changes to this layer?"
+            Find(Of TextElement)("Brand").Text = "Shader Editor"
+            Find(Of TextElement)("StandaloneTitle").isVisible = False
+            Find(Of TextElement)("DocumentTitle").TextTrimming = TextTrimming.CharacterEllipsis
+            Find(Of CheckBox)("AutoRun").Content = "Auto preview"
+            Find(Of CheckBox)("AutoRun").Size = New Vector2(112, 24)
+        End Sub
+
+        Private Sub BindToolbarHelp(button As Button, label As String)
+            AddHandler button.MouseEnter, Sub()
+                toolbarHelp.Content = label
+                toolbarHelp.Show(New Vector2(button.Position.X, button.Position.Y + button.Size.Y + 4))
+                RequestRender()
+            End Sub
+            AddHandler button.MouseLeave, Sub()
+                toolbarHelp.Hide()
+                RequestRender()
+            End Sub
+            AddHandler button.MouseLeftDown, Sub(point) toolbarHelp.Hide()
         End Sub
 
         Friend Sub Arrange(width As Integer, height As Integer)
@@ -175,8 +221,13 @@ Namespace Windows.ShaderEditing
             header.SetChildPosition(Find(Of Button)("Minimize"), New Vector2(width - 126, 6))
             header.SetChildPosition(Find(Of Button)("Maximize"), New Vector2(width - 86, 6))
             header.SetChildPosition(Find(Of Button)("Close"), New Vector2(width - 46, 6))
-            toolbar.SetChildPosition(Find(Of CheckBox)("AutoRun"), New Vector2(width - 204, 9))
-            toolbar.SetChildPosition(Find(Of Button)("Run"), New Vector2(width - 100, 6))
+            toolbar.SetChildPosition(Find(Of CheckBox)("AutoRun"), New Vector2(width - If(hosted, 380, 204), 9))
+            toolbar.SetChildPosition(Find(Of Button)("Run"), New Vector2(width - If(hosted, 258, 100), 6))
+            If hosted Then
+                Dim target = Find(Of TextElement)("DocumentTitle")
+                header.SetChildPosition(target, New Vector2(158, 14))
+                target.MaxWidth = Math.Max(1, width - 294)
+            End If
             footer.SetChildPosition(Find(Of TextElement)("Backend"), New Vector2(width - 224, 5))
             Find(Of Textbox)("CompilerPanel").Size = New Vector2(284, Math.Max(42, workHeight - 334))
             RequestRender()
@@ -190,6 +241,10 @@ Namespace Windows.ShaderEditing
             material.ApplyAppearance(settings)
             advanced.ApplyAppearance(settings)
             StylePresetBrowser(settings)
+            If toolbarHelp IsNot Nothing Then
+                toolbarHelp.BackgroundColor = settings.SurfaceColor
+                toolbarHelp.ForegroundColor = settings.TextColor
+            End If
             Find(Of TextElement)("Brand").ForegroundColor = settings.AccentColor
             StyleSelection()
             RequestRender()
@@ -215,7 +270,7 @@ Namespace Windows.ShaderEditing
             image.VisualEffect?.Dispose() : image.VisualEffect = Nothing
             BindDocument()
             UpdateDocument()
-            SetStatus(If(hosted, "Apply to save the graph to the clip.", "Run to compile and preview the graph."))
+            SetStatus(If(hosted, "", "Run to compile and preview the graph."))
             QueueAutoRun()
         End Sub
 
@@ -273,7 +328,7 @@ Namespace Windows.ShaderEditing
             historyIndex = history.Count - 1
             cancellation?.Cancel()
             UpdateDocument()
-            SetStatus(If(hosted, "Graph changed · Apply to update the clip", "Graph changed · Run to update the preview"))
+            SetStatus(If(hosted, "Unsaved changes", "Graph changed · Run to update the preview"))
             QueueAutoRun()
         End Sub
 
@@ -291,7 +346,7 @@ Namespace Windows.ShaderEditing
         End Sub
 
         Private Sub UpdateDocument()
-            Find(Of TextElement)("DocumentTitle").Text = document.Name & If(history(historyIndex) <> saved, " •", "")
+            Find(Of TextElement)("DocumentTitle").Text = If(hosted, saveTarget, document.Name) & If(history(historyIndex) <> saved, " •", "")
             Find(Of Button)("Undo").isEnabled = historyIndex > 0
             Find(Of Button)("Redo").isEnabled = historyIndex < history.Count - 1
             If viewingSource Then ShowCompilerTab(True)
@@ -338,7 +393,7 @@ Namespace Windows.ShaderEditing
             If compile IsNot Nothing AndAlso compile.IsCompleted Then FinishCompile()
             Dim now = Stopwatch.GetTimestamp()
             If applyingGraph IsNot Nothing AndAlso now >= applyingDeadline Then
-                FinishApply(New ShaderGraphReceipt(applyingGraph, "The host did not finish applying the shader. Try applying it again."))
+                FinishApply(New ShaderGraphReceipt(applyingGraph, "The layer did not finish saving the shader. Try saving it again."))
             End If
             If compile Is Nothing AndAlso pendingRun > 0 AndAlso now >= pendingRun Then StartCompile(pendingRunPublishes)
             If playback.IsRunning AndAlso now >= nextPreview Then
@@ -468,12 +523,12 @@ Namespace Windows.ShaderEditing
                 applyingDeadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 15
                 applyContinuesPrompt = continuePrompt
                 publish(Array.Empty(Of Byte)(), graph)
-                SetStatus("Applying to the clip…")
+                SetStatus("Saving to " & saveTarget & "…")
                 RefreshModalState()
                 pendingRunPublishes = False
                 pendingRun = 1
             Catch ex As InvalidDataException
-                SetError("Could not apply graph", ex.Message)
+                SetError("Could not save shader", ex.Message)
             End Try
         End Sub
 
@@ -484,12 +539,12 @@ Namespace Windows.ShaderEditing
             applyingGraph = Nothing : applyingSnapshot = Nothing : applyContinuesPrompt = False : applyingDeadline = 0
             RefreshModalState()
             If receipt.Error IsNot Nothing Then
-                SetError("Could not apply graph", receipt.Error)
+                SetError("Could not save shader", receipt.Error)
                 Return
             End If
             saved = snapshotValue
             UpdateDocument()
-            SetStatus("Applied to the clip")
+            SetStatus("Saved to " & saveTarget)
             If continuePrompt AndAlso history(historyIndex) = saved Then CompletePrompt(True)
         End Sub
 
