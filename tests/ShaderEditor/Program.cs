@@ -65,6 +65,10 @@ if (args.Contains("--desktop", StringComparer.Ordinal))
 
 static async Task CheckPresets(string? compiler, string? staging)
 {
+    Require(ShaderPresets.MatchesSearch("water-clear", "Water", "Clear Pool", "Surface material") &&
+            ShaderPresets.MatchesSearch("SOFT glow", "Soft Glow") &&
+            !ShaderPresets.MatchesSearch("water bloom", "Clear Pool", "Water"),
+        "shader search matches each term across labels and ignores punctuation and case");
     var presets = ShaderPresets.All;
     Require(presets.Count >= 50 && presets.Select(preset => preset.Id).Distinct(StringComparer.Ordinal).Count() == presets.Count,
         "the catalog provides at least 50 presets with distinct identities");

@@ -3,7 +3,7 @@
         Width="1260" Height="740" Background="Transparent">
     <Canvas x:Name="Header" Width="1260" Height="43" Background="#B0102820">
         <TextBlock x:Name="Brand" Canvas.Left="14" Canvas.Top="12" Text="Project-Z" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Canvas.Left="92" Canvas.Top="12" Text="/  Shader Editor" FontSize="16" />
+        <TextBlock x:Name="StandaloneTitle" Canvas.Left="92" Canvas.Top="12" Text="/  Shader Editor" FontSize="16" />
         <TextBlock x:Name="DocumentTitle" Canvas.Left="230" Canvas.Top="14" Width="680" FontSize="13" />
         <Button x:Name="Minimize" Canvas.Left="1134" Canvas.Top="6" Width="36" Height="30" Content="–" />
         <Button x:Name="Maximize" Canvas.Left="1174" Canvas.Top="6" Width="36" Height="30" Content="□" />

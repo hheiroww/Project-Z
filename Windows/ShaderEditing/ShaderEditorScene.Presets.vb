@@ -72,9 +72,7 @@ Namespace Windows.ShaderEditing
             Dim query = presetSearch.Text.Trim()
             Find(Of TextElement)("PresetSearchHint").isVisible = query.Length = 0
             presetMatches = presetCatalog.Where(Function(preset) (category Is Nothing OrElse PresetCategoryName(preset) = category) AndAlso
-                (preset.Name.Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
-                 PresetCategoryName(preset).Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
-                 preset.Description.Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray()
+                ShaderPresets.MatchesSearch(query, preset.Name, preset.Id, PresetCategoryName(preset), preset.Description)).ToArray()
             presetResults.Items = presetMatches.Select(Function(preset) preset.Name & "   ·   " & PresetCategoryName(preset)).ToList()
             presetResults.SelectedIndex = If(presetMatches.Length > 0, 0, -1)
             If presetMatches.Length > 0 Then presetResults.ScrollIntoView(0)
@@ -99,7 +97,7 @@ Namespace Windows.ShaderEditing
             ShowPresetBrowser(False)
             Confirm(Sub()
                         SetDocument(selected.CreateDocument.Invoke(), Nothing, keepSaved:=hosted)
-                        SetStatus("Loaded " & selected.Name & If(hosted, " · Apply to update the clip", ""))
+                        SetStatus("Loaded " & selected.Name)
                         ' Preview a new preset without sending it to the host.
                         pendingRunPublishes = False
                         pendingRun = 1

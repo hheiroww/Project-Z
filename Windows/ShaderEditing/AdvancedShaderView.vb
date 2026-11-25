@@ -149,8 +149,8 @@ Namespace Windows.ShaderEditing
             Dim hint = If(context, contextHint, paletteHint)
             hint.isVisible = search.Text.Length = 0
             Dim query = search.Text.Trim()
-            Dim matches = catalog.Where(Function(node) (node.Label.Contains(query, StringComparison.OrdinalIgnoreCase) OrElse
-                node.Category.Contains(query, StringComparison.OrdinalIgnoreCase)) AndAlso (Not context OrElse graph.CanInsert(node, pendingWire))).ToArray()
+            Dim matches = catalog.Where(Function(node) ShaderPresets.MatchesSearch(query, node.Label, node.Kind, node.Category) AndAlso
+                (Not context OrElse graph.CanInsert(node, pendingWire))).ToArray()
             If context Then
                 contextMatches = matches
             Else
@@ -159,8 +159,10 @@ Namespace Windows.ShaderEditing
             End If
             selectingResult = True
             Try
-                list.Items = matches.Select(Function(node) node.Label).ToList()
+                list.Items = If(matches.Length = 0, New List(Of String) From {"No matching nodes"},
+                                matches.Select(Function(node) node.Label).ToList())
                 list.SelectedIndex = If(matches.Length > 0, 0, -1)
+                list.ScrollIntoView(0)
             Finally
                 selectingResult = False
             End Try
