@@ -153,6 +153,7 @@ Namespace Windows.ShaderEditing
 
         Private Sub SetUpHostedToolbar()
             Dim toolbar = Find(Of CanvasPanel)("Toolbar")
+            Find(Of Button)("ExportEffect").isVisible = False
             toolbarHelp = New ToolTip(Me) With {.zIndex = 10000}
             AddElement(toolbarHelp)
             Dim names = {"New", "Open", "Save", "ExportSource", "Undo", "Redo"}
