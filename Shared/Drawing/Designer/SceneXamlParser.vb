@@ -1640,6 +1640,7 @@ End Function
         Private Function CreateLoadingIndicator(xmlElement As XmlElement) As SceneElement
             Dim indicator As New LoadingIndicator(_scene)
             indicator.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", Color.White)
+            indicator.IsLoading = GetAttributeBoolean(xmlElement, "IsLoading", indicator.IsLoading)
             Return indicator
         End Function
 

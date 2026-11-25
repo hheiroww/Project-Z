@@ -413,17 +413,35 @@ Namespace [Shared].Drawing.UI.Input
         Inherits TextElement
         Private elapsed As Double
         Private frame As Integer
+        Private loading As Boolean = True
+
+        ''' <summary>Shows and animates this indicator while its content is loading.</summary>
+        Public Property IsLoading As Boolean
+            Get
+                Return loading
+            End Get
+            Set(value As Boolean)
+                If loading = value Then Return
+                loading = value
+                isVisible = value
+            End Set
+        End Property
+
         Public Sub New(scene As Scene)
             MyBase.New(scene)
+            isMouseBypassEnabled = True
+            TabStop = False
             Text = "*..."
         End Sub
         Public Overrides Sub Tick(gameTime As GameTime)
             MyBase.Tick(gameTime)
+            If Not loading OrElse Not isVisible Then Return
             elapsed += gameTime.ElapsedGameTime.TotalMilliseconds
             If elapsed >= 140 Then
                 elapsed = 0
                 frame = (frame + 1) Mod 4
                 Text = New String("."c, frame) & "*" & New String("."c, 3 - frame)
+                Scene?.RequestRender()
             End If
         End Sub
     End Class

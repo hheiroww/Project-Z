@@ -95,7 +95,9 @@ Namespace [Shared].Drawing
         Public DrawFPS As Integer = 60
         Public Property EnableFrameProfiling As Boolean
         Public Property EnableDesignTimeControls As Boolean = True
-        Private ReadOnly renderPaths As New Dictionary(Of SceneElement, List(Of SceneElement))
+        Private ReadOnly renderPaths As New Dictionary(Of SceneElement, List(Of SceneElement))(ReferenceEqualityComparer.Instance)
+        Private ReadOnly overlayOrder As New Dictionary(Of SceneElement, Boolean)(ReferenceEqualityComparer.Instance)
+        Private ReadOnly siblingOrder As New Dictionary(Of SceneElement, Integer)(ReferenceEqualityComparer.Instance)
         Public ReadOnly Property LastLayoutMilliseconds As Double
         Public ReadOnly Property LastRenderMilliseconds As Double
         Public ReadOnly Property LastElementTickMilliseconds As Double
@@ -620,7 +622,7 @@ Namespace [Shared].Drawing
             ' Check children (they're on top of the parent)
             ' Sort by z-index descending, then by add order descending
             If element.Children.Count > 0 Then
-                Dim sortedChildren = element.Children.OrderByDescending(Function(x) x.zIndex).ThenByDescending(Function(x) element.Children.IndexOf(x)).ToList()
+                Dim sortedChildren = element.Children.Reverse().OrderByDescending(Function(x) x.zIndex).ToList()
                 For Each child In sortedChildren
                     Dim childHit = HitTestElement(child, p)
                     If childHit IsNot Nothing Then
@@ -680,7 +682,7 @@ Namespace [Shared].Drawing
 
             ' Check children first (they're on top)
             If element.Children.Count > 0 Then
-                Dim sortedChildren = element.Children.OrderByDescending(Function(x) x.zIndex).ThenByDescending(Function(x) element.Children.IndexOf(x)).ToList()
+                Dim sortedChildren = element.Children.Reverse().OrderByDescending(Function(x) x.zIndex).ToList()
                 For Each child In sortedChildren
                     HitTestElementAll(child, p, results)
                 Next
@@ -749,7 +751,7 @@ Namespace [Shared].Drawing
             ' A tab or container may detach and reattach a live subtree before
             ' the next frame. Its latest attachment cancels the deferred removal.
             Dim registeredIndex As Integer
-            If GUID_INDEX.TryGetValue(Element.GUID, registeredIndex) Then
+            If Element.GUID IsNot Nothing AndAlso GUID_INDEX.TryGetValue(Element.GUID, registeredIndex) Then
                 PendingRemovals.Remove(registeredIndex)
             ElseIf Not PendingAdds.ContainsKey(Element) Then
                 PendingAdds.Add(Element, AddQueue.AddLast(Element))
@@ -768,13 +770,12 @@ Namespace [Shared].Drawing
             Next
             ' Use GUID_INDEX to find the actual z-index in case Element.zIndex is stale
             Dim actualZIndex As Integer
-            If GUID_INDEX.TryGetValue(Element.GUID, actualZIndex) AndAlso PendingRemovals.Add(actualZIndex) Then
+            If Element.GUID IsNot Nothing AndAlso GUID_INDEX.TryGetValue(Element.GUID, actualZIndex) AndAlso PendingRemovals.Add(actualZIndex) Then
                 RemoveQueue.Add(actualZIndex)
             End If
-            Dim pending As LinkedListNode(Of SceneElement) = Nothing
-            If PendingAdds.Remove(Element, pending) Then
-                AddQueue.Remove(pending)
-            End If
+            ' Also remove from AddQueue if pending
+            Dim queued As LinkedListNode(Of SceneElement) = Nothing
+            If PendingAdds.Remove(Element, queued) Then AddQueue.Remove(queued)
         End Sub
 
         Public Overloads Function ContainsElement(Element As SceneElement) As Boolean
@@ -783,14 +784,13 @@ Namespace [Shared].Drawing
 
         Friend Function IsElementAttachedOrQueued(element As SceneElement) As Boolean
             If element Is Nothing OrElse element.IsDisposed Then Return False
-            If PendingAdds.ContainsKey(element) Then Return True
             Dim index As Integer
-            Return GUID_INDEX.TryGetValue(element.GUID, index) AndAlso Not PendingRemovals.Contains(index)
+            Return PendingAdds.ContainsKey(element) OrElse
+                   (element.GUID IsNot Nothing AndAlso GUID_INDEX.TryGetValue(element.GUID, index) AndAlso Not PendingRemovals.Contains(index))
         End Function
 
         Public Overloads Function ContainsElement(GUID As String) As Boolean
-            Dim index As Integer
-            Return GUID_INDEX.TryGetValue(GUID, index) AndAlso I_Elements.ContainsKey(index)
+            Return GUID_INDEX.ContainsKey(GUID)
         End Function
 
         Public Overloads Function GetElement(GUID As String) As SceneElement
@@ -849,12 +849,24 @@ Namespace [Shared].Drawing
             If RenderOrderDirty Then
                 RenderOrderCache.Clear()
                 RenderOrderCache.AddRange(I_Elements.Values)
-                renderPaths.Clear()
+                Dim indexedParents As New HashSet(Of SceneElement)(ReferenceEqualityComparer.Instance)
                 For Each element In RenderOrderCache
-                    renderPaths(element) = GetAncestorPath(element)
+                    Dim path = GetAncestorPath(element)
+                    renderPaths.Add(element, path)
+                    overlayOrder.Add(element, path.Any(Function(ancestor) ancestor.IsOverlay))
+                    For Each ancestor In path
+                        Dim parent = ancestor.Parent
+                        If parent Is Nothing OrElse Not indexedParents.Add(parent) Then Continue For
+                        For index = 0 To parent.Children.Count - 1
+                            Dim child = parent.Children(index)
+                            If child IsNot Nothing AndAlso child.Parent Is parent Then siblingOrder.TryAdd(child, index)
+                        Next
+                    Next
                 Next
                 RenderOrderCache.Sort(AddressOf CompareRenderOrder)
                 renderPaths.Clear()
+                overlayOrder.Clear()
+                siblingOrder.Clear()
                 RenderOrderDirty = False
             End If
             Return RenderOrderCache
@@ -874,8 +886,8 @@ Namespace [Shared].Drawing
         Private Function CompareRenderOrder(left As SceneElement, right As SceneElement) As Integer
             If Object.ReferenceEquals(left, right) Then Return 0
 
-            Dim overlayOrder = IsOverlayElement(left).CompareTo(IsOverlayElement(right))
-            If overlayOrder <> 0 Then Return overlayOrder
+            Dim overlayComparison = overlayOrder(left).CompareTo(overlayOrder(right))
+            If overlayComparison <> 0 Then Return overlayComparison
 
             Dim leftPath = renderPaths(left)
             Dim rightPath = renderPaths(right)
@@ -912,9 +924,10 @@ Namespace [Shared].Drawing
             Return path
         End Function
 
-        Private Shared Function GetSiblingOrder(element As SceneElement) As Integer
+        Private Function GetSiblingOrder(element As SceneElement) As Integer
             If element.Parent Is Nothing Then Return 0
-            Return element.Parent.Children.IndexOf(element)
+            Dim index As Integer
+            Return If(siblingOrder.TryGetValue(element, index), index, -1)
         End Function
 
         Private Function GetRegistrationOrder(element As SceneElement) As Integer
@@ -1256,54 +1269,42 @@ Namespace [Shared].Drawing
         End Sub
 
         Private Sub CheckForAddedChildren()
-            If AddQueue.Count > 0 Then
-                ' Process all items in the queue
-                While AddQueue.Count > 0
-                    Dim Element As SceneElement = AddQueue.First.Value
-                    AddQueue.RemoveFirst()
-                    PendingAdds.Remove(Element)
-                    If Element.IsDisposed Then Continue While
+            Dim changed = False
+            While AddQueue.Count > 0
+                Dim element = AddQueue.First.Value
+                AddQueue.RemoveFirst()
+                PendingAdds.Remove(element)
+                If element.IsDisposed Then Continue While
+                If String.IsNullOrEmpty(element.GUID) Then element.GUID = System.Guid.NewGuid.ToString()
+                If GUID_INDEX.ContainsKey(element.GUID) Then Continue While
 
-                    ' Generate GUID if missing
-                    If String.IsNullOrEmpty(Element.GUID) Then
-                        Element.GUID = System.Guid.NewGuid.ToString
-                    End If
-
-                    ' Skip if element already exists
-                    If GUID_INDEX.ContainsKey(Element.GUID) Then
-                        Continue While
-                    End If
-
-                    ' Registration order is intentionally separate from XAML's
-                    ' local Panel.ZIndex.  The previous implementation replaced
-                    ' the imported value here, so z-index could never survive the
-                    ' translator and late async content could cover popups.
-                    Dim nextIndex = If(I_Elements.Count = 0, 0, I_Elements.Keys(I_Elements.Count - 1) + 1)
-                    I_Elements.Add(nextIndex, Element)
-                    GUID_INDEX.Add(Element.GUID, nextIndex)
-                    InvalidateRenderOrder()
-                End While
-            End If
+                ' The keys are already sorted by registration order.
+                Dim nextIndex = If(I_Elements.Count = 0, 0, I_Elements.Keys(I_Elements.Count - 1) + 1)
+                I_Elements.Add(nextIndex, element)
+                GUID_INDEX.Add(element.GUID, nextIndex)
+                changed = True
+            End While
+            If changed Then InvalidateRenderOrder()
         End Sub
 
         Private Sub CheckForRemovedChildren()
             If RemoveQueue.Count > 0 Then
+                Dim changed = False
                 For i As Integer = RemoveQueue.Count - 1 To 0 Step -1
-                    Dim x As Integer = RemoveQueue(i)
+                    Dim index = RemoveQueue(i)
                     Dim e As SceneElement = Nothing
-                    If Not PendingRemovals.Remove(x) OrElse Not I_Elements.TryGetValue(x, e) Then
-                        Continue For
-                    End If
+                    If Not PendingRemovals.Remove(index) OrElse Not I_Elements.TryGetValue(index, e) Then Continue For
                     If e.GetType Is GetType(SceneProjectionHost) Then
                         Dim h As SceneProjectionHost = DirectCast(e, SceneProjectionHost)
                         If ContainsProjectionHost(h) Then RemoveProjectionHost(h)
                     End If
                     GUID_INDEX.Remove(e.GUID)
-                    I_Elements.Remove(x)
-                    InvalidateRenderOrder()
+                    I_Elements.Remove(index)
+                    changed = True
                 Next
                 RemoveQueue.Clear()
                 PendingRemovals.Clear()
+                If changed Then InvalidateRenderOrder()
             End If
             If BringToFrontQueue.Count > 0 Then
                 For Each element In BringToFrontQueue.ToArray()
@@ -1312,15 +1313,6 @@ Namespace [Shared].Drawing
                 BringToFrontQueue.Clear()
             End If
         End Sub
-
-        Private Shared Function IsOverlayElement(element As SceneElement) As Boolean
-            Dim current = element
-            While current IsNot Nothing
-                If current.IsOverlay Then Return True
-                current = current.Parent
-            End While
-            Return False
-        End Function
 
         Public Overridable Sub Tick(gameTime As GameTime)
             ' Initialize's GameTime is not necessarily the object supplied on
@@ -1399,10 +1391,18 @@ Namespace [Shared].Drawing
 
 #Region "IDisposable Support"
         Private disposedValue As Boolean
+        Friend Event Disposed()
+        Friend ReadOnly Property IsDisposed As Boolean
+            Get
+                Return disposedValue
+            End Get
+        End Property
 
         Protected Overridable Sub Dispose(disposing As Boolean)
             If Not disposedValue Then
+                disposedValue = True
                 If disposing Then
+                    RaiseEvent Disposed()
                     ' Dispose managed resources
                     For Each element In I_Elements.Values
                         element.Dispose()
@@ -1414,6 +1414,7 @@ Namespace [Shared].Drawing
                     RemoveQueue.Clear()
                     PendingRemovals.Clear()
                     BringToFrontQueue.Clear()
+                    RenderOrderCache.Clear()
 
                     Cursor?.Dispose()
                     CursorBorder?.Dispose()
@@ -1434,7 +1435,6 @@ Namespace [Shared].Drawing
                     WhitePlain?.Dispose()
                     _scissorRasterizerState?.Dispose()
                 End If
-                disposedValue = True
             End If
         End Sub
 
