@@ -1118,6 +1118,8 @@ Namespace [Shared].Drawing.UI.Input
                 Dim customHeader = _tabs(i).HeaderContent
                 If customHeader IsNot Nothing Then header.Children.Add(customHeader)
                 If SizeImportedHeadersToContent Then
+                    ' The header layout supplies the insets around the caption.
+                    header.TextElement.Padding = New Thickness(0)
                     header.TextElement.UseXamlTextLayout = True
                     header.TextElement.TextTrimming = TextTrimming.CharacterEllipsis
                     header.TextElement.TextAlignment = HorizontalAlignment.Center

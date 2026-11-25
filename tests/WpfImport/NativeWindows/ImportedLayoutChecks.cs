@@ -123,7 +123,7 @@ internal static class ImportedLayoutChecks
         var markup = Path.GetFullPath("artifacts/wpf-import/continuation-imported-tabs.xaml");
         File.WriteAllText(markup, """
             <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    Title="Imported tabs fixture" Width="400" Height="250" WindowStyle="None" ShowActivated="False">
+                    Title="Imported tabs fixture" Width="640" Height="250" WindowStyle="None" ShowActivated="False">
                 <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Menu Name="MainMenu" HorizontalAlignment="Left">
@@ -156,6 +156,8 @@ internal static class ImportedLayoutChecks
                         <TextBlock Text="Connected phone"/>
                     </TabItem>
                     <TabItem Header="Server Management" Name="ServerTab"><TextBlock Text="Server status"/></TabItem>
+                    <TabItem Header="Models"><TextBlock Text="Local catalog"/></TabItem>
+                    <TabItem Header="GPU"><TextBlock Text="Adapters"/></TabItem>
                 </TabControl>
                 </Grid>
             </Window>
@@ -179,12 +181,13 @@ internal static class ImportedLayoutChecks
         var headers = tabs.NativeElement.Children.OfType<NativeButton>().ToArray();
         var headerContent = ((StackPanel)window.FindName("PhoneHeader")!).NativeElement.Rectangle;
         var externalButton = ((Button)window.FindName("OpenExternal")!).NativeElement;
-        Require(headers.Length == 3 &&
+        Require(headers.Length == 5 &&
             headers[1].Rectangle.Contains(headerContent) && headerContent.Contains(externalButton.Rectangle) &&
             externalButton.Rectangle.Width == 24 && headers[1].Rectangle.Right <= headers[2].Rectangle.Left,
             $"compound tab headers arrange their action buttons inside their own slot (slot {headers[1].Rectangle}, content {headerContent}, action {externalButton.Rectangle})");
         Require(ReferenceEquals(externalButton.OwnerScene.PointToElement(externalButton.Rectangle.Center), externalButton),
             "tab header action receives input instead of a neighboring tab");
+        CheckPlainTabCaptions(window, headers);
 
         var refresh = ((Button)window.FindName("Refresh")!).NativeElement.Rectangle;
         var title = ((TextBlock)window.FindName("DashboardTitle")!).NativeElement.Rectangle;
@@ -196,6 +199,25 @@ internal static class ImportedLayoutChecks
         Require(nestedMenu.NativeElement.RoutedParent is ProjectZ.Shared.Drawing.UI.Input.ContextMenu popup &&
             popup.OwnerScene == fileMenu.NativeElement.OwnerScene && popup.Rectangle.Top >= fileMenu.NativeElement.Rectangle.Bottom,
             "opening a menu mounts its existing children beneath the header in the same native window");
+    }
+
+    private static void CheckPlainTabCaptions(Window window, NativeButton[] headers)
+    {
+        var pixels = window.CaptureFrame();
+        var width = (int)window.ActualWidth;
+        var height = pixels.Length / width;
+        foreach (var header in headers.Where(header => header.Text.Length > 0))
+        {
+            var label = header.Children.OfType<NativeTextBlock>().Single();
+            var bounds = header.Rectangle;
+            int glyphPixels = 0;
+            for (int y = Math.Max(0, bounds.Top + 3); y < Math.Min(height, bounds.Bottom - 3); y++)
+                for (int x = Math.Max(0, bounds.Left + 3); x < Math.Min(width, bounds.Right - 3); x++)
+                    if (pixels[y * width + x] is { R: > 165, G: > 165, B: > 165 })
+                        glyphPixels++;
+            Console.WriteLine($"Caption {header.Text}: pixels {glyphPixels}, slot {bounds}, label {label.Rectangle}, natural {label.MeasureXamlText(float.MaxValue)}, registered {label.OwnerScene.ContainsElement(label)}, color {label.ForegroundColor}");
+            Require(glyphPixels > 10, $"plain tab caption {header.Text} renders visible glyphs");
+        }
     }
 
     private static void CheckNativeClientResize(Window window)
