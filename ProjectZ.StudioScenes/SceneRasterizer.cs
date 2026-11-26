@@ -27,6 +27,7 @@ internal sealed class SceneRasterizer
     private TerrainFog _fog;
     private int _width;
     private int _height;
+    private bool _highQuality;
     private int[] _pixels = [];
     private float[] _depth = [];
     private const int MaximumCachedTerrainPixels = 2073600;
@@ -37,6 +38,7 @@ internal sealed class SceneRasterizer
     private StudioSky? _cachedSky;
     private Matrix4x4 _cachedCamera;
     private TerrainFog _cachedFog;
+    private bool _cachedHighQuality;
     private (int Width, int Height) _cachedSize;
     private int[] _cachedPixels = [];
     private float[] _cachedDepth = [];
@@ -46,12 +48,14 @@ internal sealed class SceneRasterizer
     private readonly record struct ClipVertex(Vector4 Position, Vector2 UV, Vector4 Tint);
     private readonly record struct PixelVertex(float X, float Y, float Depth, float ReciprocalW, Vector2 UV, Vector4 Tint);
 
-    internal void Begin(int width, int height, Matrix4x4 camera, StudioSky sky, TerrainGeometry? terrain, TerrainFog fog)
+    internal void Begin(int width, int height, Matrix4x4 camera, StudioSky sky, TerrainGeometry? terrain, TerrainFog fog,
+        bool highQuality)
     {
         _width = width;
         _height = height;
         _camera = camera;
         _fog = fog;
+        _highQuality = highQuality;
         var count = checked(width * height);
         if (count != _pixels.Length)
         {
@@ -59,7 +63,8 @@ internal sealed class SceneRasterizer
             _depth = new float[count];
         }
         if (terrain is not null && ReferenceEquals(terrain, _cachedTerrain) && sky == _cachedSky &&
-            camera == _cachedCamera && fog == _cachedFog && _cachedSize == (width, height))
+            camera == _cachedCamera && fog == _cachedFog && _cachedSize == (width, height) &&
+            highQuality == _cachedHighQuality)
         {
             _cachedPixels.CopyTo(_pixels, 0);
             _cachedDepth.CopyTo(_depth, 0);
@@ -99,6 +104,7 @@ internal sealed class SceneRasterizer
         _cachedCamera = camera;
         _cachedFog = fog;
         _cachedSize = (width, height);
+        _cachedHighQuality = highQuality;
     }
 
     internal void Release()
@@ -224,6 +230,13 @@ internal sealed class SceneRasterizer
         var rowA = Edge(left + .5f, top + .5f, b, c) * oneOver;
         var rowB = Edge(left + .5f, top + .5f, c, a) * oneOver;
         var rowC = Edge(left + .5f, top + .5f, a, b) * oneOver;
+        var textureA = a.UV * a.ReciprocalW;
+        var textureB = b.UV * b.ReciprocalW;
+        var textureC = c.UV * c.ReciprocalW;
+        var dx = textureA * stepA + textureB * stepB + textureC * stepC;
+        var dy = textureA * deltaA + textureB * deltaB + textureC * deltaC;
+        var dwx = a.ReciprocalW * stepA + b.ReciprocalW * stepB + c.ReciprocalW * stepC;
+        var dwy = a.ReciprocalW * deltaA + b.ReciprocalW * deltaB + c.ReciprocalW * deltaC;
         for (var y = top; y <= bottom; y++)
         {
             var wA = rowA;
@@ -242,7 +255,12 @@ internal sealed class SceneRasterizer
                         var pC = wC * c.ReciprocalW;
                         var inverse = 1f / (pA + pB + pC);
                         var color = (a.Tint * pA + b.Tint * pB + c.Tint * pC) * inverse;
-                        if (texture is not null)
+                        if (texture is not null && _highQuality)
+                        {
+                            var uv = (textureA * wA + textureB * wB + textureC * wC) * inverse;
+                            color *= texture.Sample(uv, (dx - uv * dwx) * inverse, (dy - uv * dwy) * inverse);
+                        }
+                        else if (texture is not null)
                             color *= texture.Sample((a.UV * pA + b.UV * pB + c.UV * pC) * inverse);
                         if (color.W > 1f / 255f)
                         {

@@ -30,14 +30,20 @@ public sealed class ProjectZCanvas : IDisposable
         _draw = draw ?? throw new ArgumentNullException(nameof(draw));
 
     /// <summary>The returned pixels are valid until the next render or disposal.</summary>
-    public ReadOnlySpan<int> Render(int width, int height)
+    public ReadOnlySpan<int> Render(int width, int height) => Render(width, height, 1);
+
+    /// <summary>Renders at an integer multiple of the logical viewport for high-resolution captures.</summary>
+    public ReadOnlySpan<int> Render(int width, int height, int scale)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         VerifyThread();
-        if (width is <= 0 or > 4096 || height is <= 0 or > 4096 || (long)width * height > 8_388_608)
+        if (scale is < 1 or > 4)
+            throw new ArgumentOutOfRangeException(nameof(scale));
+        if (width <= 0 || height <= 0 || width > 4096 / scale || height > 4096 / scale ||
+            (long)width * height * scale * scale > 8_388_608)
             throw new ArgumentOutOfRangeException(nameof(width), "Use a viewport up to 4,096 pixels per side and 8,388,608 pixels total.");
         _game ??= new CanvasGame(_draw, CanvasGame.GetForegroundWindow());
-        return _game.Render(width, height);
+        return _game.Render(width, height, scale);
     }
 
     public void Dispose()
@@ -66,6 +72,7 @@ public sealed class ProjectZCanvas : IDisposable
         private int[] _pixels = [];
         private int _width;
         private int _height;
+        private int _scale;
         private bool _started;
 
         public CanvasGame(Action<ProjectZPainter> draw, nint foregroundBeforeConstruction)
@@ -87,10 +94,11 @@ public sealed class ProjectZCanvas : IDisposable
             };
         }
 
-        public ReadOnlySpan<int> Render(int width, int height)
+        public ReadOnlySpan<int> Render(int width, int height, int scale)
         {
-            _width = width;
-            _height = height;
+            _width = width * scale;
+            _height = height * scale;
+            _scale = scale;
             if (_started)
             {
                 Tick();
@@ -154,6 +162,7 @@ public sealed class ProjectZCanvas : IDisposable
             }
 
             _manager.ExternalViewportSize = new Point(_width, _height);
+            _painter!.Scale = _scale;
             GraphicsDevice.SetRenderTarget(_target);
             try
             {
@@ -286,6 +295,13 @@ public sealed class ProjectZPainter
     private readonly SpriteBatch _sprites;
     private readonly Texture2D _pixel;
     private readonly BasicEffect _geometry;
+    private readonly SamplerState _captureSampler = new()
+    {
+        Filter = TextureFilter.Anisotropic,
+        AddressU = TextureAddressMode.Clamp,
+        AddressV = TextureAddressMode.Clamp,
+        MaxAnisotropy = 16
+    };
     private readonly VertexPositionColor[] _triangles = new VertexPositionColor[144];
     private readonly List<ImageSlot> _images = [];
     private readonly VectorFont[] _fonts =
@@ -306,8 +322,9 @@ public sealed class ProjectZPainter
         _geometry = new BasicEffect(device) { VertexColorEnabled = true, LightingEnabled = false };
     }
 
-    public int Width => _device.Viewport.Width;
-    public int Height => _device.Viewport.Height;
+    internal int Scale { get; set; } = 1;
+    public int Width => _device.Viewport.Width / Scale;
+    public int Height => _device.Viewport.Height / Scale;
 
     internal void Begin() => _nextImage = 0;
     internal void End() => Flush();
@@ -343,7 +360,7 @@ public sealed class ProjectZPainter
         var font = Font(style);
         if (align != 0)
             x -= font.Measure(text).X * (float)Math.Clamp(align, 0, 1);
-        font.Draw(_device, text, new Vector2(x, y), color, Vector2.Zero, 1);
+        font.Draw(_device, text, new Vector2(x * Scale, y * Scale), color, Vector2.Zero, Scale);
     }
 
     public void Image(ReadOnlySpan<int> pixels, int sourceWidth, int sourceHeight, Rectangle target)
@@ -456,8 +473,8 @@ public sealed class ProjectZPainter
     private void StartBatch()
     {
         if (_batch) return;
-        _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            DepthStencilState.None, RasterizerState.CullNone);
+        _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, Scale == 1 ? SamplerState.LinearClamp : _captureSampler,
+            DepthStencilState.None, RasterizerState.CullNone, transformMatrix: Matrix.CreateScale(Scale));
         _batch = true;
     }
 
@@ -481,6 +498,7 @@ public sealed class ProjectZPainter
         foreach (var font in _fonts)
             font.Dispose();
         _geometry.Dispose();
+        _captureSampler.Dispose();
         _pixel.Dispose();
     }
 }

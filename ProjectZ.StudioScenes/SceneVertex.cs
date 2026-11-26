@@ -6,6 +6,69 @@ internal readonly record struct SceneVertex(Vector3 Position, Vector3 Normal, Ve
 
 internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool ClampEdges = false)
 {
+    private MeshTexture[]? _mipmaps;
+
+    internal Vector4 Sample(Vector2 uv, Vector2 dx, Vector2 dy)
+    {
+        var size = new Vector2(Width, Height);
+        var texelsX = dx * size;
+        var texelsY = dy * size;
+        var xx = texelsX.LengthSquared();
+        var yy = texelsY.LengthSquared();
+        var xy = Vector2.Dot(texelsX, texelsY);
+        var difference = MathF.Sqrt((xx - yy) * (xx - yy) + 4 * xy * xy);
+        var major = MathF.Sqrt(.5f * (xx + yy + difference));
+        if (!float.IsFinite(major) || major <= 1)
+            return Sample(uv);
+
+        const int maxAnisotropy = 16;
+        var minor = MathF.Sqrt(MathF.Max(0, .5f * (xx + yy - difference)));
+        var width = MathF.Max(1, MathF.Max(minor, major / maxAnisotropy));
+        var count = Math.Clamp((int)MathF.Ceiling(major / width), 1, maxAnisotropy);
+        var angle = .5f * MathF.Atan2(2 * xy, xx - yy);
+        var axis = dx * MathF.Cos(angle) + dy * MathF.Sin(angle);
+        var levels = _mipmaps ??= BuildMipmaps();
+        var lod = Math.Clamp(MathF.Log2(width), 0, levels.Length - 1);
+        var first = (int)lod;
+        var second = Math.Min(levels.Length - 1, first + 1);
+        var sum = Vector4.Zero;
+        for (var tap = 0; tap < count; tap++)
+        {
+            var point = uv + axis * ((tap + .5f) / count - .5f);
+            var color = levels[first].Sample(point);
+            if (second != first && lod > first)
+                color = Vector4.Lerp(color, levels[second].Sample(point), lod - first);
+            sum += color;
+        }
+        return sum / count;
+    }
+
+    private MeshTexture[] BuildMipmaps()
+    {
+        var levels = new List<MeshTexture> { this };
+        while (levels[^1] is { } source && (source.Width > 1 || source.Height > 1))
+        {
+            var width = (source.Width + 1) / 2;
+            var height = (source.Height + 1) / 2;
+            var pixels = new int[width * height];
+            for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var left = x * 2;
+                var top = y * 2;
+                var right = Math.Min(source.Width - 1, left + 1);
+                var bottom = Math.Min(source.Height - 1, top + 1);
+                var color = StudioColor.Decode(source.Pixels[top * source.Width + left]) +
+                            StudioColor.Decode(source.Pixels[top * source.Width + right]) +
+                            StudioColor.Decode(source.Pixels[bottom * source.Width + left]) +
+                            StudioColor.Decode(source.Pixels[bottom * source.Width + right]);
+                pixels[y * width + x] = StudioColor.EncodeStraight(color * .25f);
+            }
+            levels.Add(new MeshTexture(width, height, pixels, ClampEdges));
+        }
+        return levels.ToArray();
+    }
+
     internal Vector4 Sample(Vector2 uv)
     {
         if (!float.IsFinite(uv.X) || !float.IsFinite(uv.Y))

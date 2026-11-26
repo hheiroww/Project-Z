@@ -5,7 +5,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Shared portable model and terrain scenes for Project-Z applications.</Description>
   </PropertyGroup>

@@ -134,6 +134,15 @@ internal static class Program
         material.Terrain.Material.ApplyAltitudePreset(StudioTerrainAltitudePreset.Alpine);
         var alpine = renderer.CopyFrame(Width, Height, 0, material);
         Require(!first.AsSpan().SequenceEqual(alpine), "The procedural material was not applied.");
+        var minified = material.Copy();
+        minified.Terrain.Material.TextureResolution = 512;
+        var unfiltered = renderer.CopyFrame(64, 40, 0, minified);
+        var filtered = renderer.Render(64, 40, 0, minified, default, default, highQuality: true).ToArray();
+        Require(!filtered.AsSpan().SequenceEqual(unfiltered), "Anisotropic texture filtering did not affect minified terrain.");
+        Require(CheckAlpha(filtered, 64, 40, "filtered") == CheckAlpha(unfiltered, 64, 40, "unfiltered"),
+            "Texture filtering changed the terrain silhouette.");
+        Require(unfiltered.AsSpan().SequenceEqual(renderer.Render(64, 40, 0, minified)),
+            "A high quality capture changed the next ordinary frame.");
         material.Terrain.Material.SnowEnabled = false;
         var noSnow = renderer.CopyFrame(Width, Height, 0, material);
         Require(!alpine.AsSpan().SequenceEqual(noSnow), "The alpine snow control did not change the terrain.");

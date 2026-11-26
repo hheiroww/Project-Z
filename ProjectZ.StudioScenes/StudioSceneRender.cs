@@ -37,7 +37,12 @@ public sealed class StudioSceneRender : IDisposable
     public IReadOnlyList<StudioJoint> Joints => _model?.Joints ?? Array.Empty<StudioJoint>();
 
     /// <summary>Returns a view of the completed frame until this instance renders again or is disposed.</summary>
-    public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default)
+    public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default) =>
+        Render(width, height, seconds, settings, signal, clock, false);
+
+    /// <summary>Renders with up to 16× anisotropic texture filtering when highQuality is enabled.</summary>
+    public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings, StudioSignal signal,
+        StudioClock clock, bool highQuality)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (width is <= 0 or > MaximumSide || height is <= 0 or > MaximumSide || (long)width * height > MaximumPixels)
@@ -75,7 +80,7 @@ public sealed class StudioSceneRender : IDisposable
         }
 
         var normalized = new StudioSignal(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
-        _raster.Begin(width, height, camera.ViewProjection, active.Sky, island, fog);
+        _raster.Begin(width, height, camera.ViewProjection, active.Sky, island, fog, highQuality);
         if (fog.End > 0)
         {
             foreach (var tile in _visibleTerrain)
