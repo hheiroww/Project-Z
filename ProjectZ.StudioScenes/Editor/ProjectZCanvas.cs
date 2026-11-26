@@ -80,8 +80,6 @@ public sealed class ProjectZCanvas : IDisposable
             _draw = draw;
             _foregroundBeforeConstruction = foregroundBeforeConstruction;
             Window.Title = "Project-Z canvas " + Guid.NewGuid().ToString("N");
-            Window.IsBorderless = true;
-            Window.Position = new Point(-24000, -24000);
             IsFixedTimeStep = false;
             InactiveSleepTime = TimeSpan.Zero;
             _ = new Microsoft.Xna.Framework.GraphicsDeviceManager(this)
@@ -110,6 +108,8 @@ public sealed class ProjectZCanvas : IDisposable
                 if (foreground == initial || foreground == 0)
                     foreground = _foregroundBeforeConstruction;
                 PreventActivation(initial);
+                // Position the HWND without asking MonoGame to refresh a device before startup.
+                if (initial != 0) SetWindowPos(initial, 0, -24000, -24000, 0, 0, 0x15);
                 try
                 {
                     RunFirstFrameWithoutActivation(initial);

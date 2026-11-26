@@ -13,6 +13,12 @@ internal static class Program
     {
         try
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            if (args is ["--canvas-only"])
+            {
+                StudioUiSmoke.CheckCanvas();
+                return 0;
+            }
             if (args.Length is < 1 or > 3 || args.Any(path => !Path.IsPathFullyQualified(path)))
                 throw new ArgumentException("Supply an absolute fixture directory and optional paths for terrain and Project-Z dialog PNGs.");
 

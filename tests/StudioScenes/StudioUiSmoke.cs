@@ -125,7 +125,7 @@ internal static class StudioUiSmoke
         Check(surface.PreProcessMessage(ref confirm), "The canvas did not accept numeric Enter.");
     }
 
-    private static void CheckCanvas()
+    internal static void CheckCanvas()
     {
         using var owner = new Form { Text = "Project-Z canvas focus fixture", ClientSize = new Size(220, 120) };
         owner.Show();

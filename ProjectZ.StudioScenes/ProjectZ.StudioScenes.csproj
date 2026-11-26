@@ -5,7 +5,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
+    <StudioScenesProjectZVersion Condition="'$(StudioScenesProjectZVersion)' == ''">2026.11.20.1</StudioScenesProjectZVersion>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Shared portable model and terrain scenes for Project-Z applications.</Description>
   </PropertyGroup>
@@ -14,7 +15,7 @@
     <InternalsVisibleTo Include="StudioScenes" />
   </ItemGroup>
   <ItemGroup Condition="'$(StudioScenesProjectZRoot)' == ''">
-    <PackageReference Include="ProjectZ" Version="2026.11.20.1" />
+    <PackageReference Include="ProjectZ" Version="$(StudioScenesProjectZVersion)" />
     <PackageReference Include="ProjectZ.ModelImport" Version="2026.11.20.1" />
   </ItemGroup>
   <ItemGroup Condition="'$(StudioScenesProjectZRoot)' != ''">
