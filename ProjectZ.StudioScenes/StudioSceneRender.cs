@@ -20,6 +20,7 @@ public sealed class StudioSceneRender : IDisposable
     private readonly List<TerrainGeometry> _visibleTerrain = new();
     private int[] _landIndices = [];
     private int[] _waterIndices = [];
+    private int _waterGrid;
     private Matrix4x4 _visibleCamera;
     private TerrainFog _visibleFog;
     private bool _visibleTerrainValid;
@@ -45,7 +46,7 @@ public sealed class StudioSceneRender : IDisposable
     public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default) =>
         Render(width, height, seconds, settings, signal, clock, false);
 
-    /// <summary>Renders with up to 16× anisotropic texture filtering when highQuality is enabled.</summary>
+    /// <summary>Renders with denser endless water and up to 16× anisotropic texture filtering when highQuality is enabled.</summary>
     public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings, StudioSignal signal,
         StudioClock clock, bool highQuality)
     {
@@ -67,7 +68,7 @@ public sealed class StudioSceneRender : IDisposable
         TerrainGeometry? modelGround = null;
         if (active.HasTerrain)
         {
-            SetTerrainSettings(active.Terrain);
+            SetTerrainSettings(active.Terrain, highQuality);
             UpdateVisibleTerrain(active.Terrain, camera.ViewProjection, fog);
             if (active.HasModel)
                 modelGround = active.Terrain.Endless
@@ -120,13 +121,14 @@ public sealed class StudioSceneRender : IDisposable
         _lastTerrain = null;
     }
 
-    private void SetTerrainSettings(StudioTerrain settings)
+    private void SetTerrainSettings(StudioTerrain settings, bool highQuality)
     {
-        if (_lastTerrain == settings) return;
+        var waterGrid = settings.ShowWater ? TerrainGeometry.WaterGrid(settings, highQuality) : 0;
+        if (_lastTerrain == settings && _waterGrid == waterGrid) return;
+        _waterGrid = waterGrid;
         ClearTerrain();
         _lastTerrain = settings with { Material = settings.Material with { } };
         var grid = TerrainGeometry.LandGrid(settings);
-        var waterGrid = TerrainGeometry.WaterGrid(settings);
         _landIndices = TerrainGeometry.CreateIndices(grid);
         _waterIndices = !settings.ShowWater ? [] : waterGrid == grid ? _landIndices : TerrainGeometry.CreateIndices(waterGrid);
     }
@@ -169,7 +171,7 @@ public sealed class StudioSceneRender : IDisposable
             _terrain.RemoveLast();
         }
 
-        var geometry = new TerrainGeometry(_lastTerrain!, region, _landIndices, _waterIndices);
+        var geometry = new TerrainGeometry(_lastTerrain!, region, _landIndices, _waterIndices, _waterGrid);
         _terrainByRegion.Add(region, _terrain.AddFirst(geometry));
         return geometry;
     }

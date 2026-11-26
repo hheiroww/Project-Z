@@ -14,7 +14,9 @@ internal sealed class TerrainGeometry
     internal readonly TerrainRegion Region;
     // Water has lower-frequency waves than the land heightfield. Keep its animated pass bounded.
     private const int MaximumWaterGrid = 65;
-    private const int MaximumEndlessWaterGrid = 9;
+    private const int PreviewEndlessWaterGrid = 9;
+    private const int MinimumCaptureWaterGrid = 17;
+    private const int MaximumCaptureWaterGrid = 33;
     private readonly float[] _altitudes;
     private readonly float[] _slopes;
     private readonly int _grid;
@@ -30,10 +32,19 @@ internal sealed class TerrainGeometry
     internal static int LandGrid(StudioTerrain settings) =>
         settings.Endless ? Math.Max(5, (settings.Grid - 1) / 4 + 1) : settings.Grid;
 
-    internal static int WaterGrid(StudioTerrain settings) =>
-        Math.Min(LandGrid(settings), settings.Endless ? MaximumEndlessWaterGrid : MaximumWaterGrid);
+    internal static int WaterGrid(StudioTerrain settings, bool highQuality = false)
+    {
+        var landGrid = LandGrid(settings);
+        if (!settings.Endless)
+            return Math.Min(landGrid, MaximumWaterGrid);
 
-    internal TerrainGeometry(StudioTerrain settings, TerrainRegion region, int[] landIndices, int[] waterIndices)
+        // Captures use one denser grid for every world edge. Keep live playback bounded.
+        return highQuality ? Math.Clamp(landGrid, MinimumCaptureWaterGrid, MaximumCaptureWaterGrid)
+            : Math.Min(landGrid, PreviewEndlessWaterGrid);
+    }
+
+    internal TerrainGeometry(StudioTerrain settings, TerrainRegion region, int[] landIndices, int[] waterIndices,
+        int waterGrid)
     {
         _grid = LandGrid(settings);
         _settings = settings;
@@ -96,7 +107,7 @@ internal sealed class TerrainGeometry
         var waterHeight = WorldY(_waterLevel);
         if (settings.ShowWater && (!settings.Endless || WorldY(lowestAltitude) <= waterHeight + TerrainWaterFrame.MaximumDisplacement))
         {
-            var grid = WaterGrid(settings);
+            var grid = waterGrid;
             var color = StudioColor.Decode(settings.WaterColor);
             WaterWaves = new TerrainWaterVertex[grid * grid];
             Water = CreateWater(grid, waterHeight, color);

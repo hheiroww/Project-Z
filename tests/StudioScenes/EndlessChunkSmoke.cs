@@ -8,10 +8,18 @@ internal static class EndlessChunkSmoke
     {
         var terrain = new StudioTerrain { Endless = true, Seed = 917, Grid = 49, WaterLevel = .76f };
         var landIndices = TerrainGeometry.CreateIndices(TerrainGeometry.LandGrid(terrain));
-        var waterIndices = TerrainGeometry.CreateIndices(TerrainGeometry.WaterGrid(terrain));
-        CheckBoundary(terrain, new TerrainRegion(-2, 2, 2), landIndices, waterIndices);
-        CheckBoundary(terrain, new TerrainRegion(500002, -499998, 2), landIndices, waterIndices);
-        CheckBoundary(terrain, new TerrainRegion(-499998, 500002, 2), landIndices, waterIndices);
+        var waterGrid = TerrainGeometry.WaterGrid(terrain);
+        var highWaterGrid = TerrainGeometry.WaterGrid(terrain, highQuality: true);
+        Require(waterGrid == 9 && highWaterGrid == 17 &&
+            TerrainGeometry.WaterGrid(terrain with { Grid = 129 }, highQuality: true) == 33,
+            "Capture changed the preview water density or lost the high-quality grid.");
+        var waterIndices = TerrainGeometry.CreateIndices(waterGrid);
+        var highWaterIndices = TerrainGeometry.CreateIndices(highWaterGrid);
+        CheckBoundary(terrain, new TerrainRegion(-2, 2, 2), landIndices, highWaterIndices, highWaterGrid);
+        CheckBoundary(terrain, new TerrainRegion(500002, -499998, 2), landIndices, highWaterIndices, highWaterGrid);
+        CheckBoundary(terrain, new TerrainRegion(-2, 2, 2), landIndices, waterIndices, waterGrid);
+        CheckBoundary(terrain, new TerrainRegion(500002, -499998, 2), landIndices, waterIndices, waterGrid);
+        CheckBoundary(terrain, new TerrainRegion(-499998, 500002, 2), landIndices, waterIndices, waterGrid);
 
         var surface = TerrainWaterVertex.At(500002.5f, -499999.25f, terrain);
         Require(surface == TerrainWaterVertex.At(500002.5f, -499999.25f, terrain),
@@ -37,7 +45,7 @@ internal static class EndlessChunkSmoke
         };
         var highestWater = -.42f * drySettings.Relief * 1.45f + TerrainWaterFrame.MaximumDisplacement;
         var dry = Enumerable.Range(0, 16)
-            .Select(index => new TerrainGeometry(drySettings, new TerrainRegion(2 + index * 4, -2, 2), landIndices, waterIndices))
+            .Select(index => new TerrainGeometry(drySettings, new TerrainRegion(2 + index * 4, -2, 2), landIndices, waterIndices, waterGrid))
             .FirstOrDefault(chunk => chunk.Land.All(vertex => vertex.Position.Y > highestWater));
         Require(dry is { Water.Length: 0, WaterWaves.Length: 0 },
             "A completely dry chunk still allocated animated water.");
@@ -46,12 +54,11 @@ internal static class EndlessChunkSmoke
         Console.WriteLine("PASS seeded water phases, dry-chunk cull, exact height/normal/material/water edges and no high-quality seam");
     }
 
-    private static void CheckBoundary(StudioTerrain terrain, TerrainRegion leftRegion, int[] landIndices, int[] waterIndices)
+    private static void CheckBoundary(StudioTerrain terrain, TerrainRegion leftRegion, int[] landIndices, int[] waterIndices, int waterGrid)
     {
-        var left = new TerrainGeometry(terrain, leftRegion, landIndices, waterIndices);
-        var right = new TerrainGeometry(terrain, leftRegion with { X = leftRegion.X + 4 }, landIndices, waterIndices);
+        var left = new TerrainGeometry(terrain, leftRegion, landIndices, waterIndices, waterGrid);
+        var right = new TerrainGeometry(terrain, leftRegion with { X = leftRegion.X + 4 }, landIndices, waterIndices, waterGrid);
         var landGrid = TerrainGeometry.LandGrid(terrain);
-        var waterGrid = TerrainGeometry.WaterGrid(terrain);
         Require(ReferenceEquals(left.Indices, right.Indices) && ReferenceEquals(left.WaterIndices, right.WaterIndices),
             "Neighboring chunks made duplicate index buffers.");
         for (var row = 0; row < landGrid; row++)
@@ -110,6 +117,11 @@ internal static class EndlessChunkSmoke
             "Distant water did not animate at a fixed camera.");
         Require(initial.AsSpan().SequenceEqual(renderer.Render(720, 405, 1, signal: signal, clock: new StudioClock(120, 0))),
             "Returning from a distant scene did not reconstruct the original frame.");
+
+        var capture = renderer.Render(720, 405, 1, scene, signal, new StudioClock(120, 0), highQuality: true).ToArray();
+        Require(!initial.AsSpan().SequenceEqual(capture.AsSpan()), "The capture did not use its denser water mesh.");
+        Require(initial.AsSpan().SequenceEqual(renderer.Render(720, 405, 1, signal: signal, clock: new StudioClock(120, 0))),
+            "Returning to preview quality did not reconstruct the same frame.");
 
         var watch = Stopwatch.StartNew();
         for (var index = 0; index < 32; index++)
