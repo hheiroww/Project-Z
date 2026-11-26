@@ -21,7 +21,7 @@ Namespace Windows.ShaderEditing
         Private ReadOnly publish As Action(Of Byte(), String)
         Private ReadOnly shouldClose As Func(Of Boolean)
         Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
-        Private ReadOnly hosted, surface As Boolean
+        Private ReadOnly hosted, surface, realtime As Boolean
         Private ReadOnly ownerHandle As IntPtr
         Private ReadOnly ownerProcess As UInteger
         Private ReadOnly ready As Action(Of Long)
@@ -41,7 +41,7 @@ Namespace Windows.ShaderEditing
         Friend Sub New(documentPath As String, graphJson As String, getAppearance As Func(Of WindowAppearanceSettings),
                        publish As Action(Of Byte(), String), shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt),
                        hosted As Boolean, surface As Boolean, ownerHandle As IntPtr, title As String,
-                       ready As Action(Of Long), takeActivation As Func(Of Boolean))
+                       ready As Action(Of Long), takeActivation As Func(Of Boolean), realtime As Boolean)
             Me.documentPath = documentPath
             Me.graphJson = graphJson
             Me.getAppearance = getAppearance
@@ -50,6 +50,7 @@ Namespace Windows.ShaderEditing
             Me.takeReceipt = takeReceipt
             Me.hosted = hosted
             Me.surface = surface
+            Me.realtime = realtime
             Me.ready = ready
             Me.takeActivation = takeActivation
             If ownerHandle <> IntPtr.Zero Then
@@ -104,7 +105,7 @@ Namespace Windows.ShaderEditing
             scene = New ShaderEditorScene(manager, windowSurface, documentPath, graphJson, publish,
                 Sub() windowSurface.WindowState = Forms.FormWindowState.Minimized,
                 Sub() windowSurface.WindowState = If(windowSurface.WindowState = Forms.FormWindowState.Maximized, Forms.FormWindowState.Normal, Forms.FormWindowState.Maximized),
-                Sub() closing = True, takeReceipt, hosted, surface, windowSurface.Text)
+                Sub() closing = True, takeReceipt, hosted, surface, windowSurface.Text, realtime)
             scene.Quality.AntiAliasingSamples = 4
             scene.Quality.PpiPerfectText = True
             manager.AddScene("shader-editor", scene)

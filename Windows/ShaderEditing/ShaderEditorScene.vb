@@ -39,10 +39,11 @@ Namespace Windows.ShaderEditing
         Private ReadOnly publish As Action(Of Byte(), String)
         Private ReadOnly takeReceipt As Func(Of ShaderGraphReceipt)
         Private ReadOnly closeAction As Action
-        Private ReadOnly hosted, surface As Boolean
+        Private ReadOnly hosted, surface, realtime As Boolean
         Private ReadOnly saveTarget As String
         Private toolbarHelp As ToolTip
         Private ReadOnly playback As New Stopwatch()
+        Private ReadOnly sampleScalars As New Dictionary(Of String, Single)(StringComparer.Ordinal)
         Private ReadOnly history As New List(Of String)
         Private ReadOnly staging As String = CompilerStagingDirectory()
         Private ReadOnly compiler As String = Path.Combine(AppContext.BaseDirectory, "ProjectZ.ShaderCompiler")
@@ -77,7 +78,7 @@ Namespace Windows.ShaderEditing
 
         Friend Sub New(manager As SceneManager, owner As Forms.IWin32Window, path As String, graphJson As String,
                        publish As Action(Of Byte(), String), minimize As Action, maximize As Action, close As Action,
-                       takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean, title As String)
+                       takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean, title As String, realtime As Boolean)
             MyBase.New(manager)
             Me.owner = owner
             Me.publish = publish
@@ -85,6 +86,7 @@ Namespace Windows.ShaderEditing
             closeAction = close
             Me.hosted = hosted
             Me.surface = surface
+            Me.realtime = realtime
             saveTarget = If(String.IsNullOrWhiteSpace(title) OrElse title = "Shader Editor · Project-Z", "layer", title)
             isCursorVisible = False
             EnableDesignTimeControls = False
@@ -96,7 +98,7 @@ Namespace Windows.ShaderEditing
             image = Find(Of ImageElement)("PreviewImage")
             simple = New SimpleShaderView(Me)
             material = New SimpleMaterialView(Me)
-            advanced = New AdvancedShaderView(Me)
+            advanced = New AdvancedShaderView(Me, realtime)
             workspace.Children.Add(simple.Root)
             workspace.Children.Add(material.Root)
             workspace.Children.Add(advanced.Root)
@@ -175,12 +177,13 @@ Namespace Windows.ShaderEditing
             Find(Of Button)("Presets").Size = New Vector2(128, 30)
             Dim targetButton = Find(Of Button)("Run")
             Dim targetText As New StringInfo(saveTarget)
-            targetButton.Text = "Save to " & If(targetText.LengthInTextElements > 24, targetText.SubstringByTextElements(0, 23) & "…", saveTarget)
+            targetButton.Text = If(realtime, "Apply to host",
+                "Save to " & If(targetText.LengthInTextElements > 24, targetText.SubstringByTextElements(0, 23) & "…", saveTarget))
             targetButton.Size = New Vector2(248, 30)
-            BindToolbarHelp(targetButton, "Save to " & saveTarget)
-            Find(Of Button)("PromptSave").Text = "Save"
-            Find(Of TextElement)("PromptMessage").Text = "Save changes to this layer?"
-            Find(Of TextElement)("Brand").Text = "Shader Editor"
+            BindToolbarHelp(targetButton, If(realtime, "Apply this graph with live host audio and automation.", "Save to " & saveTarget))
+            Find(Of Button)("PromptSave").Text = If(realtime, "Apply", "Save")
+            Find(Of TextElement)("PromptMessage").Text = If(realtime, "Apply changes to the host?", "Save changes to this layer?")
+            Find(Of TextElement)("Brand").Text = If(realtime, "Live Shader Editor", "Shader Editor")
             Find(Of TextElement)("StandaloneTitle").isVisible = False
             Find(Of TextElement)("DocumentTitle").TextTrimming = TextTrimming.CharacterEllipsis
             Find(Of CheckBox)("AutoRun").Content = "Auto preview"
@@ -270,7 +273,8 @@ Namespace Windows.ShaderEditing
             image.VisualEffect?.Dispose() : image.VisualEffect = Nothing
             BindDocument()
             UpdateDocument()
-            SetStatus(If(hosted, "", "Run to compile and preview the graph."))
+            SetStatus(If(realtime, "Preview uses sample audio. Apply to use the host's audio and automation.",
+                         If(hosted, "", "Run to compile and preview the graph.")))
             QueueAutoRun()
         End Sub
 
@@ -283,7 +287,7 @@ Namespace Windows.ShaderEditing
             Find(Of Button)("ResetImage").isVisible = showMediaControls
             Find(Of Button)("ExportEffect").isVisible = Not hosted AndAlso showMediaControls
             Find(Of TextElement)("Backend").Text = If(Backend = ShaderBackend.DirectX12, "DirectX 12", "DirectX 11") &
-                If(document.IsSurface, " · Material preview", " · XAML pixel effect")
+                If(realtime, " · Live inputs", If(document.IsSurface, " · Material preview", " · XAML pixel effect"))
             ChangeMode(document.Mode)
         End Sub
 
@@ -362,7 +366,7 @@ Namespace Windows.ShaderEditing
             If compile IsNot Nothing Then Return
             pendingRun = 0
             Try
-                generatedSource = ShaderGenerator.Generate(document)
+                generatedSource = GeneratePreviewSource()
                 compiledPath = export
                 compiledGraph = If(shouldPublish, document.ToJson(), Nothing)
                 cancellation = New CancellationTokenSource()
@@ -399,7 +403,7 @@ Namespace Windows.ShaderEditing
             If playback.IsRunning AndAlso now >= nextPreview Then
                 nextPreview = now + Stopwatch.Frequency \ 24
                 Find(Of TextElement)("PreviewTime").Text = playback.Elapsed.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture) & " s"
-                If image.VisualEffect IsNot Nothing Then image.VisualEffect.TimeOverride = CSng(playback.Elapsed.TotalSeconds)
+                If image.VisualEffect IsNot Nothing Then UpdatePreviewInputs(image.VisualEffect)
                 RequestRender()
             End If
         End Sub
@@ -420,7 +424,7 @@ Namespace Windows.ShaderEditing
                     SetStatus("Exported " & Path.GetFileName(compiledPath))
                 Else
                     Dim replacement = XamlNativeEffect.FromCompiledShader(result.Bytecode)
-                    replacement.TimeOverride = CSng(playback.Elapsed.TotalSeconds)
+                    UpdatePreviewInputs(replacement)
                     image.VisualEffect?.Dispose()
                     image.VisualEffect = replacement
                     If Not hosted Then SetStatus(If(compiledGraph Is Nothing, "Preview ready · Run to apply", "Shader running"))
@@ -440,11 +444,40 @@ Namespace Windows.ShaderEditing
             End Try
         End Sub
 
+        Private Function GeneratePreviewSource() As String
+            Return If(realtime, ShaderGenerator.GenerateRealtimeEffect(document), ShaderGenerator.Generate(document))
+        End Function
+
+        Private Function GenerateExportSource() As String
+            Return If(document.IsSurface, SurfaceMaterials.GenerateHlsl(document), GeneratePreviewSource())
+        End Function
+
+        Private Sub UpdatePreviewInputs(effect As XamlNativeEffect)
+            Dim seconds = CSng(playback.Elapsed.TotalSeconds)
+            effect.TimeOverride = seconds
+            If Not realtime Then Return
+
+            Dim beat = seconds * 2.0F
+            Dim phase = beat - MathF.Floor(beat)
+            Dim kick = MathF.Exp(-phase * 5.0F)
+            sampleScalars("Tempo") = 120.0F
+            sampleScalars("BeatPhase") = phase
+            sampleScalars("AudioBeat") = kick
+            sampleScalars("AudioLow") = 0.15F + 0.75F * kick
+            sampleScalars("AudioMid") = 0.42F + 0.24F * MathF.Sin(phase * 2 * MathF.PI)
+            sampleScalars("AudioHigh") = 0.35F + 0.26F * MathF.Sin(phase * 4 * MathF.PI + 1)
+            sampleScalars("AudioLevel") = 0.35F + 0.43F * kick
+            For Each name In ShaderRuntimeInputs.ScalarNames
+                If name.StartsWith("Macro", StringComparison.Ordinal) Then sampleScalars(name) = 0.5F
+            Next
+            effect.RuntimeScalars = sampleScalars
+        End Sub
+
         Private Sub ShowCompilerTab(showSource As Boolean)
             viewingSource = showSource
             If showSource Then
                 Try
-                    generatedSource = If(document.IsSurface, SurfaceMaterials.GenerateHlsl(document), ShaderGenerator.Generate(document))
+                    generatedSource = GenerateExportSource()
                 Catch ex As InvalidDataException
                     generatedSource = ex.Message
                 End Try
@@ -628,7 +661,7 @@ Namespace Windows.ShaderEditing
                 ChooseSave("Effect source (*.fx)|*.fx", "fx"))
             If path Is Nothing Then Return
             Try
-                File.WriteAllText(path, If(document.IsSurface, SurfaceMaterials.GenerateHlsl(document), ShaderGenerator.Generate(document)))
+                File.WriteAllText(path, GenerateExportSource())
                 SetStatus("Exported " & IO.Path.GetFileName(path))
             Catch ex As Exception When TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException OrElse TypeOf ex Is InvalidDataException
                 SetError("Could not export FX source", ex.Message)

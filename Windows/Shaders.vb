@@ -55,14 +55,24 @@ Public NotInheritable Class Shaders
         Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, surface:=True, ownerHandle:=ownerHandle, title:=title)
     End Function
 
+    ''' <summary>Opens an owned editor for a real-time screen shader. Apply publishes JSON to the host for validation.</summary>
+    Public Shared Function ShowOwnedRealtimeShaderEditor(graphJson As String, appearance As WindowAppearance, ownerHandle As IntPtr, title As String) As ShaderEditorSession
+        If ownerHandle = IntPtr.Zero Then Throw New ArgumentException("A host window is required.", NameOf(ownerHandle))
+        If graphJson IsNot Nothing AndAlso ShaderDocument.Parse(graphJson).IsSurface Then
+            Throw New IO.InvalidDataException("A real-time shader needs a screen-space graph.")
+        End If
+        Return ShowEditorCore(Nothing, graphJson, appearance, hosted:=True, ownerHandle:=ownerHandle, title:=title, realtime:=True)
+    End Function
+
     Private Shared Function ShowEditorCore(documentPath As String, graphJson As String, appearance As WindowAppearance,
                                            Optional hosted As Boolean = False, Optional surface As Boolean = False,
-                                           Optional ownerHandle As IntPtr = Nothing, Optional title As String = Nothing) As ShaderEditorSession
+                                           Optional ownerHandle As IntPtr = Nothing, Optional title As String = Nothing,
+                                           Optional realtime As Boolean = False) As ShaderEditorSession
 #If PROJECTZ_OPENGL Then
         Throw New PlatformNotSupportedException("The shader editor requires a DirectX build of Project-Z.")
 #Else
         Dim theme = If(appearance, WindowAppearance.Default)
-        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson, hosted, surface, ownerHandle.ToInt64(), title)
+        Dim host As New ShaderWorkerProcess(documentPath, JsonSerializer.Serialize(theme.Settings), graphJson, hosted, surface, ownerHandle.ToInt64(), title, realtime)
         Dim handler As EventHandler = Sub(sender, args) host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
         AddHandler theme.Changed, handler
         host.RefreshAppearance(JsonSerializer.Serialize(theme.Settings))
@@ -82,6 +92,20 @@ Public NotInheritable Class Shaders
     Private Shared Sub RunOwnedEditorWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
                                             shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean,
                                             ownerHandle As Long, title As String, ready As Action(Of Long), takeActivation As Func(Of Boolean))
+        RunShaderWorker(documentPath, graphJson, appearanceJson, publish, shouldClose, takeReceipt, hosted, surface,
+                        ownerHandle, title, ready, takeActivation, realtime:=False)
+    End Sub
+
+    Private Shared Sub RunRealtimeEditorWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
+                                               shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean,
+                                               ownerHandle As Long, title As String, ready As Action(Of Long), takeActivation As Func(Of Boolean))
+        RunShaderWorker(documentPath, graphJson, appearanceJson, publish, shouldClose, takeReceipt, hosted, surface,
+                        ownerHandle, title, ready, takeActivation, realtime:=True)
+    End Sub
+
+    Private Shared Sub RunShaderWorker(documentPath As String, graphJson As String, appearanceJson As Func(Of String), publish As Action(Of Byte(), String),
+                                       shouldClose As Func(Of Boolean), takeReceipt As Func(Of ShaderGraphReceipt), hosted As Boolean, surface As Boolean,
+                                       ownerHandle As Long, title As String, ready As Action(Of Long), takeActivation As Func(Of Boolean), realtime As Boolean)
         If shouldClose() Then Return
         Dim snapshot As String = Nothing
         Dim current As WindowAppearanceSettings = Nothing
@@ -95,7 +119,7 @@ Public NotInheritable Class Shaders
                 Return current
             End Function
         Using game As New ShaderEditorGame(documentPath, graphJson, getAppearance, publish, shouldClose, takeReceipt, hosted, surface,
-                                          New IntPtr(ownerHandle), title, ready, takeActivation)
+                                          New IntPtr(ownerHandle), title, ready, takeActivation, realtime)
             game.Run()
         End Using
     End Sub

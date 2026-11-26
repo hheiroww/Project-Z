@@ -35,6 +35,7 @@ Namespace [Shared].Drawing.UI.Primitives
         Private Shared ReadOnly shaderClock As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
         Private compiledShader As Byte()
         Friend Property TimeOverride As Single?
+        Friend Property RuntimeScalars As IReadOnlyDictionary(Of String, Single)
 
         ''' <summary>Creates a visual effect from MGFX bytecode compiled for the current graphics backend.</summary>
         Public Shared Function FromCompiledShader(bytecode As Byte()) As XamlNativeEffect
@@ -91,6 +92,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 renderer.Direction = Me.Direction : renderer.Color = Me.Color : renderer.Opacity = Me.Opacity * Math.Clamp(quality.ShadowOpacityScale, 0, 2)
                 renderer.compiledShader = Me.compiledShader
                 renderer.TimeOverride = Me.TimeOverride
+                renderer.RuntimeScalars = Me.RuntimeScalars
                 Return renderer.Render(device, width, height, draw)
             End If
             If shader Is Nothing Then
@@ -121,6 +123,11 @@ Namespace [Shared].Drawing.UI.Primitives
             shader.Parameters("TexelSize")?.SetValue(New Vector2(1.0F / width, 1.0F / height))
             If Kind = XamlEffectKind.CompiledShader Then
                 shader.Parameters("Time")?.SetValue(If(TimeOverride, CSng(shaderClock.Elapsed.TotalSeconds)))
+                If RuntimeScalars IsNot Nothing Then
+                    For Each parameter In RuntimeScalars
+                        shader.Parameters(parameter.Key)?.SetValue(parameter.Value)
+                    Next
+                End If
                 DrawPass(device, source, scratch)
                 Return scratch
             End If

@@ -37,10 +37,13 @@ public sealed class ShaderWorkerProcess
         this(documentPath, appearance, graphJson, hosted, surface, 0, null) { }
 
     public ShaderWorkerProcess(string? documentPath, string appearance, string? graphJson, bool hosted, bool surface,
-        long ownerHandle, string? title)
+        long ownerHandle, string? title) : this(documentPath, appearance, graphJson, hosted, surface, ownerHandle, title, false) { }
+
+    public ShaderWorkerProcess(string? documentPath, string appearance, string? graphJson, bool hosted, bool surface,
+        long ownerHandle, string? title, bool realtime)
     {
         this.appearance = appearance;
-        Completion = RunAsync(documentPath, graphJson, hosted, surface, ownerHandle, title);
+        Completion = RunAsync(documentPath, graphJson, hosted, surface, ownerHandle, title, realtime);
     }
 
     public Task Completion { get; }
@@ -105,11 +108,14 @@ public sealed class ShaderWorkerProcess
         changes.Writer.TryWrite(true);
     }
 
-    private async Task RunAsync(string? documentPath, string? graphJson, bool hosted, bool surface, long ownerHandle, string? title)
+    internal static string WorkerDirectory => Path.GetDirectoryName(typeof(ShaderWorkerProcess).Assembly.Location)
+        ?? throw new FileNotFoundException("The Project-Z shader editor requires its worker assemblies on disk.");
+
+    private async Task RunAsync(string? documentPath, string? graphJson, bool hosted, bool surface, long ownerHandle, string? title, bool realtime)
     {
         string pipeName = PipeProtocol.Prefix + Guid.NewGuid().ToString("N");
-        string basePath = AppContext.BaseDirectory;
-        string worker = Path.Combine(basePath, "ProjectZ.ShaderEditor.dll");
+        string basePath = WorkerDirectory;
+        string worker = typeof(ShaderWorkerProcess).Assembly.Location;
         string runtimeConfig = Path.Combine(basePath, "ProjectZ.ShaderEditor.Worker.runtimeconfig.json");
         if (!File.Exists(worker) || !File.Exists(runtimeConfig))
             throw new FileNotFoundException("The Project-Z shader editor worker is missing from the application output.");
@@ -130,15 +136,11 @@ public sealed class ShaderWorkerProcess
         start.ArgumentList.Add("exec");
         start.ArgumentList.Add("--runtimeconfig");
         start.ArgumentList.Add(runtimeConfig);
-        string? application = Assembly.GetEntryAssembly()?.Location;
-        if (!string.IsNullOrEmpty(application))
+        string? dependencies = FindDependencies(basePath, Assembly.GetEntryAssembly()?.Location);
+        if (dependencies is not null)
         {
-            string dependencies = Path.ChangeExtension(application, ".deps.json");
-            if (File.Exists(dependencies))
-            {
-                start.ArgumentList.Add("--depsfile");
-                start.ArgumentList.Add(dependencies);
-            }
+            start.ArgumentList.Add("--depsfile");
+            start.ArgumentList.Add(dependencies);
         }
         start.ArgumentList.Add(worker);
         start.ArgumentList.Add(pipeName);
@@ -166,7 +168,7 @@ public sealed class ShaderWorkerProcess
                 return;
             }
             await connected.ConfigureAwait(false);
-            var settings = new ShaderWorkerStart(documentPath, Volatile.Read(ref appearance), graphJson, hosted, surface, ownerHandle, title);
+            var settings = new ShaderWorkerStart(documentPath, Volatile.Read(ref appearance), graphJson, hosted, surface, ownerHandle, title, realtime);
             await PipeProtocol.WriteAsync(pipe, new(PipeMessage.Start, JsonSerializer.SerializeToUtf8Bytes(settings)), startup.Token)
                 .ConfigureAwait(false);
             var ready = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -232,6 +234,59 @@ public sealed class ShaderWorkerProcess
         }
         catch (InvalidOperationException) when (process.HasExited) { }
         await exited.WaitAsync(ShutdownTimeout).ConfigureAwait(false);
+    }
+
+    internal static string? FindDependencies(string directory, string? entryAssembly)
+    {
+        directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        var paths = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        string? entry = ComponentManifest(entryAssembly);
+        if (entry is not null && IsCompatible(entry)) return entry;
+
+        // The entry assembly can be null or located in a native host (such as a DAW).
+        // Prefer an already loaded component's manifest before scanning its own directory.
+        var loaded = AppDomain.CurrentDomain.GetAssemblies().Where(assembly => !assembly.IsDynamic)
+            .Select(assembly => ComponentManifest(assembly.Location)).OfType<string>();
+        return loaded.Concat(Directory.EnumerateFiles(directory, "*.deps.json").OrderBy(path => path, paths))
+            .Distinct(paths).FirstOrDefault(IsCompatible);
+
+        string? ComponentManifest(string? assembly) => string.IsNullOrEmpty(assembly) ||
+            !paths.Equals(Path.GetDirectoryName(assembly), directory)
+            ? null : Path.ChangeExtension(assembly, ".deps.json");
+
+        static bool IsCompatible(string path)
+        {
+            try
+            {
+                using var file = File.OpenRead(path);
+                using var document = JsonDocument.Parse(file);
+                if (!document.RootElement.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
+                    return false;
+                foreach (var target in targets.EnumerateObject())
+                {
+                    if (target.Value.ValueKind != JsonValueKind.Object) continue;
+                    bool framework = false, worker = false;
+                    foreach (var library in target.Value.EnumerateObject())
+                    {
+                        if (library.Value.ValueKind != JsonValueKind.Object) continue;
+                        foreach (string section in new[] { "runtime", "runtimeTargets" })
+                        {
+                            if (!library.Value.TryGetProperty(section, out var assets) || assets.ValueKind != JsonValueKind.Object)
+                                continue;
+                            foreach (var asset in assets.EnumerateObject())
+                            {
+                                string name = Path.GetFileName(asset.Name);
+                                framework |= name == "ProjectZ.dll";
+                                worker |= name == "ProjectZ.ShaderEditor.dll";
+                            }
+                        }
+                        if (framework && worker) return true;
+                    }
+                }
+                return false;
+            }
+            catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException) { return false; }
+        }
     }
 
     private async Task SendChangesAsync(Stream pipe, CancellationToken token)
@@ -345,10 +400,11 @@ internal static class ShaderWorkerEntry
             context.Resolving += ResolveSibling;
             try
             {
-                var framework = context.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory, "ProjectZ.dll"));
+                var framework = context.LoadFromAssemblyPath(Path.Combine(ShaderWorkerProcess.WorkerDirectory, "ProjectZ.dll"));
+                string entryName = start.Realtime ? "RunRealtimeEditorWorker" : "RunOwnedEditorWorker";
                 var entry = framework.GetType("ProjectZ.Shaders", throwOnError: true)!
-                    .GetMethod("RunOwnedEditorWorker", BindingFlags.Static | BindingFlags.NonPublic)
-                    ?? throw new MissingMethodException("ProjectZ.Shaders", "RunOwnedEditorWorker");
+                    .GetMethod(entryName, BindingFlags.Static | BindingFlags.NonPublic)
+                    ?? throw new MissingMethodException("ProjectZ.Shaders", entryName);
                 Func<string> currentAppearance = () => Volatile.Read(ref appearance);
                 Func<bool> shouldClose = () => Volatile.Read(ref closeRequested) != 0;
                 Func<ShaderGraphReceipt?> takeReceipt = () => receipts.TryDequeue(out var receipt) ? receipt : null;
@@ -471,14 +527,14 @@ internal static class ShaderWorkerEntry
 
     private static Assembly? ResolveSibling(AssemblyLoadContext context, AssemblyName name)
     {
-        string path = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");
+        string path = Path.Combine(ShaderWorkerProcess.WorkerDirectory, name.Name + ".dll");
         return File.Exists(path) ? context.LoadFromAssemblyPath(path) : null;
     }
 }
 
 public sealed record ShaderGraphReceipt(string Graph, string? Error);
 internal sealed record ShaderWorkerStart(string? DocumentPath, string Appearance, string? Graph, bool Hosted, bool Surface,
-    long OwnerHandle = 0, string? Title = null);
+    long OwnerHandle = 0, string? Title = null, bool Realtime = false);
 internal enum PipeMessage : byte { Start = 1, Appearance, Close, RunResult, Failure, GraphReceipt, Ready, Activate }
 internal sealed record PipePacket(PipeMessage Type, byte[] Payload);
 

@@ -83,6 +83,8 @@ public static class ShaderNodes
         Add("PixelPosition", "Pixel Position", "Inputs", Float2, [], (_, _) => "input.Position.xy");
         Add("Time", "Time", "Inputs", Float, [], (_, _) => "Time");
         Add("TexelSize", "Texel Size", "Inputs", Float2, [], (_, _) => "TexelSize");
+        foreach (string parameter in ShaderRuntimeInputs.ScalarNames)
+            Add(parameter, ShaderRuntimeInputs.Label(parameter), "Runtime Input", Float, [], (_, _) => parameter);
         Add("Float", "Float", "Inputs", Float, [], (_, values) => values[0], new ShaderParameter("Value", 1));
         Add("Color", "Color", "Inputs", Float4, [], (_, values) => $"float4({string.Join(", ", values)})",
             new ShaderParameter("R", 1), new ShaderParameter("G", 1), new ShaderParameter("B", 1), new ShaderParameter("A", 1));

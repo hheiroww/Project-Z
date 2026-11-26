@@ -56,11 +56,103 @@ var presetTool = Environment.GetEnvironmentVariable("PROJECTZ_PRESET_TEST_COMPIL
 var presetStage = Environment.GetEnvironmentVariable("PROJECTZ_PRESET_TEST_STAGE");
 await CheckPresets(presetTool, presetStage);
 await CheckSurfaceMaterials(presetTool, presetStage);
+await CheckRealtime(
+    Environment.GetEnvironmentVariable("PROJECTZ_REALTIME_TEST_COMPILER") ?? presetTool,
+    Environment.GetEnvironmentVariable("PROJECTZ_REALTIME_TEST_STAGE") ?? presetStage);
 
 if (args.Contains("--desktop", StringComparer.Ordinal))
 {
     await CheckDesktop(json);
     await CheckHostedDesktop();
+}
+
+static async Task CheckRealtime(string? compiler, string? staging)
+{
+    var scalars = new[]
+    {
+        "AudioLevel", "AudioLow", "AudioMid", "AudioHigh", "AudioBeat", "BeatPhase", "Tempo",
+        "Macro01", "Macro02", "Macro03", "Macro04", "Macro05", "Macro06", "Macro07", "Macro08",
+        "Macro09", "Macro10", "Macro11", "Macro12", "Macro13", "Macro14", "Macro15", "Macro16"
+    };
+    Require(ShaderRuntimeInputs.ScalarNames.SequenceEqual(scalars), "real-time hosts have stable audio, transport, and macro parameter names");
+    Require(scalars.All(name => ShaderNodes.Get(name).Category == "Runtime Input"), "every scalar is available as a friendly Runtime Input node");
+
+    var graph = ShaderDocument.Create();
+    string baseline = ShaderGenerator.Generate(graph);
+    Require(!baseline.Contains("AudioLevel", StringComparison.Ordinal), "legacy shader source has no inactive runtime bindings");
+    var output = graph.Nodes.Single(node => node.Kind == "Output");
+    var runtime = ShaderNodes.Create("AudioLow", 170, 20);
+    var custom = ShaderNodes.Create("CustomFloat", 280, 70);
+    custom.Expression = "saturate(A + Macro16 + AudioHigh * BeatPhase)";
+    graph.Nodes.Add(runtime);
+    graph.Nodes.Add(custom);
+    graph.Connections.Add(new() { Source = runtime.Id, Target = custom.Id, Input = "A" });
+    graph.Connections.Add(new() { Source = custom.Id, Target = output.Id, Input = "Alpha" });
+
+    string json = graph.ToJson();
+    string emitted = ShaderGenerator.GenerateRealtimeEffect(ShaderDocument.Parse(json));
+    Require(scalars.All(name => emitted.Contains($"float {name};", StringComparison.Ordinal)) &&
+        emitted.Contains(" = AudioLow;", StringComparison.Ordinal) && emitted.Contains(custom.Expression, StringComparison.Ordinal),
+        "native SpriteBatch generation preserves both runtime graph nodes and custom HLSL expressions");
+    string film = ShaderGenerator.GenerateVideoShader(graph);
+    Require(film.Contains("static const float AudioLow = 0.0;", StringComparison.Ordinal) &&
+        film.Contains("static const float Macro16 = 0.0;", StringComparison.Ordinal) &&
+        film.Contains("static const float Tempo = 120.0;", StringComparison.Ordinal),
+        "a shared graph keeps generated video independent of live uniform bindings");
+    CompilePixelShader(film);
+    Reject(() => ShaderGenerator.GenerateRealtimeEffect(SurfaceMaterials.CreatePreset("clear-water")),
+        "live screen shader generation requires a pixel-effect graph");
+
+    var presets = ShaderPresets.Realtime;
+    Require(presets.Select(preset => preset.Id).SequenceEqual(new[] { "spectral-rings", "prism-bloom", "folded-pulse" }),
+        "the editable live shader catalog has stable preset identities");
+    foreach (var preset in presets)
+    {
+        var doc = preset.CreateDocument();
+        string serialized = doc.ToJson();
+        Require(ShaderDocument.Parse(serialized).ToJson() == serialized, $"{preset.Name} round-trips as a reusable .pzshader graph");
+        CompilePixelShader(ShaderGenerator.GenerateVideoShader(doc));
+        if (compiler is null) continue;
+        string hlsl = ShaderGenerator.GenerateRealtimeEffect(doc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        foreach (var backend in Enum.GetValues<ShaderBackend>())
+        {
+            var result = await ShaderCompiler.CompileAsync(hlsl, backend, compiler, staging!, timeout.Token);
+            Require(result.Success && result.Bytecode is { Length: > 16 }, $"{preset.Name} {backend}: {result.Diagnostics}");
+        }
+    }
+
+    string temp = Path.Combine(Path.GetTempPath(), "projectz-shader-deps-" + Guid.NewGuid().ToString("N"));
+    string component = Directory.CreateDirectory(Path.Combine(temp, "component")).FullName;
+    string unrelated = Directory.CreateDirectory(Path.Combine(temp, "host")).FullName;
+    const string deps = """
+        {
+          "targets": {
+            ".NETCoreApp,Version=v10.0": {
+              "ProjectZ/synthetic": {
+                "runtime": {
+                  "lib/net8.0/ProjectZ.dll": {},
+                  "lib/net8.0/ProjectZ.ShaderEditor.dll": {}
+                }
+              }
+            }
+          }
+        }
+        """;
+    File.WriteAllText(Path.Combine(unrelated, "Host.deps.json"), deps);
+    File.WriteAllText(Path.Combine(component, "Incompatible.deps.json"), "{\"targets\":{}}");
+    string componentDeps = Path.Combine(component, "NativeComponent.deps.json");
+    File.WriteAllText(componentDeps, deps);
+    var finder = typeof(ShaderWorkerProcess).GetMethod("FindDependencies", BindingFlags.Static | BindingFlags.NonPublic)!;
+    Require((string?)finder.Invoke(null, [component, Path.Combine(unrelated, "Host.dll")]) == componentDeps &&
+        (string?)finder.Invoke(null, [component, null]) == componentDeps,
+        "the worker chooses a compatible component manifest when run from an unrelated or unmanaged host");
+    string preferred = Path.Combine(component, "Desktop.deps.json");
+    File.WriteAllText(preferred, deps);
+    Require((string?)finder.Invoke(null, [component, Path.Combine(component, "Desktop.dll")]) == preferred,
+        "a compatible local managed entry manifest takes preference");
+    Console.WriteLine("PASS live audio uniforms and macro nodes, reusable graphs, hosted dependencies, and three audio presets" +
+        (compiler is null ? "" : " compiled for DirectX 11 and 12"));
 }
 
 static async Task CheckPresets(string? compiler, string? staging)

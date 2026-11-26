@@ -19,7 +19,9 @@ Namespace Windows.ShaderEditing
             presetSearch = Find(Of Textbox)("PresetSearch")
             presetCategory = Find(Of ComboBox)("PresetCategory")
             presetResults = Find(Of ListBox)("PresetResults")
-            If hosted Then
+            If realtime Then
+                presetCatalog = ShaderPresets.Realtime.Concat(ShaderPresets.All).ToArray()
+            ElseIf hosted Then
                 presetCatalog = If(surface, SurfaceMaterials.Presets, ShaderPresets.All)
             Else
                 presetCatalog = ShaderPresets.All.Concat(SurfaceMaterials.Presets).ToArray()

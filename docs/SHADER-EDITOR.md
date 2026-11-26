@@ -43,6 +43,20 @@ Use `session.TryTakeGraph(ref graphJson)` with a string initialized to `null` to
 
 Use `ShowEditorForVideoGraph` or `ShowSurfaceEditorForGraph` when the graph belongs to a host project. **Apply** returns the graph for host validation. The host calls `AcknowledgeGraph` with the exact accepted string or `RejectGraph` with the validation message. On acknowledgment the editor marks that revision applied. **Export graph** writes a reusable copy.
 
+## Author a real-time effect
+
+Use `Shaders.ShowOwnedRealtimeShaderEditor(graphJson, appearance, ownerHandle, title)` for a modeless editor owned by the host window. Pass `null` to create a new graph. The preview plays a sample audio signal when **Play time** is active. **Apply to host** sends the editable graph to the host. Use `TryTakeGraph` to receive it, then call `AcknowledgeGraph` or `RejectGraph` with the validation result.
+
+Compile `ShaderGenerator.GenerateRealtimeEffect(ShaderDocument.Parse(graphJson))` with `ShaderCompiler.CompileAsync` for the host's DirectX backend. Apply the compiled effect to a screen-space `SpriteBatch`. The input texture and output pixels use premultiplied alpha. Set `Time` to elapsed seconds and `TexelSize` to `(1 / width, 1 / height)` each frame. Set each scalar that the compiled `Effect` exposes.
+
+- `AudioLevel`, `AudioLow`, `AudioMid`, `AudioHigh`, and `AudioBeat` take normalized audio levels from 0 to 1.
+- `BeatPhase` is the fractional position within the beat. `Tempo` is beats per minute.
+- `Macro01` through `Macro16` are normalized host controls. `ShaderRuntimeInputs.ScalarNames` provides the exact scalar names.
+
+The node palette lists these scalars under **Runtime Input**. HLSL expression nodes can use the same names. The **Audio reactive** presets provide editable examples. Exported `.pzshader` graphs can be opened in the video pipeline, which supplies zero audio, phase and macro values and a 120 BPM tempo.
+
+Keep `ProjectZ.dll`, `ProjectZ.ShaderEditor.dll`, the shader worker runtime configuration, and `ProjectZ.ShaderCompiler` beside the host component's managed dependencies. The worker uses a compatible component-local `.deps.json` when an unmanaged host opens it.
+
 ## Assign a 3D surface material
 
 ```csharp

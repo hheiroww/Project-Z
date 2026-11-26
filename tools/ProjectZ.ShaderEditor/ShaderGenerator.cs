@@ -16,7 +16,12 @@ public static class ShaderGenerator
         ? throw new InvalidDataException("A material graph needs the 3D surface shader.")
         : Generate(document, video: true);
 
-    private static string Generate(ShaderDocument document, bool video)
+    /// <summary>Generates a SpriteBatch effect with real-time audio, transport, and macro parameters.</summary>
+    public static string GenerateRealtimeEffect(ShaderDocument document) => document.IsSurface
+        ? throw new InvalidDataException("A real-time pixel effect needs a screen-space shader graph.")
+        : Generate(document, video: false, realtime: true);
+
+    private static string Generate(ShaderDocument document, bool video, bool realtime = false)
     {
         var ordered = document.GetEvaluationOrder();
         var output = ordered.Single(node => node.Kind == "Output");
@@ -34,6 +39,17 @@ public static class ShaderGenerator
         }
 
         var source = new StringBuilder(video ? VideoHeader : XamlHeader);
+        if (realtime || ordered.Any(node => reachable.Contains(node.Id) && UsesRuntimeInput(node)))
+        {
+            source.AppendLine();
+            foreach (string parameter in ShaderRuntimeInputs.ScalarNames)
+            {
+                if (realtime)
+                    source.AppendLine($"float {parameter};");
+                else
+                    source.AppendLine($"static const float {parameter} = {(parameter == "Tempo" ? "120.0" : "0.0")};");
+            }
+        }
         source.AppendLine().AppendLine().Append(SharedFunctions);
         source.AppendLine().AppendLine();
         var body = new StringBuilder();
@@ -99,6 +115,13 @@ public static class ShaderGenerator
             return port.Type == ShaderValueType.Float ? port.DefaultExpression : $"({TypeName(port.Type)})({port.DefaultExpression})";
         }
     }
+
+    private static readonly Regex RuntimeInputName = new(
+        @"\b(?:" + string.Join("|", ShaderRuntimeInputs.ScalarNames) + @")\b",
+        RegexOptions.CultureInvariant);
+
+    private static bool UsesRuntimeInput(ShaderNode node) => ShaderRuntimeInputs.ScalarNames.Contains(node.Kind) ||
+        RuntimeInputName.IsMatch(node.Expression);
 
     internal static void ValidateCustomExpression(string expression, string label)
     {

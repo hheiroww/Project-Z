@@ -30,8 +30,8 @@ Namespace Windows.ShaderEditing
         Private ReadOnly contextHint As TextElement
         Private ReadOnly contextResults As ListBox
         Private ReadOnly graphStatus As TextElement
-        Private ReadOnly catalog As ShaderNodeDefinition() = ShaderNodes.All.Where(Function(item) Not ShaderDocument.IsOutputKind(item.Kind)).
-            OrderBy(Function(item) item.Category).ThenBy(Function(item) item.Label).ToArray()
+        Private ReadOnly catalog As ShaderNodeDefinition()
+        Private ReadOnly realtime As Boolean
         Private ReadOnly fieldCommits As New List(Of Action)
         Private ReadOnly fieldEditors As New List(Of SceneElement)
         Private settings As New WindowAppearanceSettings()
@@ -48,8 +48,12 @@ Namespace Windows.ShaderEditing
         Public ReadOnly Property Root As SceneElement
         Public Event GraphChanged As EventHandler
 
-        Public Sub New(scene As Scene)
+        Public Sub New(scene As Scene, Optional realtime As Boolean = False)
             Me.scene = scene
+            Me.realtime = realtime
+            catalog = ShaderNodes.All.Where(Function(item) Not ShaderDocument.IsOutputKind(item.Kind) AndAlso
+                (realtime OrElse item.Category <> "Runtime Input")).
+                OrderBy(Function(item) item.Category).ThenBy(Function(item) item.Label).ToArray()
             Dim parser As SceneXamlParser = Nothing
             Root = ShaderEditorChrome.LoadView(scene, "AdvancedShaderView.xaml", parser)
             Dim elements = parser.NamedElements
@@ -280,6 +284,10 @@ Namespace Windows.ShaderEditing
                 Dim definition = ShaderNodes.Get(node.Kind)
                 AddCaption(definition.Label)
                 AddCaption(definition.Category, True)
+                If definition.Category = "Runtime Input" Then
+                    AddCaption(definition.Kind)
+                    AddCaption("Set by the host each frame.", True)
+                End If
                 If Not ShaderDocument.IsOutputKind(node.Kind) Then
                     AddCaption("Name", True)
                     AddTextField(node, node.Name, False, Function() node.Name, Sub(value) node.Name = value.Trim())
@@ -291,6 +299,12 @@ Namespace Windows.ShaderEditing
                     AddCaption("HLSL expression")
                     AddTextField(node, node.Expression, True, Function() node.Expression, Sub(value) node.Expression = value)
                     AddCaption("A, B, C, uv, Time, TexelSize", True)
+                    If realtime Then
+                        AddCaption("AudioLevel, AudioLow", True)
+                        AddCaption("AudioMid, AudioHigh", True)
+                        AddCaption("AudioBeat, BeatPhase, Tempo", True)
+                        AddCaption("Macro01 through Macro16", True)
+                    End If
                 End If
                 For Each port In definition.Inputs
                     Dim wired = document.Connections.Any(Function(wire) wire.Target = node.Id AndAlso wire.Input = port.Name)
