@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>1.0.0</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Shared portable model and terrain scenes for Project-Z applications.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(StudioScenesProjectZRoot)' == ''">
+    <PackageReference Include="ProjectZ" Version="2026.11.20.1" />
+    <PackageReference Include="ProjectZ.ModelImport" Version="2026.11.20.1" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(StudioScenesProjectZRoot)' != ''">
+    <ProjectReference Include="$(StudioScenesProjectZRoot)/Project Z Windows.vbproj" />
+    <ProjectReference Include="$(StudioScenesProjectZRoot)/Project Z Model Import/Project Z Model Import.csproj" />
+  </ItemGroup>
+</Project>
