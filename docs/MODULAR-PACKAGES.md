@@ -48,7 +48,9 @@ in the base runtime. Native fault dumps and forced-exit observation require
 `ProjectZ.Diagnostics`. A base application does not start an observer, allocate
 its shared context buffer or subscribe to first-chance exception snapshots.
 The optional observer stays outside a single-file bundle so it can be started
-reliably as a separate process. Distribute that sidecar when opting in.
+reliably as a separate process. Applications in the same Windows user session
+and elevation context share one observer. It exits after the last registered
+application closes. Distribute the matching sidecar and framework together.
 
 Self-contained applications still contain the .NET/Windows Desktop runtime.
 Framework-dependent deployment can share a separately installed runtime; it
