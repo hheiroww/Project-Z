@@ -55,6 +55,8 @@ Compile `ShaderGenerator.GenerateRealtimeEffect(ShaderDocument.Parse(graphJson))
 
 The node palette lists these scalars under **Runtime Input**. HLSL expression nodes can use the same names. The **Audio reactive** presets provide editable examples. Exported `.pzshader` graphs can be opened in the video pipeline, which supplies zero audio, phase and macro values and a 120 BPM tempo.
 
+A video compositor that supplies audio or automation can opt into `ShaderGenerator.GenerateReactiveVideoShader`. This keeps the video texture, sampler, and `b0` time/texel-size binding. When the graph references live inputs, bind a 96-byte `b1` constant buffer with the 23 floats in `ShaderRuntimeInputs.ScalarNames` order and one padding float. `GenerateVideoShader` continues to supply the neutral values.
+
 Keep `ProjectZ.dll`, `ProjectZ.ShaderEditor.dll`, the shader worker runtime configuration, and `ProjectZ.ShaderCompiler` beside the host component's managed dependencies. The worker uses a compatible component-local `.deps.json` when an unmanaged host opens it.
 
 ## Assign a 3D surface material

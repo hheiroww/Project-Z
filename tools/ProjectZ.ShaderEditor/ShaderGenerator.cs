@@ -21,7 +21,12 @@ public static class ShaderGenerator
         ? throw new InvalidDataException("A real-time pixel effect needs a screen-space shader graph.")
         : Generate(document, video: false, realtime: true);
 
-    private static string Generate(ShaderDocument document, bool video, bool realtime = false)
+    /// <summary>Generates a video pixel shader with optional real-time scalars in a separate b1 buffer.</summary>
+    public static string GenerateReactiveVideoShader(ShaderDocument document) => document.IsSurface
+        ? throw new InvalidDataException("A material graph needs the 3D surface shader.")
+        : Generate(document, video: true, reactiveVideo: true);
+
+    private static string Generate(ShaderDocument document, bool video, bool realtime = false, bool reactiveVideo = false)
     {
         var ordered = document.GetEvaluationOrder();
         var output = ordered.Single(node => node.Kind == "Output");
@@ -42,13 +47,21 @@ public static class ShaderGenerator
         if (realtime || ordered.Any(node => reachable.Contains(node.Id) && UsesRuntimeInput(node)))
         {
             source.AppendLine();
+            if (reactiveVideo)
+                source.AppendLine("cbuffer ProjectZVideoRuntimeInputs : register(b1)").AppendLine("{");
+
             foreach (string parameter in ShaderRuntimeInputs.ScalarNames)
             {
-                if (realtime)
+                if (reactiveVideo)
+                    source.AppendLine($"    float {parameter};");
+                else if (realtime)
                     source.AppendLine($"float {parameter};");
                 else
                     source.AppendLine($"static const float {parameter} = {(parameter == "Tempo" ? "120.0" : "0.0")};");
             }
+
+            if (reactiveVideo)
+                source.AppendLine("    float RuntimeInputPadding;").AppendLine("};");
         }
         source.AppendLine().AppendLine().Append(SharedFunctions);
         source.AppendLine().AppendLine();

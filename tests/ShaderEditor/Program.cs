@@ -103,6 +103,16 @@ static async Task CheckRealtime(string? compiler, string? staging)
         film.Contains("static const float Tempo = 120.0;", StringComparison.Ordinal),
         "a shared graph keeps generated video independent of live uniform bindings");
     CompilePixelShader(film);
+    string reactiveFilm = ShaderGenerator.GenerateReactiveVideoShader(graph);
+    Require(reactiveFilm.Contains("ProjectZVideoParameters : register(b0)", StringComparison.Ordinal) &&
+        reactiveFilm.Contains("ProjectZVideoRuntimeInputs : register(b1)", StringComparison.Ordinal) &&
+        reactiveFilm.Contains("float RuntimeInputPadding;", StringComparison.Ordinal) &&
+        !reactiveFilm.Contains("static const float AudioLow", StringComparison.Ordinal),
+        "reactive video keeps the existing b0 ABI and adds a separate packed scalar buffer");
+    var legacyGraph = ShaderDocument.Create();
+    Require(ShaderGenerator.GenerateReactiveVideoShader(legacyGraph) == ShaderGenerator.GenerateVideoShader(legacyGraph),
+        "ordinary video graphs compile identically with and without opt-in reactive video");
+    CompilePixelShader(reactiveFilm);
     Reject(() => ShaderGenerator.GenerateRealtimeEffect(SurfaceMaterials.CreatePreset("clear-water")),
         "live screen shader generation requires a pixel-effect graph");
 
