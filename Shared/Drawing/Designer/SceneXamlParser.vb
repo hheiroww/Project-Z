@@ -762,6 +762,7 @@ End Function
             End If
             If normalized.EndsWith("fill") OrElse normalized.EndsWith("fillcolor") Then
                 If TypeOf target Is PolygonElement Then Return New FillColorProperty(target)
+                If TypeOf target Is RectangleElement Then Return New BackgroundColorProperty(target)
             End If
             If (normalized.EndsWith("borderbrush") OrElse normalized.EndsWith("stroke") OrElse
                 normalized.EndsWith("strokecolor")) AndAlso TypeOf target Is Border Then
