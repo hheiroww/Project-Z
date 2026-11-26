@@ -14,7 +14,7 @@ public static partial class ShaderPresets
     }
 
     public static IReadOnlyList<ShaderPreset> All { get; } = Array.AsReadOnly(
-        Materials().Concat(Particles()).Concat(ImageEffects()).Concat(MotionEffects())
+        Materials().Concat(Particles()).Concat(ImageEffects()).Concat(MotionEffects()).Concat(Fractals())
             .OrderBy(preset => preset.Category, StringComparer.Ordinal)
             .ThenBy(preset => preset.Name, StringComparer.Ordinal)
             .ToArray());
