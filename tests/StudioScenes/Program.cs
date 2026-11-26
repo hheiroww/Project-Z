@@ -18,6 +18,7 @@ internal static class Program
 
             CheckCameraMotion();
             CheckTerrain(args.ElementAtOrDefault(1));
+            EndlessChunkSmoke.Run();
             var fixture = CheckSceneFile(args[0]);
             CheckImportedModel(fixture.Scene, fixture.ModelPath);
             if (args.Length == 3) StudioUiSmoke.Run(args[2]);

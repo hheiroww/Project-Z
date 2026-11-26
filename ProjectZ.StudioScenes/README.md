@@ -32,6 +32,8 @@ The Coastal, Temperate, Highland, Alpine, and Arid altitude presets fill in edit
 
 ## Endless worlds and camera animation
 
-Enable Endless terrain to travel beyond the island's original bounds. Neighboring tiles sample the same world coordinates and share their edge heights. Fog fades distant ground and water into the sky or transparent background. The renderer retains a bounded tile cache and distributes geometry and material samples across the visible world.
+Enable Endless terrain to travel beyond the island's original bounds. The seed and world coordinates define each chunk, including its edge heights, normals, material samples, and animated water phases. Revisiting a location at the same scene time and signal reproduces the frame. The water combines seeded spatial variation with continuous time and audio inputs.
+
+Fog blends distant ground and water into the sky or transparent background. The CPU renderer reuses chunk topology, skips water under dry ground, and caches the rendered land and depth at a fixed camera. Active camera movement and higher geometry or material resolutions require more CPU time. The surrounding host still needs its own supported graphics backend.
 
 Choose Flythrough, Orbit, or Keyframes on the Path page. The beat grid snaps authored keys. Playback interpolates camera orientation, position, zoom, and field of view between those keys. When a host supplies track tempo or beat position, Sync to track lets the camera follow it.

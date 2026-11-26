@@ -34,7 +34,7 @@ internal sealed class SceneRasterizer
     private ClipVertex[] _projected = [];
     private PixelVertex[] _screen = [];
     private int[] _clipMasks = [];
-    private TerrainGeometry? _cachedTerrain;
+    private StudioTerrain? _cachedTerrainSettings;
     private StudioSky? _cachedSky;
     private Matrix4x4 _cachedCamera;
     private TerrainFog _cachedFog;
@@ -48,8 +48,8 @@ internal sealed class SceneRasterizer
     private readonly record struct ClipVertex(Vector4 Position, Vector2 UV, Vector4 Tint);
     private readonly record struct PixelVertex(float X, float Y, float Depth, float ReciprocalW, Vector2 UV, Vector4 Tint);
 
-    internal void Begin(int width, int height, Matrix4x4 camera, StudioSky sky, TerrainGeometry? terrain, TerrainFog fog,
-        bool highQuality)
+    internal void Begin(int width, int height, Matrix4x4 camera, StudioSky sky, IReadOnlyList<TerrainGeometry> terrain,
+        StudioTerrain? terrainSettings, TerrainFog fog, bool highQuality)
     {
         _width = width;
         _height = height;
@@ -62,7 +62,7 @@ internal sealed class SceneRasterizer
             _pixels = new int[count];
             _depth = new float[count];
         }
-        if (terrain is not null && ReferenceEquals(terrain, _cachedTerrain) && sky == _cachedSky &&
+        if (terrainSettings is not null && ReferenceEquals(terrainSettings, _cachedTerrainSettings) && sky == _cachedSky &&
             camera == _cachedCamera && fog == _cachedFog && _cachedSize == (width, height) &&
             highQuality == _cachedHighQuality)
         {
@@ -70,7 +70,7 @@ internal sealed class SceneRasterizer
             _cachedDepth.CopyTo(_depth, 0);
             return;
         }
-        _cachedTerrain = null;
+        _cachedTerrainSettings = null;
 
         if (sky.Enabled)
         {
@@ -86,10 +86,11 @@ internal sealed class SceneRasterizer
         else
             Array.Clear(_pixels);
         Array.Fill(_depth, float.PositiveInfinity);
-        if (terrain is null)
+        if (terrainSettings is null)
             return;
 
-        Draw(terrain.Land, terrain.Indices, terrain.Material, SurfaceLighting.Land);
+        foreach (var chunk in terrain)
+            Draw(chunk.Land, chunk.Indices, chunk.Material, SurfaceLighting.Land);
         if (count > MaximumCachedTerrainPixels)
             return;
         if (_cachedPixels.Length != count)
@@ -99,7 +100,7 @@ internal sealed class SceneRasterizer
         }
         _pixels.CopyTo(_cachedPixels, 0);
         _depth.CopyTo(_cachedDepth, 0);
-        _cachedTerrain = terrain;
+        _cachedTerrainSettings = terrainSettings;
         _cachedSky = sky with { };
         _cachedCamera = camera;
         _cachedFog = fog;
@@ -114,14 +115,15 @@ internal sealed class SceneRasterizer
         _projected = [];
         _screen = [];
         _clipMasks = [];
-        _cachedTerrain = null;
+        _cachedTerrainSettings = null;
         _cachedSky = null;
         _cachedPixels = [];
         _cachedDepth = [];
     }
 
     internal void Draw(ReadOnlySpan<SceneVertex> vertices, ReadOnlySpan<int> indices, MeshTexture? texture = null,
-        SurfaceLighting surface = SurfaceLighting.Model, double seconds = 0, StudioSignal signal = default)
+        SurfaceLighting surface = SurfaceLighting.Model, ReadOnlySpan<TerrainWaterVertex> waves = default,
+        TerrainWaterFrame water = default)
     {
         if (_projected.Length < vertices.Length)
         {
@@ -142,15 +144,7 @@ internal sealed class SceneRasterizer
             }
             else if (surface == SurfaceLighting.Water)
             {
-                var phase = (float)(seconds % 16384);
-                var frequency = _fog.End > 0 ? .27f : 1f;
-                var ripple = MathF.Sin((point.X * 19f + point.Z * 13f) * frequency + phase * 3.4f + .5f * signal.Mid)
-                    + .44f * MathF.Sin((point.X * 25f - point.Z * 21f) * frequency - phase * 3.9f);
-                point.Y += ripple * (.0028f + .009f * signal.Bass);
-                var crest = MathF.Pow(Math.Clamp(.5f + ripple * .32f, 0, 1), 4);
-                var highlight = new Vector3(color.X, color.Y, color.Z) * (.58f + .46f * crest)
-                    + new Vector3(.24f, .35f, .43f) * crest * (.55f + .35f * signal.Beat + .10f * signal.Treble);
-                color = new Vector4(highlight, color.W);
+                water.Apply(waves[index], ref point, ref color);
             }
             if (_fog.End > 0 && surface != SurfaceLighting.Model)
                 color.W *= _fog.Coverage(point);
@@ -230,13 +224,19 @@ internal sealed class SceneRasterizer
         var rowA = Edge(left + .5f, top + .5f, b, c) * oneOver;
         var rowB = Edge(left + .5f, top + .5f, c, a) * oneOver;
         var rowC = Edge(left + .5f, top + .5f, a, b) * oneOver;
-        var textureA = a.UV * a.ReciprocalW;
-        var textureB = b.UV * b.ReciprocalW;
-        var textureC = c.UV * c.ReciprocalW;
-        var dx = textureA * stepA + textureB * stepB + textureC * stepC;
-        var dy = textureA * deltaA + textureB * deltaB + textureC * deltaC;
-        var dwx = a.ReciprocalW * stepA + b.ReciprocalW * stepB + c.ReciprocalW * stepC;
-        var dwy = a.ReciprocalW * deltaA + b.ReciprocalW * deltaB + c.ReciprocalW * deltaC;
+        Vector2 textureA = default, textureB = default, textureC = default, dx = default, dy = default;
+        float dwx = 0, dwy = 0;
+        var filter = texture is not null && _highQuality;
+        if (filter)
+        {
+            textureA = a.UV * a.ReciprocalW;
+            textureB = b.UV * b.ReciprocalW;
+            textureC = c.UV * c.ReciprocalW;
+            dx = textureA * stepA + textureB * stepB + textureC * stepC;
+            dy = textureA * deltaA + textureB * deltaB + textureC * deltaC;
+            dwx = a.ReciprocalW * stepA + b.ReciprocalW * stepB + c.ReciprocalW * stepC;
+            dwy = a.ReciprocalW * deltaA + b.ReciprocalW * deltaB + c.ReciprocalW * deltaC;
+        }
         for (var y = top; y <= bottom; y++)
         {
             var wA = rowA;
@@ -255,13 +255,18 @@ internal sealed class SceneRasterizer
                         var pC = wC * c.ReciprocalW;
                         var inverse = 1f / (pA + pB + pC);
                         var color = (a.Tint * pA + b.Tint * pB + c.Tint * pC) * inverse;
-                        if (texture is not null && _highQuality)
+                        if (texture is not null)
                         {
-                            var uv = (textureA * wA + textureB * wB + textureC * wC) * inverse;
-                            color *= texture.Sample(uv, (dx - uv * dwx) * inverse, (dy - uv * dwy) * inverse);
+                            if (filter)
+                            {
+                                var uv = (textureA * wA + textureB * wB + textureC * wC) * inverse;
+                                color *= texture.Sample(uv, (dx - uv * dwx) * inverse, (dy - uv * dwy) * inverse);
+                            }
+                            else
+                            {
+                                color *= texture.Sample((a.UV * pA + b.UV * pB + c.UV * pC) * inverse);
+                            }
                         }
-                        else if (texture is not null)
-                            color *= texture.Sample((a.UV * pA + b.UV * pB + c.UV * pC) * inverse);
                         if (color.W > 1f / 255f)
                         {
                             _depth[destination] = z;

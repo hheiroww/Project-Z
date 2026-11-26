@@ -24,11 +24,18 @@ internal sealed class TerrainGeometry
     internal readonly int[] Indices;
     internal readonly SceneVertex[] Water;
     internal readonly int[] WaterIndices;
+    internal readonly TerrainWaterVertex[] WaterWaves;
     internal readonly MeshTexture? Material;
 
-    internal TerrainGeometry(StudioTerrain settings, TerrainRegion region)
+    internal static int LandGrid(StudioTerrain settings) =>
+        settings.Endless ? Math.Max(5, (settings.Grid - 1) / 4 + 1) : settings.Grid;
+
+    internal static int WaterGrid(StudioTerrain settings) =>
+        Math.Min(LandGrid(settings), settings.Endless ? MaximumEndlessWaterGrid : MaximumWaterGrid);
+
+    internal TerrainGeometry(StudioTerrain settings, TerrainRegion region, int[] landIndices, int[] waterIndices)
     {
-        _grid = settings.Endless ? Math.Max(5, (settings.Grid - 1) / 4 + 1) : settings.Grid;
+        _grid = LandGrid(settings);
         _settings = settings;
         Region = region;
         _axis = new float[_grid];
@@ -40,7 +47,7 @@ internal sealed class TerrainGeometry
         _altitudes = new float[count];
         _slopes = new float[count];
         Land = new SceneVertex[count];
-        Indices = CreateIndices(_grid);
+        Indices = landIndices;
 
         var surface = settings.Material;
         var useTexture = surface.Enabled && surface.TextureStrength > 0;
@@ -48,10 +55,16 @@ internal sealed class TerrainGeometry
         var high = StudioColor.Decode(settings.HighColor);
         var snow = StudioColor.Decode(settings.SnowColor);
 
+        var lowestAltitude = 1f;
         for (var row = 0; row < _grid; row++)
         for (var column = 0; column < _grid; column++)
-            _altitudes[row * _grid + column] = Height(settings, Region.X + _axis[column], Region.Z + _axis[row]);
+        {
+            var altitude = Height(settings, Region.X + _axis[column], Region.Z + _axis[row]);
+            _altitudes[row * _grid + column] = altitude;
+            lowestAltitude = Math.Min(lowestAltitude, altitude);
+        }
 
+        var step = 2 * Region.Extent / (_grid - 1);
         for (var row = 0; row < _grid; row++)
         for (var column = 0; column < _grid; column++)
         {
@@ -59,14 +72,15 @@ internal sealed class TerrainGeometry
             var x = Region.X + _axis[column];
             var z = Region.Z + _axis[row];
             var altitude = _altitudes[offset];
-            var step = 2 * Region.Extent / (_grid - 1);
-            var outside = settings.Endless;
-            var west = column == 0 && outside ? Height(settings, x - step, z) : At(_altitudes, column - 1, row);
-            var east = column == _grid - 1 && outside ? Height(settings, x + step, z) : At(_altitudes, column + 1, row);
-            var north = row == 0 && outside ? Height(settings, x, z - step) : At(_altitudes, column, row - 1);
-            var south = row == _grid - 1 && outside ? Height(settings, x, z + step) : At(_altitudes, column, row + 1);
-            var spacingX = (column == 0 || column == _grid - 1) && !outside ? step : step * 2;
-            var spacingZ = (row == 0 || row == _grid - 1) && !outside ? step : step * 2;
+            var onWestOrEast = column == 0 || column == _grid - 1;
+            var onNorthOrSouth = row == 0 || row == _grid - 1;
+            var sharedEdge = settings.Endless && (onWestOrEast || onNorthOrSouth);
+            var west = sharedEdge ? Height(settings, x - step, z) : At(_altitudes, column - 1, row);
+            var east = sharedEdge ? Height(settings, x + step, z) : At(_altitudes, column + 1, row);
+            var north = sharedEdge ? Height(settings, x, z - step) : At(_altitudes, column, row - 1);
+            var south = sharedEdge ? Height(settings, x, z + step) : At(_altitudes, column, row + 1);
+            var spacingX = onWestOrEast && !settings.Endless ? step : step * 2;
+            var spacingZ = onNorthOrSouth && !settings.Endless ? step : step * 2;
             var normal = Vector3.Normalize(new Vector3((west - east) * _relief / spacingX, 1, (north - south) * _relief / spacingZ));
             var slope = MathF.Acos(Math.Clamp(normal.Y, 0, 1)) * (2f / MathF.PI);
             _slopes[offset] = slope;
@@ -79,16 +93,19 @@ internal sealed class TerrainGeometry
         if (useTexture)
             Material = CreateMaterial(settings, low, high, snow);
 
-        if (settings.ShowWater)
+        var waterHeight = WorldY(_waterLevel);
+        if (settings.ShowWater && (!settings.Endless || WorldY(lowestAltitude) <= waterHeight + TerrainWaterFrame.MaximumDisplacement))
         {
-            var grid = Math.Min(_grid, settings.Endless ? MaximumEndlessWaterGrid : MaximumWaterGrid);
+            var grid = WaterGrid(settings);
             var color = StudioColor.Decode(settings.WaterColor);
-            Water = CreateWater(grid, WorldY(_waterLevel), color);
-            WaterIndices = grid == _grid ? Indices : CreateIndices(grid);
+            WaterWaves = new TerrainWaterVertex[grid * grid];
+            Water = CreateWater(grid, waterHeight, color);
+            WaterIndices = waterIndices;
         }
         else
         {
             Water = [];
+            WaterWaves = [];
             WaterIndices = [];
         }
     }
@@ -115,13 +132,15 @@ internal sealed class TerrainGeometry
         {
             var x = Region.X + axis[column];
             var z = Region.Z + axis[row];
-            vertices[row * grid + column] = new SceneVertex(new Vector3(x, height, z), Vector3.UnitY, new Vector2(x, z),
+            var index = row * grid + column;
+            vertices[index] = new SceneVertex(new Vector3(x, height, z), Vector3.UnitY, Vector2.Zero,
                 waterColor with { W = waterColor.W * BoundaryAlpha(x, z) });
+            WaterWaves[index] = TerrainWaterVertex.At(x, z, _settings);
         }
         return vertices;
     }
 
-    private static int[] CreateIndices(int grid)
+    internal static int[] CreateIndices(int grid)
     {
         var indices = new int[checked(6 * (grid - 1) * (grid - 1))];
         var offset = 0;
@@ -148,12 +167,13 @@ internal sealed class TerrainGeometry
         var soil = StudioColor.Decode(surface.SoilColor);
         var grass = StudioColor.Decode(surface.GrassColor);
         var rock = StudioColor.Decode(surface.RockColor);
-        var scale = surface.TextureScale;
+        var scale = (double)surface.TextureScale;
         for (var row = 0; row < resolution; row++)
         for (var column = 0; column < resolution; column++)
         {
-            var u = (column + .5f) / resolution;
-            var v = (row + .5f) / resolution;
+            // Neighboring chunks share the exact material samples along their common edge.
+            var u = settings.Endless ? (float)column / (resolution - 1) : (column + .5f) / resolution;
+            var v = settings.Endless ? (float)row / (resolution - 1) : (row + .5f) / resolution;
             var x = (Region.X + Axis(u, Region.Extent)) * scale;
             var z = (Region.Z + Axis(v, Region.Extent)) * scale;
             var sampleHeight = Sample(_altitudes, u, v);
@@ -162,7 +182,7 @@ internal sealed class TerrainGeometry
             // Frequencies are measured in world space, not in viewport pixels or mesh cells.
             var patches = Noise(x * 3.7f + 7, z * 3.7f + 43, settings.Seed + 619);
             var grain = Noise(x * 32f - 21, z * 32f + 11, settings.Seed - 283);
-            var banding = .5f + .5f * MathF.Sin((sampleHeight * 2.1f + x * .39f - z * .65f) * 45f + patches * 4f);
+            var banding = .5f + .5f * (float)Math.Sin((sampleHeight * 2.1 + x * .39 - z * .65) * 45 + patches * 4);
             var altitude = sampleHeight + (patches - .5f) * .11f;
             var slope = sampleSlope + (patches - .5f) * .13f;
             var blend = surface.AltitudeBlend;
@@ -183,7 +203,7 @@ internal sealed class TerrainGeometry
             terrain = Vector4.Lerp(terrain, Shade(snow, .88f + .15f * grain), ice);
             texture[row * resolution + column] = StudioColor.EncodeStraight(terrain);
         }
-        return new MeshTexture(resolution, resolution, texture, ClampEdges: true);
+        return new MeshTexture(resolution, resolution, texture, ClampEdges: true, SharedBorder: settings.Endless);
     }
 
     private static Vector4 BaseColor(Vector4 low, Vector4 high, float altitude, float slope) =>
@@ -203,12 +223,14 @@ internal sealed class TerrainGeometry
     {
         var gridX = u * (_grid - 1);
         var gridZ = v * (_grid - 1);
-        var column = Math.Min(_grid - 2, (int)gridX);
-        var row = Math.Min(_grid - 2, (int)gridZ);
+        var column = (int)gridX;
+        var row = (int)gridZ;
         var blendX = gridX - column;
-        var index = row * _grid + column;
-        var top = Interpolate(data[index], data[index + 1], blendX);
-        var bottom = Interpolate(data[index + _grid], data[index + _grid + 1], blendX);
+        var nextColumn = Math.Min(_grid - 1, column + 1);
+        var topStart = row * _grid;
+        var bottomStart = Math.Min(_grid - 1, row + 1) * _grid;
+        var top = Interpolate(data[topStart + column], data[topStart + nextColumn], blendX);
+        var bottom = Interpolate(data[bottomStart + column], data[bottomStart + nextColumn], blendX);
         return Interpolate(top, bottom, gridZ - row);
     }
 
@@ -224,9 +246,9 @@ internal sealed class TerrainGeometry
     private float AxisToUnit(float offset) => Math.Clamp((offset / Region.Extent + 1f) * .5f, 0, 1);
     private static float Height(StudioTerrain settings, float x, float z)
     {
-        var frequency = settings.Frequency * .62f;
-        var warpX = Noise(x * .91f + 11.3f, z * .91f, settings.Seed - 53) - .5f;
-        var warpZ = Noise(x * .88f, z * .88f + 33.7f, settings.Seed + 31) - .5f;
+        var frequency = settings.Frequency * .62;
+        var warpX = Noise(x * .91 + 11.3, z * .91, settings.Seed - 53) - .5;
+        var warpZ = Noise(x * .88, z * .88 + 33.7, settings.Seed + 31) - .5;
         var amplitude = 1f;
         var sum = 0f;
         var weight = 0f;
@@ -244,12 +266,12 @@ internal sealed class TerrainGeometry
         return Math.Clamp((sum / weight - .5f) * 1.58f + .52f - islandFade, 0, 1);
     }
 
-    private static float Noise(float x, float z, int seed)
+    internal static float Noise(double x, double z, int seed)
     {
-        var ix = (int)MathF.Floor(x);
-        var iz = (int)MathF.Floor(z);
-        var dx = Smooth(0, 1, x - ix);
-        var dz = Smooth(0, 1, z - iz);
+        var ix = (int)Math.Floor(x);
+        var iz = (int)Math.Floor(z);
+        var dx = Smooth(0, 1, (float)(x - ix));
+        var dz = Smooth(0, 1, (float)(z - iz));
         return Interpolate(Interpolate(Hash(ix, iz, seed), Hash(ix + 1, iz, seed), dx),
             Interpolate(Hash(ix, iz + 1, seed), Hash(ix + 1, iz + 1, seed), dx), dz);
     }

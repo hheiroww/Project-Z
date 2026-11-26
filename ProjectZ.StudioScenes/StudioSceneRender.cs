@@ -18,6 +18,11 @@ public sealed class StudioSceneRender : IDisposable
     private readonly LinkedList<TerrainGeometry> _terrain = new();
     private readonly Dictionary<TerrainRegion, LinkedListNode<TerrainGeometry>> _terrainByRegion = new();
     private readonly List<TerrainGeometry> _visibleTerrain = new();
+    private int[] _landIndices = [];
+    private int[] _waterIndices = [];
+    private Matrix4x4 _visibleCamera;
+    private TerrainFog _visibleFog;
+    private bool _visibleTerrainValid;
     private bool _disposed;
 
     public StudioSceneRender(StudioScene scene, string? modelPath = null)
@@ -59,40 +64,33 @@ public sealed class StudioSceneRender : IDisposable
         var fog = active.HasTerrain && active.Terrain.Endless
             ? TerrainFog.ForCamera(camera.Eye, camera.Distance)
             : default;
-        TerrainGeometry? island = null;
         TerrainGeometry? modelGround = null;
-        _visibleTerrain.Clear();
         if (active.HasTerrain)
         {
             SetTerrainSettings(active.Terrain);
-            if (active.Terrain.Endless)
-            {
-                CollectVisibleTiles(camera.ViewProjection, fog, active.Terrain.Relief);
-                if (active.HasModel)
-                    modelGround = GetTerrain(TileAt(active.Model.OffsetX, active.Model.OffsetZ));
-            }
-            else
-            {
-                island = GetTerrain(TerrainRegion.Island);
-                modelGround = island;
-                _visibleTerrain.Add(island);
-            }
+            UpdateVisibleTerrain(active.Terrain, camera.ViewProjection, fog);
+            if (active.HasModel)
+                modelGround = active.Terrain.Endless
+                    ? GetTerrain(TileAt(active.Model.OffsetX, active.Model.OffsetZ))
+                    : _visibleTerrain[0];
+        }
+        else
+        {
+            _visibleTerrain.Clear();
+            _visibleTerrainValid = false;
         }
 
         var normalized = new StudioSignal(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
-        _raster.Begin(width, height, camera.ViewProjection, active.Sky, island, fog, highQuality);
-        if (fog.End > 0)
-        {
-            foreach (var tile in _visibleTerrain)
-                _raster.Draw(tile.Land, tile.Indices, tile.Material, SurfaceLighting.Land);
-        }
-
+        _raster.Begin(width, height, camera.ViewProjection, active.Sky, _visibleTerrain,
+            active.HasTerrain ? _lastTerrain : null, fog, highQuality);
         if (active.HasModel)
             _model!.Draw(_raster, active.Model, seconds, modelGround, normalized);
+
+        var water = TerrainWaterFrame.At(seconds, normalized);
         foreach (var tile in _visibleTerrain)
         {
             if (tile.Water.Length > 0)
-                _raster.Draw(tile.Water, tile.WaterIndices, surface: SurfaceLighting.Water, seconds: seconds, signal: normalized);
+                _raster.Draw(tile.Water, tile.WaterIndices, surface: SurfaceLighting.Water, waves: tile.WaterWaves, water: water);
         }
         return _raster.Pixels;
     }
@@ -117,7 +115,8 @@ public sealed class StudioSceneRender : IDisposable
         _raster.Release();
         _model = null;
         ClearTerrain();
-        _visibleTerrain.Clear();
+        _landIndices = [];
+        _waterIndices = [];
         _lastTerrain = null;
     }
 
@@ -126,12 +125,33 @@ public sealed class StudioSceneRender : IDisposable
         if (_lastTerrain == settings) return;
         ClearTerrain();
         _lastTerrain = settings with { Material = settings.Material with { } };
+        var grid = TerrainGeometry.LandGrid(settings);
+        var waterGrid = TerrainGeometry.WaterGrid(settings);
+        _landIndices = TerrainGeometry.CreateIndices(grid);
+        _waterIndices = !settings.ShowWater ? [] : waterGrid == grid ? _landIndices : TerrainGeometry.CreateIndices(waterGrid);
+    }
+
+    private void UpdateVisibleTerrain(StudioTerrain terrain, Matrix4x4 camera, TerrainFog fog)
+    {
+        if (_visibleTerrainValid && (!terrain.Endless || (_visibleCamera == camera && _visibleFog == fog)))
+            return;
+
+        _visibleTerrain.Clear();
+        if (terrain.Endless)
+            CollectVisibleTiles(camera, fog, terrain.Relief);
+        else
+            _visibleTerrain.Add(GetTerrain(TerrainRegion.Island));
+        _visibleCamera = camera;
+        _visibleFog = fog;
+        _visibleTerrainValid = true;
     }
 
     private void ClearTerrain()
     {
         _terrain.Clear();
         _terrainByRegion.Clear();
+        _visibleTerrain.Clear();
+        _visibleTerrainValid = false;
     }
 
     private TerrainGeometry GetTerrain(TerrainRegion region)
@@ -149,7 +169,7 @@ public sealed class StudioSceneRender : IDisposable
             _terrain.RemoveLast();
         }
 
-        var geometry = new TerrainGeometry(_lastTerrain!, region);
+        var geometry = new TerrainGeometry(_lastTerrain!, region, _landIndices, _waterIndices);
         _terrainByRegion.Add(region, _terrain.AddFirst(geometry));
         return geometry;
     }

@@ -4,13 +4,13 @@ namespace ProjectZ.StudioScenes;
 
 internal readonly record struct SceneVertex(Vector3 Position, Vector3 Normal, Vector2 UV, Vector4 Tint);
 
-internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool ClampEdges = false)
+internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool ClampEdges = false, bool SharedBorder = false)
 {
     private MeshTexture[]? _mipmaps;
 
     internal Vector4 Sample(Vector2 uv, Vector2 dx, Vector2 dy)
     {
-        var size = new Vector2(Width, Height);
+        var size = SharedBorder ? new Vector2(Width - 1, Height - 1) : new Vector2(Width, Height);
         var texelsX = dx * size;
         var texelsY = dy * size;
         var xx = texelsX.LengthSquared();
@@ -27,6 +27,12 @@ internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool Cla
         var count = Math.Clamp((int)MathF.Ceiling(major / width), 1, maxAnisotropy);
         var angle = .5f * MathF.Atan2(2 * xy, xx - yy);
         var axis = dx * MathF.Cos(angle) + dy * MathF.Sin(angle);
+        if (SharedBorder)
+        {
+            // Restrict taps to this region and filter along the common boundary at its edge.
+            var extent = 2 * Vector2.Max(Vector2.Zero, Vector2.Min(uv, Vector2.One - uv));
+            axis = Vector2.Clamp(axis, -extent, extent);
+        }
         var levels = _mipmaps ??= BuildMipmaps();
         var lod = Math.Clamp(MathF.Log2(width), 0, levels.Length - 1);
         var first = (int)lod;
@@ -46,14 +52,20 @@ internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool Cla
     private MeshTexture[] BuildMipmaps()
     {
         var levels = new List<MeshTexture> { this };
-        while (levels[^1] is { } source && (source.Width > 1 || source.Height > 1))
+        var minimumSize = SharedBorder ? 2 : 1;
+        while (levels[^1] is { } source && (source.Width > minimumSize || source.Height > minimumSize))
         {
-            var width = (source.Width + 1) / 2;
-            var height = (source.Height + 1) / 2;
+            var width = Math.Max(minimumSize, (source.Width + 1) / 2);
+            var height = Math.Max(minimumSize, (source.Height + 1) / 2);
             var pixels = new int[width * height];
             for (var y = 0; y < height; y++)
             for (var x = 0; x < width; x++)
             {
+                if (SharedBorder)
+                {
+                    pixels[y * width + x] = source.FilterTerrainSample(x, y, width, height);
+                    continue;
+                }
                 var left = x * 2;
                 var top = y * 2;
                 var right = Math.Min(source.Width - 1, left + 1);
@@ -64,9 +76,20 @@ internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool Cla
                             StudioColor.Decode(source.Pixels[bottom * source.Width + right]);
                 pixels[y * width + x] = StudioColor.EncodeStraight(color * .25f);
             }
-            levels.Add(new MeshTexture(width, height, pixels, ClampEdges));
+            levels.Add(new MeshTexture(width, height, pixels, ClampEdges, SharedBorder));
         }
         return levels.ToArray();
+    }
+
+    private int FilterTerrainSample(int x, int y, int width, int height)
+    {
+        var u = (float)x / (width - 1);
+        var v = (float)y / (height - 1);
+        var dx = x == 0 || x == width - 1 ? 0 : .5f / (Width - 1);
+        var dy = y == 0 || y == height - 1 ? 0 : .5f / (Height - 1);
+        var sum = Sample(new Vector2(u - dx, v - dy)) + Sample(new Vector2(u + dx, v - dy)) +
+                  Sample(new Vector2(u - dx, v + dy)) + Sample(new Vector2(u + dx, v + dy));
+        return StudioColor.EncodeStraight(sum * .25f);
     }
 
     internal Vector4 Sample(Vector2 uv)
@@ -75,8 +98,8 @@ internal sealed record MeshTexture(int Width, int Height, int[] Pixels, bool Cla
             return Vector4.One;
         var u = ClampEdges ? Math.Clamp(uv.X, 0, 1) : uv.X - MathF.Floor(uv.X);
         var v = ClampEdges ? Math.Clamp(uv.Y, 0, 1) : uv.Y - MathF.Floor(uv.Y);
-        var horizontal = u * Width - .5f;
-        var vertical = v * Height - .5f;
+        var horizontal = SharedBorder ? u * (Width - 1) : u * Width - .5f;
+        var vertical = SharedBorder ? v * (Height - 1) : v * Height - .5f;
         var x = (int)MathF.Floor(horizontal);
         var y = (int)MathF.Floor(vertical);
         var left = ClampEdges ? Math.Clamp(x, 0, Width - 1) : (x + Width) % Width;
