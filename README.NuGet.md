@@ -2,7 +2,7 @@
 
 Version 2026.10.17.1 fixes package restore: the internal `ProjectZ.ModelImport.dll` is bundled with ProjectZ, and consumers no longer need an unpublished `ProjectZ.ModelImport` package.
 
-Project-Z automatically starts persistent diagnostics when a Windows `SceneManager` is created. Logs include full managed exceptions, while the bundled `ProjectZ.Diagnostics` observer records abrupt exits and captures native fault dumps. NuGet consumers receive the observer automatically, including for self-contained publishing.
+Project-Z automatically starts diagnostics when a Windows `SceneManager` is created. Applications in the same Windows user session and elevation context share one `ProjectZ.Diagnostics` observer. It records abrupt exits and captures native fault dumps in each application's diagnostic folder, then exits when the last registered application closes. NuGet consumers receive the observer automatically, including for self-contained publishing. Deploy the matching framework and observer together when updating an application.
 
 The implementation lives in `Windows/Diagnostics` and the crash observer builds from `Project Z Diagnostics/ProjectZ.Diagnostics.vbproj` in the Project-Z solution. Repository project-reference consumers use the same deployment targets through `Directory.Build.targets`; the diagnostics implementation and build rules belong to Project-Z. `tests/CrashDiagnostics/Consumer` verifies an independent consumer without downstream application references.
 
