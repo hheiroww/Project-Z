@@ -97,6 +97,21 @@ The loader takes the host's `GraphicsDevice`; create and load textures on its gr
 
 Particle `PhysicsEnabled`, `GravityEnabled`, `Gravity`, and `LinearDrag` control particle movement. Particles do not enter scene rigid-body collisions. Capacity is 1–16,000 per emitter; invalid state is sanitized and a long frame advances at most 250 ms. For a single atlas, billboards share one texture batch per effect pass. Managed frames with different textures create batches while retaining depth order. `LastDrawCallCount` exposes the actual batch count.
 
+## Seeded simulation samples
+
+Use `ProjectZ.Shared.Physics.LinearCongruentialRandom` for repeatable variation in impact placement, spawn positions, or forces. To select this sequence for particle velocity spread, use `New ParticleSimulation(New LinearCongruentialRandom(seed), capacity:=4096)`. The simulation copies the supplied state into an independent stream. The existing `ParticleSimulation(capacity, seed)` constructor continues to use the .NET seeded sequence. Keep a mutable instance per stream so the same seed and draw order reproduce the sequence. Pass its current `State` to the constructor to resume at the next draw.
+
+```vb
+Imports ProjectZ.Shared.Physics
+
+Dim sequence As New LinearCongruentialRandom(seed:=12398)
+Dim drop As New WaterSurfaceImpact(WaterHeightfield.TickAt(0.5),
+    sequence.NextSingle(), sequence.NextSingle(), 0.09F, -0.7F)
+Dim firstSample = LinearCongruentialRandom.Sample(12398)
+```
+
+`NextDouble()` and `NextSingle()` advance the sequence and return values in `[0, 1)`. `Sample(seed)` returns the first normalized value for a seed without storing state. Seeds of any signed 64-bit value wrap into the 134,456-state period. The generator follows the [reference recurrence](https://github.com/GarrettGunnell/Linear-Congruential-Generator/blob/main/main.py). Its short period suits small procedural variations.
+
 ## Water surfaces
 
 `WaterHeightfield` simulates a closed, shallow pool with one height per X/Z location. Its coordinates are normalized to a square of width one, and Y is up. Ripples travel through the mesh and reflect off the pool boundaries. Wave speed controls propagation and damping controls how long disturbances persist. The mesh supplies positions and normals for the renderer's water material.

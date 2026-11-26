@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="Program.vb" />
     <Compile Include="../../Shared/Drawing/Particles/*.vb" Link="%(Filename)%(Extension)" />
+    <Compile Include="../../Shared/Physics/LinearCongruentialRandom.vb" Link="LinearCongruentialRandom.vb" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
   </ItemGroup>
 </Project>
