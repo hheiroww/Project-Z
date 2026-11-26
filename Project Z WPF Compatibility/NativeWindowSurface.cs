@@ -30,6 +30,11 @@ public sealed class NativeWindowSurface : IDisposable
     }
     public void RenderFrame() { VerifyAlive(); game.RenderTick(true); }
     internal void RenderFrame(bool force) { VerifyAlive(); game.RenderTick(force); }
+    internal void SetDesktopBackdrop(bool enabled, int captureFramesPerSecond)
+    {
+        VerifyAlive();
+        game.SetDesktopBackdrop(hwnd, enabled, captureFramesPerSecond);
+    }
     public void Resize(int width, int height) { VerifyAlive(); game.Resize(width, height); }
     public void DispatchClick(int x, int y) { VerifyAlive(); game.DispatchClick(x, y); }
     public void DispatchRightClick(int x, int y) { VerifyAlive(); game.DispatchRightClick(x, y); }
@@ -77,6 +82,7 @@ public sealed class NativeWindowSurface : IDisposable
         long renderedRevision;
         long renderedBackdropRevision;
         long nextIdleFrame;
+        Color? backgroundBeforeBackdrop;
         public Scene SurfaceScene { get; private set; } = null!;
         public int FrameCount { get; private set; }
         public bool Closed { get; private set; }
@@ -118,6 +124,24 @@ public sealed class NativeWindowSurface : IDisposable
             manager.AddScene("window", SurfaceScene); manager.ActiveScene = SurfaceScene;
         }
         protected override void Update(GameTime time) { manager.Tick(time); base.Update(time); }
+        public void SetDesktopBackdrop(IntPtr window, bool enabled, int captureFramesPerSecond)
+        {
+            var backdrop = manager.DesktopBackdrop;
+            backdrop.NativeWindowHandle = window;
+            backdrop.Settings.CaptureFramesPerSecond = captureFramesPerSecond;
+            backdrop.Settings.Enabled = enabled;
+            if (enabled)
+            {
+                backgroundBeforeBackdrop ??= SurfaceScene.BackgroundColor;
+                SurfaceScene.BackgroundColor = Color.Transparent;
+            }
+            else if (backgroundBeforeBackdrop is { } background)
+            {
+                SurfaceScene.BackgroundColor = background;
+                backgroundBeforeBackdrop = null;
+            }
+            SurfaceScene.RequestRender();
+        }
         protected override bool BeginDraw()
         {
             // Keep ticking input and animation clocks, but reuse the presented

@@ -32,6 +32,7 @@ Namespace [Shared].Drawing.Designer
         Private ReadOnly _elementFactories As New Dictionary(Of String, Func(Of XmlElement, SceneElement))
         Private ReadOnly _namedElements As New Dictionary(Of String, SceneElement)
         Private ReadOnly _xmlElements As New Dictionary(Of XmlElement, SceneElement)()
+        Private ReadOnly _markupByElement As New Dictionary(Of SceneElement, XmlElement)(ReferenceEqualityComparer.Instance)
         Private ReadOnly _storyboards As New Dictionary(Of String, XamlStoryboard)(StringComparer.OrdinalIgnoreCase)
         Private ReadOnly _explicitStoryboardTriggers As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Private ReadOnly _unsupportedFeatures As New List(Of String)()
@@ -95,6 +96,7 @@ Namespace [Shared].Drawing.Designer
             doc.LoadXml(xaml)
             _namedElements.Clear()
             _xmlElements.Clear()
+            _markupByElement.Clear()
             _storyboards.Clear()
             _explicitStoryboardTriggers.Clear()
             _unsupportedFeatures.Clear()
@@ -156,13 +158,11 @@ Namespace [Shared].Drawing.Designer
 
         ''' <summary>Keep imported layout metadata in sync with code-behind property changes.</summary>
         Public Sub SetImportedProperty(element As SceneElement, propertyName As String, value As String)
-            For Each pair In _xmlElements
-                If pair.Value Is element Then
-                    pair.Key.SetAttribute(propertyName, value)
-                    InvalidateImportedLayout()
-                    Return
-                End If
-            Next
+            Dim markup As XmlElement = Nothing
+            If Not _markupByElement.TryGetValue(element, markup) Then Return
+            If markup.HasAttribute(propertyName) AndAlso String.Equals(markup.GetAttribute(propertyName), value, StringComparison.Ordinal) Then Return
+            markup.SetAttribute(propertyName, value)
+            InvalidateImportedLayout()
         End Sub
 
         Public Function ParseLegacyWindow(filePath As String) As SceneElement
@@ -359,7 +359,12 @@ Namespace [Shared].Drawing.Designer
             Else
                 element = _elementFactories(elementName)(xmlElement)
             End If
+            Dim previousElement As SceneElement = Nothing
+            If _xmlElements.TryGetValue(xmlElement, previousElement) AndAlso previousElement IsNot element Then
+                _markupByElement.Remove(previousElement)
+            End If
             _xmlElements(xmlElement) = element
+            _markupByElement.TryAdd(element, xmlElement)
 
             ' Handle x:Name attribute
             Dim nameAttr = xmlElement.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml")
@@ -592,7 +597,13 @@ End Function
                 End Try
             End If
             If xml.HasAttribute("BorderThickness") Then target.BorderThickness = GetUniformBorderThickness(xml, target.BorderThickness)
-            If xml.HasAttribute("BorderBrush") Then target.BorderColor = GetAttributeColor(xml, "BorderBrush", target.BorderColor)
+            Dim stroke = ReadGradientBrush(xml, "BorderBrush")
+            If stroke IsNot Nothing Then
+                target.BorderBrush = stroke
+            ElseIf xml.HasAttribute("BorderBrush") OrElse BrushDeclaration(xml, "BorderBrush") IsNot Nothing Then
+                target.BorderBrush = Nothing
+                target.BorderColor = ReadSolidSurfaceColor(xml, "BorderBrush", target.BorderColor)
+            End If
         End Sub
 
         Private Sub ParseStoryboards(document As XmlDocument)
@@ -751,6 +762,7 @@ End Function
             End If
             If normalized.EndsWith("fill") OrElse normalized.EndsWith("fillcolor") Then
                 If TypeOf target Is PolygonElement Then Return New FillColorProperty(target)
+                If TypeOf target Is RectangleElement Then Return New BackgroundColorProperty(target)
             End If
             If (normalized.EndsWith("borderbrush") OrElse normalized.EndsWith("stroke") OrElse
                 normalized.EndsWith("strokecolor")) AndAlso TypeOf target Is Border Then
@@ -764,11 +776,22 @@ End Function
         End Function
 
         Private Sub ApplyBackgroundBrush(target As RectangleElement, xml As XmlElement)
-            target.BackgroundBrush = ReadGradientBrush(xml, If(xml.LocalName = "Rectangle", "Fill", "Background"))
+            Dim propertyName = If(xml.LocalName = "Rectangle", "Fill", "Background")
+            target.BackgroundBrush = ReadGradientBrush(xml, propertyName)
+            If target.BackgroundBrush Is Nothing AndAlso (xml.HasAttribute(propertyName) OrElse BrushDeclaration(xml, propertyName) IsNot Nothing) Then
+                Dim color = ReadSolidSurfaceColor(xml, propertyName, target.BackgroundColor)
+                target.BackgroundColor = Color.FromNonPremultiplied(color.ToVector4())
+            End If
             If TypeOf target Is Button Then
                 Dim button = DirectCast(target, Button)
                 button.MouseOverBackgroundBrush = ReadGradientBrush(xml, "MouseOverBackground")
                 button.MouseDownBackgroundBrush = ReadGradientBrush(xml, "MouseDownBackground")
+                If button.MouseOverBackgroundBrush Is Nothing AndAlso xml.HasAttribute("MouseOverBackground") Then
+                    button.MouseOverBackgroundColor = Color.FromNonPremultiplied(GetAttributeColor(xml, "MouseOverBackground", button.MouseOverBackgroundColor).ToVector4())
+                End If
+                If button.MouseDownBackgroundBrush Is Nothing AndAlso xml.HasAttribute("MouseDownBackground") Then
+                    button.MouseDownBackgroundColor = Color.FromNonPremultiplied(GetAttributeColor(xml, "MouseDownBackground", button.MouseDownBackgroundColor).ToVector4())
+                End If
             End If
         End Sub
 
@@ -919,17 +942,21 @@ End Function
         End Function
 
         Private Sub ParseTabItems(xmlElement As XmlElement, control As TabControl)
+            Dim tabs As New List(Of TabItem)
             For Each node As XmlNode In VisualChildNodes(xmlElement)
                 If Not TypeOf node Is XmlElement Then Continue For
                 Dim tabXml = DirectCast(node, XmlElement)
                 If tabXml.LocalName <> "TabItem" Then Continue For
                 If ImportedEventRouting Then
-                    control.AddTab(GetAttributeString(tabXml, "Header", "Tab"), ParseElement(tabXml))
+                    Dim body = ParseElement(tabXml)
                     Dim headerXml = TryCast(tabXml.SelectSingleNode("*[local-name()='TabItem.Header']/*"), XmlElement)
-                    If headerXml IsNot Nothing Then
-                        control.Tabs.Last().HeaderContent = ParseElement(headerXml)
-                        control.SetTabs(control.Tabs)
-                    End If
+                    tabs.Add(New TabItem With {
+                        .Header = GetAttributeString(tabXml, "Header", "Tab"),
+                        .HeaderContent = If(headerXml Is Nothing, Nothing, ParseElement(headerXml)),
+                        .Content = body,
+                        .IsVisible = body.isVisible,
+                        .IsEnabled = body.isEnabled
+                    })
                     Continue For
                 End If
                 Dim contentNodes = VisualChildNodes(tabXml).OfType(Of XmlElement)().ToArray()
@@ -943,15 +970,14 @@ End Function
                     Next
                     content = stack
                 End If
-                control.AddTab(GetAttributeString(tabXml, "Header", "Tab"), content)
+                tabs.Add(New TabItem With {.Header = GetAttributeString(tabXml, "Header", "Tab"), .Content = content})
             Next
             Dim selected = GetAttributeInteger(xmlElement, "SelectedIndex", 0)
-            If control.Tabs.Count > 0 Then control.SelectedIndex = Math.Max(0, Math.Min(selected, control.Tabs.Count - 1))
+            control.SetTabs(tabs, Math.Max(0, Math.Min(selected, tabs.Count - 1)))
         End Sub
 
         Private Sub ApplyCommonProperties(element As SceneElement, xmlElement As XmlElement)
             ApplyPhysicsProperties(element, xmlElement)
-            If TypeOf element Is RectangleElement Then ApplyRoundedSurface(DirectCast(element, RectangleElement), xmlElement)
             ' --- Position: Canvas.Left/Top take precedence over X/Y ---
             ' These values are incorporated into the element's Margin so the
             ' layout system (AlignChild) uses them as positional offsets.
@@ -1555,6 +1581,7 @@ End Function
 
         Private Function CreateTabControl(xmlElement As XmlElement) As SceneElement
             Dim tabControl As New TabControl(_scene)
+            tabControl.SizeImportedHeadersToContent = ImportedEventRouting
             tabControl.BackgroundColor = GetAttributeColor(xmlElement, "Background", tabControl.BackgroundColor)
             tabControl.TabHeaderHeight = GetAttributeSingle(xmlElement, "TabHeaderHeight", tabControl.TabHeaderHeight)
 
@@ -1564,6 +1591,7 @@ End Function
 
         Private Function CreateScrollViewer(xmlElement As XmlElement) As SceneElement
             Dim scrollViewer As New ScrollViewer(_scene)
+            If ImportedEventRouting Then scrollViewer.BackgroundColor = Color.Transparent
             scrollViewer.BackgroundColor = GetAttributeColor(xmlElement, "Background", scrollViewer.BackgroundColor)
 
             Dim vScroll = GetAttributeString(xmlElement, "VerticalScrollBarVisibility", "Auto")
@@ -1614,6 +1642,7 @@ End Function
         Private Function CreateLoadingIndicator(xmlElement As XmlElement) As SceneElement
             Dim indicator As New LoadingIndicator(_scene)
             indicator.ForegroundColor = GetAttributeColor(xmlElement, "Foreground", Color.White)
+            indicator.IsLoading = GetAttributeBoolean(xmlElement, "IsLoading", indicator.IsLoading)
             Return indicator
         End Function
 

@@ -37,6 +37,17 @@ Namespace [Shared].Drawing.UI.Primitives
             End Set
         End Property
         Public Property BorderColor As Color = Color.Transparent
+        Public Property BorderBrush As XamlGradientBrush
+            Get
+                Return borderBrushValue
+            End Get
+            Set(value As XamlGradientBrush)
+                If borderBrushValue Is value Then Return
+                borderBrushValue = value
+                Scene?.RequestRender()
+            End Set
+        End Property
+        Private borderBrushValue As XamlGradientBrush
         Public Property BorderThickness As Single
         Private roundedBrush As XamlGradientBrush
         Public Overridable Property isResizable As AlignmentType = AlignmentType.None
@@ -103,7 +114,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 Dim brush = If(overrideBrush, If(useBackgroundBrush, BackgroundBrush, Nothing))
                 If brush Is Nothing Then
                     If roundedBrush Is Nothing Then
-                        roundedBrush = New XamlGradientBrush()
+                        roundedBrush = New XamlGradientBrush With {.PremultipliedStops = True}
                         roundedBrush.Stops.Add(New XamlGradientStop())
                     End If
                     roundedBrush.Stops(0).Color = fill
@@ -111,7 +122,7 @@ Namespace [Shared].Drawing.UI.Primitives
                 End If
                 ' Generate in layout units, then transform the entire surface,
                 ' including its corners and stroke, just as WPF does.
-                DrawBackgroundSurface(brush.GetTexture(Scene.graphicsDevice, CInt(Size.X), CInt(Size.Y), CornerRadii, BorderThickness, BorderColor), ApplyOpacity(Color.White))
+                DrawBackgroundSurface(brush.GetTexture(Scene.graphicsDevice, CInt(Size.X), CInt(Size.Y), CornerRadii, BorderThickness, BorderColor, BorderBrush), ApplyOpacity(Color.White))
                 DrawFocusIndicator()
                 Return
             End If

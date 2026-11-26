@@ -33,7 +33,7 @@ namespace ProjectZ.WpfCompatibility
     {
         internal NativeWindowSurface? surface;
         readonly Scene? previousConstructionScene;
-        bool rendering, pendingSurfaceDispose;
+        bool rendering, pendingSurfaceDispose, nativeSizeMove;
         Interop.HwndSource? messageSource;
         IntPtr WindowMessage(IntPtr hwnd,int message,IntPtr wParam,IntPtr lParam,ref bool handled)
         {
@@ -48,6 +48,14 @@ namespace ProjectZ.WpfCompatibility
                     StateChanged?.Invoke(this, EventArgs.Empty);
                     Changed(nameof(WindowState));
                 }
+                if (nativeSizeMove && nativeState != WindowState.Minimized) RenderNativeFrame();
+            }
+            else if (message == 0x231) nativeSizeMove = true; // WM_ENTERSIZEMOVE
+            else if (message == 0x232) // WM_EXITSIZEMOVE
+            {
+                nativeSizeMove = false;
+                nextNativeFrame = 0;
+                RenderNativeFrame();
             }
             else if (message == 0x83 && HasCustomFrame) // WM_NCCALCSIZE
             {
@@ -95,6 +103,14 @@ namespace ProjectZ.WpfCompatibility
         public Window() : this(CreateRoot()) { }
         Window(Root root) : base(root.Element) { surface=root.Surface; previousConstructionScene=root.Previous; Width=Application.Current.StartupOptions.Width; Height=Application.Current.StartupOptions.Height; }
         public IntPtr NativeHandle => surface?.Handle ?? (NativeElement.OwnerScene?.sender() is { } game ? global::ProjectZ.Windows.Composition.WindowsComposition.ResolveHwnd(game) : IntPtr.Zero);
+        /// <summary>Enable the Project-Z desktop shader on this window's native surface.</summary>
+        public bool TrySetDesktopBackdrop(bool enabled, int captureFramesPerSecond)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(captureFramesPerSecond);
+            if (surface == null) return false;
+            surface.SetDesktopBackdrop(enabled, captureFramesPerSecond);
+            return true;
+        }
         public Microsoft.Xna.Framework.Color[] CaptureFrame() => surface?.CaptureFrame() ?? throw new InvalidOperationException("This window has no native surface.");
         public void SaveFrame(string path) { if(surface==null) throw new InvalidOperationException("This window has no native surface."); surface.SaveFrame(path); }
         string title="";
@@ -190,7 +206,7 @@ namespace ProjectZ.WpfCompatibility
         }
         internal void RenderNativeFrame()
         {
-            if(surface==null || IsDisposed || Visibility!=Visibility.Visible) return;
+            if(surface==null || rendering || IsDisposed || Visibility!=Visibility.Visible) return;
             if(surface.IsClosed) { Close(); return; }
             var current=DesktopNative.GetForegroundWindow()==NativeHandle;
             if(current!=active) { active=current; nextNativeFrame=0; if(current) Activated?.Invoke(this,EventArgs.Empty); else Deactivated?.Invoke(this,EventArgs.Empty); }
@@ -200,9 +216,30 @@ namespace ProjectZ.WpfCompatibility
             long period = System.Diagnostics.Stopwatch.Frequency / frameLimit;
             if (now < nextNativeFrame) return;
             nextNativeFrame = nextNativeFrame == 0 || now - nextNativeFrame >= period ? now + period : nextNativeFrame + period;
-            var bounds=ReadBounds(); if(bounds!=lastBounds) { lastBounds=bounds; LocationChanged?.Invoke(this,EventArgs.Empty); }
             rendering=true;
-            try { surface.RenderFrame(false); }
+            try
+            {
+                var bounds=ReadBounds(); if(bounds!=lastBounds) { lastBounds=bounds; LocationChanged?.Invoke(this,EventArgs.Empty); }
+                if (IsDisposed) return;
+                if (DesktopNative.GetClientRect(NativeHandle, out var client))
+                {
+                    int width = client.Right - client.Left, height = client.Bottom - client.Top;
+                    if (width > 0 && height > 0 && (NativeElement.Size.X != width || NativeElement.Size.Y != height))
+                    {
+                        surface.Resize(width, height);
+                        // MonoGame's presentation change can resize the HWND
+                        // again using its own frame assumptions. Keep the size
+                        // Windows already assigned to this imported window.
+                        if (ReadBounds() != bounds)
+                            DesktopNative.SetWindowPos(NativeHandle, IntPtr.Zero, (int)bounds.X, (int)bounds.Y,
+                                (int)bounds.Width, (int)bounds.Height, 4 | 16);
+                        // OS sizing changes the arrangement slot, not XAML's
+                        // authored sizes or the scale used to draw controls.
+                        NativeElement.Size = new(width, height);
+                    }
+                }
+                if (!IsDisposed) surface.RenderFrame(false);
+            }
             finally { rendering=false; if(pendingSurfaceDispose) { surface.Dispose(); surface=null; } }
         }
         public override void Dispose()
@@ -223,6 +260,7 @@ namespace ProjectZ.WpfCompatibility
         [DllImport("user32.dll",EntryPoint="GetMonitorInfoW")] static extern bool ReadMonitorInfo(IntPtr monitor,ref MonitorInfo info);
         internal static bool GetMonitorInfo(IntPtr monitor,out MonitorInfo info) { info=new() { Size=Marshal.SizeOf<MonitorInfo>() }; return ReadMonitorInfo(monitor,ref info); }
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window,out Bounds bounds);
+        [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr window,out Bounds bounds);
         [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window,int command);
         [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);

@@ -149,7 +149,7 @@ public class ScrollViewer : HostedContentControl
     public ScrollBarVisibility HorizontalScrollBarVisibility { get => GetHorizontalScrollBarVisibility(this); set => SetHorizontalScrollBarVisibility(this, value); }
     public ScrollBarVisibility VerticalScrollBarVisibility { get => GetVerticalScrollBarVisibility(this); set => SetVerticalScrollBarVisibility(this, value); }
     public bool CanContentScroll { get => GetCanContentScroll(this); set => SetCanContentScroll(this, value); }
-    public ScrollViewer() : this(new Native.ScrollViewer(Application.Current.ControlScene)) { }
+    public ScrollViewer() : this(new Native.ScrollViewer(Application.Current.ControlScene) { BackgroundColor = Microsoft.Xna.Framework.Color.Transparent }) { }
     internal ScrollViewer(SceneElement native) : base(native) { }
     protected override SceneElement? NativeContent { get => ((Native.ScrollViewer)NativeElement).Content; set => ((Native.ScrollViewer)NativeElement).Content = value; }
     public double HorizontalOffset => ((Native.ScrollViewer)NativeElement).ScrollOffset.X;

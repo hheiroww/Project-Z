@@ -78,7 +78,7 @@ internal static class Program
         first.RenderFrame(); Require(first.FrameCount > previousFrames, "owner continues rendering after child disposal");
         first.Dispose(); Require(!IsWindow(ownerHandle), "native window disposal releases its HWND");
         Require(sharedWhite.IsDisposed, "graphics device disposal releases its shared primitive texture");
-        try { Hosting.Run(()=>new ImportedWindowApplication()); }
+        try { Hosting.Run(()=>new ImportedWindowApplication()); ImportedLayoutChecks.Run(); WrappedItemChecks.Run(); }
         catch(Exception error) { Console.Error.WriteLine(error); Environment.ExitCode=1; return; }
         Console.WriteLine("NATIVE_WINDOWS_READY");
     }
@@ -109,7 +109,8 @@ internal static class Program
             var retainedTabBody=new ProjectZ.WpfCompatibility.Controls.Border { Background=ProjectZ.WpfCompatibility.Media.Brushes.Green };
             var ownerTab=new ProjectZ.WpfCompatibility.Controls.TabItem { Header="Manage", Content=retainedTabBody };
             ownerTabs.Items.Add(ownerTab);
-            ownerTabs.Items.Add(new ProjectZ.WpfCompatibility.Controls.TabItem {Header="Other",Content=new ProjectZ.WpfCompatibility.Controls.Border {Background=ProjectZ.WpfCompatibility.Media.Brushes.Blue}});
+            var inactiveTabBody = new ProjectZ.WpfCompatibility.Controls.Border {Background=ProjectZ.WpfCompatibility.Media.Brushes.Blue};
+            ownerTabs.Items.Add(new ProjectZ.WpfCompatibility.Controls.TabItem {Header="Other",Content=inactiveTabBody});
             ProjectZ.WpfCompatibility.Controls.Canvas.SetLeft(ownerTabs,100);ownerRoot.Children.Add(ownerTabs);first.Content=ownerRoot;
             var cardsMarkup=Path.GetFullPath("artifacts/wpf-import/continuation-measured-cards.xaml");
             File.WriteAllText(cardsMarkup,"""
@@ -123,6 +124,7 @@ internal static class Program
             var cards=(ProjectZ.WpfCompatibility.Controls.ListBox)cardsHost.FindName("Cards")!;cards.ItemsSource=new[]{"card one","card two"};
             ProjectZ.WpfCompatibility.Controls.Canvas.SetTop(cardsHost,80);ownerRoot.Children.Add(cardsHost);
             first.Show();
+            TabNavigation.Verify(Require);
             Require((GetWindowLongPtr(first.NativeHandle,-16).ToInt64() & 0x00c40000L)==0,"a non-resizable borderless XAML window has no native caption or sizing frame");
             Require(GetClientRect(first.NativeHandle,out var ownerClient) && GetWindowRect(first.NativeHandle,out var ownerBounds) && ownerClient.Right==ownerBounds.Right-ownerBounds.Left && ownerClient.Bottom==ownerBounds.Bottom-ownerBounds.Top,"borderless loader content occupies the entire native window");
             Require((GetWindowLongPtr(first.NativeHandle,-20).ToInt64() & 0x00040000L)==0,"XAML ShowInTaskbar=false is applied to the native HWND");
@@ -273,13 +275,17 @@ internal static class Program
                 if(tabRefreshPhase==0)
                 {
                     Require(first.NativeElement.OwnerScene.ContainsElement(retainedTabBody.NativeElement),"initial active tab subtree is registered");
-                    ownerTab.Header="Manage models";ownerTabs.SelectedIndex=1;ownerTabs.SelectedIndex=0;
+                    ownerTab.Header="Manage models";ownerTabs.SelectedIndex=1;
+                    Require(ownerTabs.Items[1].NativeElement.Position == ownerTab.NativeElement.Position
+                        && ownerTabs.Items[1].NativeElement.Size == ownerTab.NativeElement.Size, "a newly selected tab receives the active viewport geometry before presentation");
+                    ownerTabs.SelectedIndex=0;
                     ownerRoot.NativeElement.Children.Remove(ownerTabs.NativeElement);ownerRoot.NativeElement.Children.Add(ownerTabs.NativeElement);
                     tabRefreshPhase=1;return;
                 }
                 if(tabRefreshPhase==1)
                 {
                     Require(first.NativeElement.OwnerScene.ContainsElement(retainedTabBody.NativeElement) && !retainedTabBody.NativeElement.IsDisposed,"tab refresh and same-frame subtree reattachment preserve native content registration");
+                    Require(!first.NativeElement.OwnerScene.ContainsElement(inactiveTabBody.NativeElement), "the briefly selected tab does not remain registered after returning before presentation");
                     first.SaveFrame(Path.GetFullPath("artifacts/wpf-import/continuation-retained-tabs.png"));
                     Console.WriteLine($"TAB_BODY rectangle={retainedTabBody.NativeElement.Rectangle}; parent={ownerTab.NativeElement.Rectangle}; tabs={ownerTabs.NativeElement.Rectangle}; renderException={ProjectZ.Shared.Drawing.UI.SceneElement.FirstRenderException}");
                     Require(first.CaptureFrame().Count(c=>c.G>80&&c.R<30&&c.B<30)>100,"refreshed active tab body still renders actual pixels");
@@ -288,7 +294,7 @@ internal static class Program
                 }
                 if(phase==1) {first.WindowState=WindowState.Minimized;minimizedFrames=ownerSurface.FrameCount;phase=2;return;}
                 if(phase==2) {Require(ownerSurface.FrameCount==minimizedFrames,"minimized imported windows do not render or present additional frames");first.WindowState=WindowState.Normal;phase=3;return;}
-                if(phase==3) { timer.Stop();Require(first.CaptureFrame().Count(c=>c.R>200&&c.G<30)>100,"closing a window with a shared brush preserves rendering in the surviving window");first.Close();return; }
+                if(phase==3) { timer.Stop();Require(first.CaptureFrame().Count(c=>c.R>200&&c.G<30)>100,"closing a window with a shared brush preserves rendering in the surviving window");MessageBoxChecks.Run(first);first.Close();return; }
                 if(!completed || !colorCompleted || !repeatCompleted) return;
                 Require(translation.X==40 && secondContent.NativeElement.RenderTranslation.X==40,"codebehind storyboard updates native transforms and completes on the frame clock");
                 Require(first.CaptureFrame().Count(c=>c.R>200&&c.B<30)>100 && second.CaptureFrame().Count(c=>c.B>200&&c.R<30)>100,"imported windows render their distinct native content");

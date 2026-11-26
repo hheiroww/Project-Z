@@ -46,7 +46,10 @@ public static class Hosting
             var batch = new SpriteBatch(GraphicsDevice);
             var resources = new ContentContainer(Content, GraphicsDevice); resources.LoadVectorFontsOnly();
             Services.AddService(typeof(SpriteBatch), batch); Services.AddService(typeof(GraphicsDevice), GraphicsDevice); Services.AddService(typeof(ContentContainer), resources);
-            manager = new(this); var scene = new HostedScene(manager) { EnableDesignTimeControls = false };
+            // The hidden coordinator never owns user input. Imported windows
+            // route input from their own HWNDs and may close independently.
+            manager = new(this) { UseExternalInput = true };
+            var scene = new HostedScene(manager) { EnableDesignTimeControls = false };
             options.Apply(manager); scene.BackgroundColor = options.BackgroundColor;
             manager.AddScene("application", scene); manager.ActiveScene = scene;
             Application.HostingScene = scene;
@@ -76,14 +79,21 @@ public static class Hosting
             // SDL may show its coordinator after LoadContent returns. Keep the
             // coordinator hidden while the imported native windows own the UI.
             if (DesktopNative.IsWindowVisible(coordinatorHandle)) DesktopNative.ShowWindow(coordinatorHandle, 0);
-            application?.Dispatcher.Pump(); manager?.Tick(time);
-            if (application?.ShutdownRequested == true) Exit(); base.Update(time);
+            if (application?.ShutdownRequested == false) application.Dispatcher.Pump();
+            if (application?.ShutdownRequested == true)
+            {
+                Exit();
+                return;
+            }
+            manager?.Tick(time);
+            base.Update(time);
+            if (application?.ShutdownRequested == true) Exit();
         }
         protected override bool BeginDraw()
         {
             // Fixed-step catch-up updates must not render every native window
             // repeatedly after an expensive application callback or cold frame.
-            application?.PumpWindows();
+            if (application?.ShutdownRequested == false) application.PumpWindows();
             // This hidden coordinator supplies the clock and application
             // dispatcher. Only the visible native windows submit/present UI.
             return false;

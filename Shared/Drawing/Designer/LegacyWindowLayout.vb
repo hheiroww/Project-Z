@@ -26,10 +26,16 @@ Namespace [Shared].Drawing.Designer
                 If xml.HasAttribute("Type", "urn:projectz:import") AndAlso item.ImportedMeasure IsNot Nothing Then Continue For
                 item.ImportedMeasure = Function(width) Measure(item, width)
                 AddHandler item.VisibilityChanged, Sub() revision += 1
+                If TypeOf item Is ListBox Then
+                    AddHandler DirectCast(item, ListBox).WrappedItemsExtentChanged, Sub() revision += 1
+                End If
                 item.Padding = ThicknessValue(xml.GetAttribute("Padding"))
                 If TypeOf item Is TextElement Then
                     Dim text = DirectCast(item, TextElement)
                     text.isMouseBypassEnabled = True
+                    If text.TextTrimming <> TextTrimming.None AndAlso Not xml.HasAttribute("TextWrapping") Then
+                        text.TextWrapping = TextWrapping.NoWrap
+                    End If
                     Dim size = Number(xml, "FontSize", 12)
                     text.FontScale = size * 0.75F / 12
                     AddHandler text.TextChanged, Sub() revision += 1
@@ -43,7 +49,7 @@ Namespace [Shared].Drawing.Designer
                     Dim wrap = DirectCast(item, WrapPanel)
                     wrap.HorizontalSpacing = 0 : wrap.VerticalSpacing = 0
                 End If
-                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "StackPanel", "WrapPanel", "TabItem"}.Contains(xml.LocalName) Then
+                If {"Window", "UserControl", "ContentControl", "Border", "Grid", "DockPanel", "StackPanel", "WrapPanel", "TabItem", "Menu"}.Contains(xml.LocalName) Then
                     Dim lastPosition As New Vector2(Single.NaN)
                     Dim lastSize As New Vector2(Single.NaN)
                     Dim lastRevision = -1
@@ -112,11 +118,20 @@ Namespace [Shared].Drawing.Designer
                 Dim naturalWidth = If(label Is Nothing, 80, Math.Max(80, scene.MeasureText(label.Font, label.Text).X + 30))
                 desired = ControlDesired(item, available, naturalWidth, 30)
             ElseIf TypeOf item Is ScrollViewer OrElse TypeOf item Is ListBox Then
-                Dim naturalWidth As Single
+                Dim natural As Vector2
+                Dim viewer = TryCast(item, ScrollViewer)
                 For Each child In VisualChildren(item)
-                    naturalWidth = Math.Max(naturalWidth, Measure(child, available).X)
+                    Dim childSize = Measure(child, available)
+                    natural.X = Math.Max(natural.X, childSize.X)
+                    ' A bounded scroll host should reserve room for wrapped cards in an Auto row.
+                    If viewer IsNot Nothing AndAlso child Is viewer.Content AndAlso TypeOf child Is ListBox AndAlso DirectCast(child, ListBox).WrapItems Then natural.Y = childSize.Y
                 Next
-                desired = ControlDesired(item, available, naturalWidth, 0)
+                Dim list = TryCast(item, ListBox)
+                If list IsNot Nothing AndAlso list.WrapItems Then
+                    natural = list.MeasureWrappedItems(available - item.Padding.Left - item.Padding.Right)
+                End If
+                desired = New Vector2(If(IsUnconstrained(available), natural.X + item.Padding.Left + item.Padding.Right, available),
+                                      natural.Y + item.Padding.Top + item.Padding.Bottom)
             ElseIf TypeOf item Is GroupBox Then
                 Dim group = DirectCast(item, GroupBox)
                 Dim contentSize As Vector2
@@ -179,9 +194,10 @@ Namespace [Shared].Drawing.Designer
         End Function
 
         Private Shared Function ControlDesired(item As SceneElement, available As Single, naturalWidth As Single, naturalHeight As Single) As Vector2
-            ' Horizontal stacks measure their children without a width limit.
-            ' That limit is a constraint, never a requested pixel width.
-            Return New Vector2(If(IsUnconstrained(available), naturalWidth + item.Padding.Left + item.Padding.Right, available), naturalHeight + item.Padding.Top + item.Padding.Bottom)
+            ' A docked or aligned control asks for its intrinsic size. The arrange
+            ' pass still fills the available slot when the control stretches.
+            Return New Vector2(Math.Min(available, naturalWidth + item.Padding.Left + item.Padding.Right),
+                               naturalHeight + item.Padding.Top + item.Padding.Bottom)
         End Function
 
         Private Function TrackSizes(item As SceneElement, horizontal As Boolean, width As Single, height As Single, stretch As Boolean) As Single()
@@ -233,15 +249,31 @@ Namespace [Shared].Drawing.Designer
             Dim start = item.Position + New Vector2(item.Padding.Left, item.Padding.Top)
             Dim stackOffset As Single
             Dim horizontalStack = TypeOf item Is StackPanel AndAlso DirectCast(item, StackPanel).Orientation = Orientation.Horizontal
+            Dim children = VisualChildren(item)
+            Dim trimWidth = width
+            If horizontalStack AndAlso children.Any(AddressOf CanTrimStackText) Then
+                ' Keep ordinary siblings at their intrinsic widths. Only labels
+                ' that request trimming share the available space.
+                For Each child In children
+                    If Not CanTrimStackText(child) Then trimWidth -= Measure(child, Single.MaxValue).X
+                Next
+                trimWidth = Math.Max(0, trimWidth)
+            End If
             Dim columns = If(TypeOf item Is Grid, TrackSizes(item, True, width, height, True), {width})
             Dim rows = If(TypeOf item Is Grid, TrackSizes(item, False, width, height, True), {height})
-            For Each child In VisualChildren(item)
+            For Each child In children
                 Dim xml = nodes(child)
                 Dim col = Math.Clamp(CInt(Number(xml, "Grid.Column", 0)), 0, columns.Length - 1)
                 Dim row = Math.Clamp(CInt(Number(xml, "Grid.Row", 0)), 0, rows.Length - 1)
                 Dim slotWidth = columns.Skip(col).Take(CInt(Number(xml, "Grid.ColumnSpan", 1))).Sum()
                 Dim slotHeight = rows.Skip(row).Take(CInt(Number(xml, "Grid.RowSpan", 1))).Sum()
+                Dim trimText = horizontalStack AndAlso CanTrimStackText(child)
                 Dim desired = Measure(child, If(horizontalStack, Single.MaxValue, slotWidth))
+                If trimText Then
+                    Dim minimum = Number(xml, "MinWidth", 0) + child.Margin.Left + child.Margin.Right
+                    desired.X = Math.Max(minimum, Math.Min(desired.X, trimWidth))
+                    trimWidth = Math.Max(0, trimWidth - desired.X)
+                End If
                 Dim location = start + New Vector2(columns.Take(col).Sum(), rows.Take(row).Sum())
                 If TypeOf item Is StackPanel Then
                     If horizontalStack Then
@@ -270,6 +302,12 @@ Namespace [Shared].Drawing.Designer
                 If child.Size <> finalSize Then child.Size = finalSize
             Next
         End Sub
+
+        Private Function CanTrimStackText(item As SceneElement) As Boolean
+            Dim text = TryCast(item, TextElement)
+            Return text IsNot Nothing AndAlso text.TextWrapping = TextWrapping.NoWrap AndAlso
+                text.TextTrimming <> TextTrimming.None AndAlso Not nodes(item).HasAttribute("Width")
+        End Function
 
         Private Sub ArrangeDock(panel As DockPanel)
             Dim left = panel.Position.X + panel.Padding.Left, top = panel.Position.Y + panel.Padding.Top

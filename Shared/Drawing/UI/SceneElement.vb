@@ -419,7 +419,17 @@ Namespace [Shared].Drawing.UI
         Public Event VisibilityChanged()
 
         ''' <summary>WPF-compatible opacity, inherited multiplicatively from visual parents.</summary>
-        Public Property Opacity As Single = 1.0F
+        Public Property Opacity As Single
+            Get
+                Return opacityValue
+            End Get
+            Set(value As Single)
+                If opacityValue = value Then Return
+                opacityValue = value
+                Scene?.RequestRender()
+            End Set
+        End Property
+        Private opacityValue As Single = 1.0F
 
         Private _backgroundBlur As Single
         Private backgroundBlurRenderer As Primitives.XamlNativeEffect
@@ -450,7 +460,8 @@ Namespace [Shared].Drawing.UI
                 effective *= Math.Clamp(ancestor.Opacity, 0.0F, 1.0F)
                 ancestor = ancestor.Parent
             End While
-            Return New Color(color.R, color.G, color.B, CByte(Math.Clamp(CInt(color.A * effective), 0, 255)))
+            ' The scene batches use premultiplied AlphaBlend, so opacity scales RGB and alpha together.
+            Return color * effective
         End Function
 
         Public Property GUID As String = ""

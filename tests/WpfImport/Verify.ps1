@@ -34,7 +34,10 @@ try {
     if ($browserRun -notmatch 'WEBVIEW_DEPENDENCY_OK') { throw 'Compatible direct WebView2 SDK pin failed.' }
     Write-Output 'PASS compatible direct WebView2 pin and installed native browser runtime'
     & (Join-Path $PSScriptRoot 'WebViewEvents/Verify.ps1') -SkipRuntime:$SkipRuntime
-    if(!$SkipRuntime) {& (Join-Path $PSScriptRoot 'NativeWindows/Verify.ps1')}
+    if (!$SkipRuntime) {
+        & (Join-Path $PSScriptRoot 'NativeWindows/Verify.ps1')
+        Invoke-Dotnet @('run', '--project', 'tests/WpfImport/Compositor/CompositorFixture.csproj', '-c', 'Release', '-p:GeneratePackageOnBuild=false')
+    }
     Invoke-Dotnet @('run', '--project', 'tests/WpfImport/Dispatcher/Dispatcher.csproj', '-c', 'Release', '-p:GeneratePackageOnBuild=false')
     Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/DispatcherImport/DispatcherImport.csproj', '--output', 'artifacts/wpf-import/dispatcher-import')
     Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/GridImport/GridImport.csproj', '--output', 'artifacts/wpf-import/grid-import')
@@ -149,6 +152,16 @@ Write-Host "PASS compiler implicit usings and x64 execution."
     $graphPublishedRun = Invoke-Dotnet @('artifacts/wpf-import/build-target-publish/BuildTargetGraph.dll') | Out-String
     if ($graphPublishedRun -notmatch 'BUILD_TARGET_GRAPH_OK') { throw 'Published build target contract failed.' }
     Write-Output 'PASS build-only project graph custom targets package metadata Release hash and publish'
+    $sharedWorker = (Resolve-Path -LiteralPath 'tests/WpfImport/BuildTargetWorker/BuildTargetWorker.csproj').Path
+    $sharedWorkerHash = (Get-FileHash -LiteralPath $sharedWorker).Hash
+    $sharedGraphOutput = 'artifacts/wpf-import/build-target-graph-shared'
+    Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/BuildTargetGraph/BuildTargetGraph.csproj', '--output', $sharedGraphOutput, '--reference-existing', $sharedWorker)
+    $sharedGraph = (Get-Content -LiteralPath "$sharedGraphOutput/projectz-import.report.json" -Raw | ConvertFrom-Json).RootProject
+    if (Get-ChildItem -LiteralPath $sharedGraphOutput -Recurse -Filter 'BuildTargetWorker.csproj') { throw 'An existing build worker was copied to the generated graph.' }
+    if ((Get-FileHash -LiteralPath $sharedWorker).Hash -ne $sharedWorkerHash) { throw 'An existing project was changed by the import.' }
+    $sharedGraphRun = Invoke-Dotnet @('run', '--project', $sharedGraph, '-c', 'Release') | Out-String
+    if ($sharedGraphRun -notmatch 'BUILD_TARGET_GRAPH_OK') { throw 'Existing build worker or Release hash failed.' }
+    Write-Output 'PASS import reuses the original build worker without changing or copying its project'
     Invoke-Dotnet @($generator, 'import', 'tests/WpfImport/SdkWeb/SdkWeb.csproj', '--output', 'artifacts/wpf-import/sdk-web')
     $webProject = Get-ChildItem artifacts/wpf-import/sdk-web -Recurse -Filter SdkWeb.csproj | Select-Object -First 1
     $webRun = Invoke-Dotnet @('run', '--project', $webProject.FullName, '-c', 'Release') | Out-String

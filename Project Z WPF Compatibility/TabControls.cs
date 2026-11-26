@@ -22,16 +22,72 @@ public class TabItem : ContentControl
 {
     object? header;
     bool requestedSelection;
+    Func<FrameworkElement>? contentFactory;
     public TabItem() : base(new Native.Border(Application.Current.ControlScene)) { }
     internal TabItem(SceneElement native) : base(native) { }
-    public object? Header { get => header; set { header = value; Changed(nameof(Header)); } }
-    public bool IsSelected { get => Parent is TabControl tabs ? tabs.SelectedItem == this : requestedSelection; set { requestedSelection = value; if (Parent is TabControl tabs) { if (value) tabs.SelectedItem = this; else if (tabs.SelectedItem == this) tabs.SelectedIndex = -1; } Changed(nameof(IsSelected)); } }
-    public override object? Content { get => LogicalChildren.FirstOrDefault(child => child != header); set { if (value is not FrameworkElement child) throw new ArgumentException("Tab content must be a native element."); if (ReferenceEquals(Content,child)) return; if (Content is FrameworkElement old) { NativeElement.Children.Remove(old.NativeElement); LogicalChildren.Remove(old); old.Reparent(null); } PrepareContentChild(child); if (!NativeElement.Children.Contains(child.NativeElement)) NativeElement.Children.Add(child.NativeElement); if (!LogicalChildren.Contains(child)) LogicalChildren.Add(child); child.Reparent(this); Changed(nameof(Content)); } }
+    public object? Header
+    {
+        get => header;
+        set { if (Equals(header, value)) return; header = value; Changed(nameof(Header)); }
+    }
+    public bool IsSelected
+    {
+        get => Parent is TabControl tabs ? tabs.SelectedItem == this : requestedSelection;
+        set
+        {
+            bool changed = requestedSelection != value;
+            requestedSelection = value;
+            if (Parent is TabControl tabs)
+            {
+                if (value) tabs.SelectedItem = this;
+                else if (tabs.SelectedItem == this) tabs.SelectedIndex = -1;
+            }
+            else if (changed) Changed(nameof(IsSelected));
+        }
+    }
+    public override object? Content
+    {
+        get { EnsureContent(); return CurrentContent; }
+        set
+        {
+            if (value is not null and not FrameworkElement) throw new ArgumentException("Tab content must be a native element.");
+            bool hadFactory = contentFactory != null;
+            contentFactory = null;
+            var old = CurrentContent;
+            if (ReferenceEquals(old, value) && !hadFactory) return;
+            if (old != null)
+            {
+                NativeElement.Children.Remove(old.NativeElement);
+                LogicalChildren.Remove(old);
+                old.Reparent(null);
+            }
+            if (value is FrameworkElement child)
+            {
+                PrepareContentChild(child);
+                if (!NativeElement.Children.Contains(child.NativeElement)) NativeElement.Children.Add(child.NativeElement);
+                if (!LogicalChildren.Contains(child)) LogicalChildren.Add(child);
+                child.Reparent(this);
+            }
+            Changed(nameof(Content));
+        }
+    }
+    FrameworkElement? CurrentContent => LogicalChildren.FirstOrDefault(child => NativeElement.Children.Contains(child.NativeElement));
+    internal void DeferContent(Func<FrameworkElement> factory) => contentFactory = factory;
+    internal void EnsureContent()
+    {
+        if (contentFactory == null) return;
+        var factory = contentFactory;
+        contentFactory = null;
+        FrameworkElement child;
+        try { child = factory(); }
+        catch { contentFactory = factory; throw; }
+        Content = child;
+    }
     internal void SelectionChanged() => Changed(nameof(IsSelected));
 }
 public class TabControl : Control
 {
-    object? previousSelection;
+    TabItem? previousSelection;
     System.Collections.IEnumerable? itemsSource;
     System.Collections.Specialized.INotifyCollectionChanged? observableItems;
     Style? itemContainerStyle;
@@ -46,21 +102,54 @@ public class TabControl : Control
     void SourceChanged(object? sender,System.Collections.Specialized.NotifyCollectionChangedEventArgs args) { if(Dispatcher.CheckAccess()) RefreshSource(); else _=Dispatcher.InvokeAsync(RefreshSource); }
     void RefreshSource()
     {
-        Items.Clear(); if(itemsSource==null) return;
-        using var construction=Application.Current.ConstructIn(NativeElement.OwnerScene);
-        foreach(var item in itemsSource)
+        var replacement = new List<TabItem>();
+        if (itemsSource != null)
         {
-            if(item is TabItem existing) { Items.Add(existing); continue; }
-            var content=ItemTemplate?.LoadContent() ?? item as FrameworkElement ?? new TextBlock {Text=item?.ToString()??""}; content.DataContext=item;
-            var header=DisplayMemberPath.Length==0 ? item : item?.GetType().GetProperty(DisplayMemberPath)?.GetValue(item);
-            var tab=new TabItem {Header=header,Content=content,DataContext=item}; itemContainerStyle?.Apply(tab); Items.Add(tab);
+            using var construction = Application.Current.ConstructIn(NativeElement.OwnerScene);
+            foreach (var item in itemsSource)
+            {
+                if (item is TabItem existing) { replacement.Add(existing); continue; }
+                var header = DisplayMemberPath.Length == 0 ? item : item?.GetType().GetProperty(DisplayMemberPath)?.GetValue(item);
+                var tab = new TabItem { Header = header, DataContext = item };
+                var template = ItemTemplate;
+                tab.DeferContent(() =>
+                {
+                    using var contentConstruction = Application.Current.ConstructIn(NativeElement.OwnerScene);
+                    var content = template?.LoadContent() ?? item as FrameworkElement ?? new TextBlock { Text = item?.ToString() ?? "" };
+                    content.DataContext = item;
+                    return content;
+                });
+                itemContainerStyle?.Apply(tab);
+                replacement.Add(tab);
+            }
         }
+        Items.ReplaceAll(replacement);
     }
     public TabControl() : this(new Native.TabControl(Application.Current.ControlScene)) { }
     internal TabControl(SceneElement native) : base(native)
     {
         Items = new(this);
-        Listen("SelectionChanged", _ => { var selected = SelectedItem; var removed = previousSelection; previousSelection = selected; foreach (var tab in Items) tab.SelectionChanged(); Changed(nameof(SelectedIndex)); Changed(nameof(SelectedItem)); Emit("SelectionChanged", new SelectionChangedEventArgs { RemovedItems = removed == null ? Array.Empty<object>() : new[] { removed }, AddedItems = selected == null ? Array.Empty<object>() : new[] { selected } }); });
+        Listen("SelectionChanged", _ => UpdateSelection());
+    }
+    void UpdateSelection()
+    {
+        var selected = SelectedItem as TabItem;
+        var removed = previousSelection;
+        previousSelection = selected;
+        if (!ReferenceEquals(removed, selected))
+        {
+            selected?.EnsureContent();
+            removed?.SelectionChanged();
+            selected?.SelectionChanged();
+            Changed(nameof(SelectedItem));
+            Changed(nameof(SelectedIndex));
+            Emit("SelectionChanged", new SelectionChangedEventArgs
+            {
+                RemovedItems = removed == null ? Array.Empty<object>() : new[] { removed },
+                AddedItems = selected == null ? Array.Empty<object>() : new[] { selected }
+            });
+        }
+        else Changed(nameof(SelectedIndex));
     }
     public TabItemCollection Items { get; }
     public int SelectedIndex { get => ((Native.TabControl)NativeElement).SelectedIndex; set => ((Native.TabControl)NativeElement).SelectedIndex = value; }
@@ -70,16 +159,55 @@ public class TabControl : Control
         add { if (value != null) AddHandler(RoutedEvent.For("SelectionChanged"), value); }
         remove { if (value != null) RemoveHandler(RoutedEvent.For("SelectionChanged"), value); }
     }
-    internal void RefreshTabs() => ((Native.TabControl)NativeElement).SetTabs(Items.Select(tab => new Native.TabItem { Header = tab.Header is UIElement ? "" : tab.Header?.ToString() ?? "", HeaderContent = (tab.Header as UIElement)?.NativeElement, Content = tab.NativeElement, IsVisible = tab.Visibility == Visibility.Visible, IsEnabled = tab.IsEnabled }));
+    internal void RefreshTabs()
+    {
+        ((Native.TabControl)NativeElement).SetTabs(Items.Select(tab => new Native.TabItem
+        {
+            Header = tab.Header is UIElement ? "" : tab.Header?.ToString() ?? "",
+            HeaderContent = (tab.Header as UIElement)?.NativeElement,
+            Content = tab.NativeElement,
+            IsVisible = tab.Visibility == Visibility.Visible,
+            IsEnabled = tab.IsEnabled
+        }));
+        if (!ReferenceEquals(previousSelection, SelectedItem)) UpdateSelection();
+    }
     public override void Dispose() { if(observableItems!=null) observableItems.CollectionChanged-=SourceChanged; Items.Detach(); base.Dispose(); }
 }
 public sealed class TabItemCollection(TabControl owner) : Collection<TabItem>
 {
+    TabItem? importedSelection;
     void Watch(TabItem tab) { tab.Reparent(owner); owner.LogicalChildren.Add(tab); tab.PropertyChanged += Changed; }
     void Unwatch(TabItem tab) { tab.PropertyChanged -= Changed; owner.LogicalChildren.Remove(tab); tab.Reparent(null); }
     internal void Detach() { foreach (var tab in this) tab.PropertyChanged -= Changed; }
-    void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs args) { if (args.PropertyName is "Header" or "Visibility" or "IsEnabled" or "Content") owner.RefreshTabs(); }
-    protected override void InsertItem(int index, TabItem tab) { if (tab.Parent != null) throw new InvalidOperationException("The tab already has an owner."); var select = tab.IsSelected; base.InsertItem(index,tab); Watch(tab); owner.RefreshTabs(); if (select) owner.SelectedItem = tab; }
+    void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs args) { if (args.PropertyName is "Header" or "Visibility" or "IsEnabled") owner.RefreshTabs(); }
+    bool AttachItem(int index, TabItem tab)
+    {
+        if (tab.Parent != null) throw new InvalidOperationException("The tab already has an owner.");
+        bool select = tab.IsSelected;
+        base.InsertItem(index, tab);
+        Watch(tab);
+        return select;
+    }
+    internal void AddImported(TabItem tab) { if (AttachItem(Count, tab)) importedSelection = tab; }
+    internal void ReplaceAll(List<TabItem> replacement)
+    {
+        if (replacement.Distinct().Count() != replacement.Count
+            || replacement.Any(tab => tab.Parent != null && tab.Parent != owner))
+            throw new InvalidOperationException("Each tab may appear only once and must belong to this collection.");
+        foreach (var tab in this) Unwatch(tab);
+        base.ClearItems();
+        importedSelection = null;
+        foreach (var tab in replacement) AddImported(tab);
+        CompleteImport();
+    }
+    internal void CompleteImport()
+    {
+        var select = importedSelection;
+        importedSelection = null;
+        owner.RefreshTabs();
+        if (select != null) owner.SelectedItem = select;
+    }
+    protected override void InsertItem(int index, TabItem tab) { bool select = AttachItem(index, tab); owner.RefreshTabs(); if (select) owner.SelectedItem = tab; }
     protected override void RemoveItem(int index) { Unwatch(this[index]); base.RemoveItem(index); owner.RefreshTabs(); }
     protected override void ClearItems() { foreach (var tab in this) Unwatch(tab); base.ClearItems(); owner.RefreshTabs(); }
     protected override void SetItem(int index, TabItem tab) { if (tab == this[index]) return; if (tab.Parent != null) throw new InvalidOperationException("The tab already has an owner."); var select = tab.IsSelected; Unwatch(this[index]); base.SetItem(index, tab); Watch(tab); owner.RefreshTabs(); if (select) owner.SelectedItem = tab; }
