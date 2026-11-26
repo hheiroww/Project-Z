@@ -299,6 +299,7 @@ Namespace Windows.ShaderEditing
                     AddCaption("HLSL expression")
                     AddTextField(node, node.Expression, True, Function() node.Expression, Sub(value) node.Expression = value)
                     AddCaption("A, B, C, uv, Time, TexelSize", True)
+                    AddCaption("AspectUV(uv, TexelSize) for round shapes", True)
                     If realtime Then
                         AddCaption("AudioLevel, AudioLow", True)
                         AddCaption("AudioMid, AudioHigh", True)
