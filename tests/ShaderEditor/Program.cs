@@ -66,6 +66,9 @@ if (args.Contains("--desktop", StringComparer.Ordinal))
     await CheckHostedDesktop();
 }
 
+if (args.Contains("--realtime-desktop", StringComparer.Ordinal))
+    await CheckRealtimeDesktop();
+
 static async Task CheckRealtime(string? compiler, string? staging)
 {
     var scalars = new[]
@@ -379,6 +382,69 @@ static async Task CheckHostedDesktop()
     }
 }
 
+static async Task CheckRealtimeDesktop()
+{
+    string title = $"Real-time shader QA {Environment.ProcessId}";
+    string graph = ShaderPresets.Realtime[0].CreateDocument().ToJson();
+    var appearance = new WindowAppearance();
+    appearance.Update(new() { DwmBlurEnabled = false });
+    var ready = new TaskCompletionSource<(System.Windows.Forms.Form Form, IntPtr Handle)>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+    var ownerThread = new Thread(() =>
+    {
+        using var form = new System.Windows.Forms.Form { Text = title + " owner", ShowInTaskbar = false };
+        form.Shown += (_, _) => ready.TrySetResult((form, form.Handle));
+        System.Windows.Forms.Application.Run(form);
+    }) { IsBackground = true };
+    ownerThread.SetApartmentState(ApartmentState.STA);
+    ownerThread.Start();
+    var owner = await ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    ShaderEditorSession? session = null;
+    try
+    {
+        session = Shaders.ShowOwnedRealtimeShaderEditor(graph, appearance, owner.Handle, title);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        IntPtr window;
+        while ((window = FindWindow(null, title)) == IntPtr.Zero)
+        {
+            if (session.Completion.IsCompleted) await session.Completion;
+            await Task.Delay(100, timeout.Token);
+        }
+        Require(GetWindow(window, 4) == owner.Handle, "the real-time shader worker window belongs to the supplied host HWND");
+
+        string result = null!;
+        while (!session.TryTakeGraph(ref result))
+        {
+            if (session.Completion.IsCompleted) await session.Completion;
+            PostMessage(window, 0x100, 0x11, 1);
+            PostMessage(window, 0x100, 0x0d, 1);
+            PostMessage(window, 0x101, 0x0d, 1);
+            PostMessage(window, 0x101, 0x11, 1);
+            await Task.Delay(300, timeout.Token);
+        }
+        Require(ShaderDocument.Parse(result).ToJson() == graph, "owned real-time Apply transfers the editable spectral graph");
+        session.AcknowledgeGraph(result);
+        var pixelEffect = Path.Combine(Environment.GetEnvironmentVariable("PROJECTZ_SHADER_EDITOR_STAGING")!, "shader.DirectX12.mgfx");
+        while (!File.Exists(pixelEffect))
+        {
+            if (session.Completion.IsCompleted) await session.Completion;
+            await Task.Delay(100, timeout.Token);
+        }
+        Require(new FileInfo(pixelEffect).Length > 16, "the owned real-time editor compiled its native preview effect");
+
+        owner.Form.BeginInvoke(() => owner.Form.Close());
+        await session.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        Require(FindWindow(null, title) == IntPtr.Zero, "closing the host HWND closes its real-time worker window");
+    }
+    finally
+    {
+        session?.Close();
+        if (session is not null) await session.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        if (!owner.Form.IsDisposed && owner.Form.IsHandleCreated) owner.Form.BeginInvoke(() => owner.Form.Close());
+        ownerThread.Join(TimeSpan.FromSeconds(5));
+    }
+}
+
 static void CompilePixelShader(string source)
 {
     var input = Encoding.UTF8.GetBytes(source);
@@ -425,6 +491,9 @@ static extern int D3DCompile(byte[] source, nuint length, string? name, IntPtr d
 
 [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)]
 static extern IntPtr FindWindow(string? windowClass, string title);
+
+[DllImport("user32.dll")]
+static extern IntPtr GetWindow(IntPtr window, uint command);
 
 [DllImport("user32.dll", EntryPoint = "PostMessageW")]
 static extern bool PostMessage(IntPtr window, uint message, nuint wParam, nint lParam);
