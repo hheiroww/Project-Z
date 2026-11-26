@@ -18,17 +18,17 @@ flow into every application.
 Use the same version for Project-Z co-packages:
 
 ```powershell
-dotnet add package ProjectZ --version 2026.11.20.1
+dotnet add package ProjectZ --version 2026.11.26.1
 # Only for applications that load model files:
-dotnet add package ProjectZ.ModelImport --version 2026.11.20.1
+dotnet add package ProjectZ.ModelImport --version 2026.11.26.1
 # Only for applications that need native crash dumps:
-dotnet add package ProjectZ.Diagnostics --version 2026.11.20.1
+dotnet add package ProjectZ.Diagnostics --version 2026.11.26.1
 ```
 
 For native scene XAML compilation:
 
 ```xml
-<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.20.1" PrivateAssets="all" />
+<PackageReference Include="ProjectZ.XamlTools" Version="2026.11.26.1" PrivateAssets="all" />
 ```
 
 ## Migrating an application
@@ -48,7 +48,9 @@ in the base runtime. Native fault dumps and forced-exit observation require
 `ProjectZ.Diagnostics`. A base application does not start an observer, allocate
 its shared context buffer or subscribe to first-chance exception snapshots.
 The optional observer stays outside a single-file bundle so it can be started
-reliably as a separate process. Distribute that sidecar when opting in.
+reliably as a separate process. Applications in the same Windows user session
+and elevation context share one observer. It exits after the last registered
+application closes. Distribute the matching sidecar and framework together.
 
 Self-contained applications still contain the .NET/Windows Desktop runtime.
 Framework-dependent deployment can share a separately installed runtime; it
@@ -63,7 +65,7 @@ runtime and packages both Windows architectures.
 
 ```powershell
 ./tools/Pack-RuntimePackages.ps1
-./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.20.1.nupkg
+./tests/Packaging/Verify.ps1 -PackagePath artifacts/runtime-packages/ProjectZ.2026.11.26.1.nupkg
 ```
 
 The packaging test builds consumers outside the source tree. It checks the base

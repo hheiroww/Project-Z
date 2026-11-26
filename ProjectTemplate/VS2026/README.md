@@ -2,7 +2,7 @@
 
 **[Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SocketJack.ProjectZVisualStudio2026)** · **[Download ProjectZ.VisualStudio2026.vsix](https://github.com/hheiroww/Project-Z/releases/latest/download/ProjectZ.VisualStudio2026.vsix)** · [Latest release](https://github.com/hheiroww/Project-Z/releases/latest)
 
-Version **2026.11.20.1** installs seven templates in Visual Studio 2026 on Windows:
+Version **2026.11.26.1** installs seven templates in Visual Studio 2026 on Windows:
 
 | Template | Languages | Application platforms |
 | --- | --- | --- |

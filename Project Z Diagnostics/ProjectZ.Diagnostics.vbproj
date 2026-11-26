@@ -14,7 +14,6 @@
     <RootNamespace>ProjectZ</RootNamespace>
     <AssemblyName>ProjectZ.Diagnostics</AssemblyName>
     <StartupObject>ProjectZ.RuntimeDiagnostics.ObserverProgram</StartupObject>
-    <DefineConstants>$(DefineConstants),PROJECTZ_DIAGNOSTICS_OBSERVER=-1</DefineConstants>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
@@ -29,8 +28,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\Windows\Diagnostics\ApplicationDiagnostics.vb" Link="ApplicationDiagnostics.vb" />
-    <Compile Include="..\Windows\Diagnostics\DiagnosticOptions.vb" Link="DiagnosticOptions.vb" />
+    <Compile Include="..\Windows\Diagnostics\ObserverConnection.vb" Link="ObserverConnection.vb" />
+    <Compile Include="..\Windows\Diagnostics\ManagedDiagnosticContext.vb" Link="ManagedDiagnosticContext.vb" />
   </ItemGroup>
   <Target Name="PublishStandaloneObservers" BeforeTargets="GenerateNuspec" DependsOnTargets="InitializeSourceControlInformation">
     <PropertyGroup>
