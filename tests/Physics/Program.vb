@@ -40,6 +40,10 @@ Module Program
         Run("scalar impulse drives an existing property", AddressOf ScalarImpulse)
         Run("stiff scalar spring stays stable with small mass", AddressOf StiffScalar)
         Run("scalar bounds and invalid values stay finite", AddressOf ScalarBounds)
+        Run("linear congruential samples match the reference sequence", AddressOf LinearCongruentialKnownSequence)
+        Run("linear congruential seeds normalize and state resumes independently", AddressOf LinearCongruentialSeedAndState)
+        Run("linear congruential samples visit the full bounded period", AddressOf LinearCongruentialFullPeriod)
+        Run("seeded water impacts reproduce across timeline seeks", AddressOf WaterReproducesSeededImpacts)
         Run("water impulses spread radially and settle", AddressOf WaterSpreadsAndDamps)
         Run("water reflects at walls and conserves its mean height", AddressOf WaterReflectsAndConservesMean)
         Run("water sampling is identical after forward and backward seeking", AddressOf WaterSeeksDeterministically)
@@ -49,6 +53,87 @@ Module Program
         If failures.Count > 0 Then Throw New Exception(String.Join(Environment.NewLine, failures))
         Console.WriteLine($"PASS {passes} physics regression cases without a graphics device")
     End Sub
+
+    Private Sub LinearCongruentialKnownSequence()
+        Dim sequence As New LinearCongruentialRandom(12398)
+        Dim expectedStates = {5025, 96268, 93655, 117530, 120853, 81280, 58787, 118838}
+
+        For Each expected In expectedStates
+            Check(sequence.NextState() = expected AndAlso sequence.State = expected, "reference state differed")
+        Next
+
+        sequence = New LinearCongruentialRandom(12398)
+        Check(sequence.NextDouble() = 5025.0 / 134456.0, "reference normalized Double differed")
+        Check(sequence.NextSingle() = CSng(96268.0 / 134456.0), "reference normalized Single differed")
+        Check(LinearCongruentialRandom.Sample(12398) = 5025.0 / 134456.0, "first sample differed")
+        Check(sequence.State = 96268, "one-shot sampling altered an active sequence")
+    End Sub
+
+    Private Sub LinearCongruentialSeedAndState()
+        Dim negative As New LinearCongruentialRandom(-1)
+        Check(negative.State = 134455, "negative seed was not normalized")
+        Check(New LinearCongruentialRandom(-268912).State = 0, "negative multiple did not start at zero")
+        Check(New LinearCongruentialRandom(268913).State = 1, "large positive seed was not reduced")
+        Check(New LinearCongruentialRandom(Long.MinValue).State = 3968, "minimum Int64 seed was not normalized")
+        Check(New LinearCongruentialRandom(Long.MaxValue).State = 130487, "maximum Int64 seed was not normalized")
+
+        Dim defaultSequence As New LinearCongruentialRandom()
+        Check(defaultSequence.NextState() = 28411, "default instance did not start at zero")
+
+        Dim resumed As New LinearCongruentialRandom(negative.State)
+        Dim nextValue = negative.NextState()
+        Check(resumed.State = 134455, "advancing one sequence changed another")
+        Check(resumed.NextState() = nextValue, "restored sequence did not resume")
+    End Sub
+
+    Private Sub LinearCongruentialFullPeriod()
+        Dim sequence As New LinearCongruentialRandom(0)
+        Dim visited(LinearCongruentialRandom.Modulus - 1) As Boolean
+
+        For stepIndex = 1 To visited.Length
+            Dim value = sequence.NextSingle()
+            Check(value >= 0F AndAlso value < 1F, "normalized sample left [0, 1)")
+            Check(Not visited(sequence.State), "sequence repeated before visiting each state")
+            visited(sequence.State) = True
+        Next
+
+        Check(sequence.State = 0, "full period did not return to the seed")
+        Check(sequence.NextState() = 28411, "sequence did not repeat after a full period")
+    End Sub
+
+    Private Sub WaterReproducesSeededImpacts()
+        Dim expected As New WaterHeightfield(24, impacts:=SeededWaterImpacts(12398))
+        Dim replay As New WaterHeightfield(24, impacts:=SeededWaterImpacts(12398))
+        Dim other As New WaterHeightfield(24, impacts:=SeededWaterImpacts(12399))
+        expected.Seek(73)
+        replay.Seek(144)
+        replay.Seek(19)
+        replay.Seek(73)
+        other.Seek(73)
+
+        Dim moved = False
+        Dim differs = False
+        For row = 0 To expected.GridSize - 1
+            For column = 0 To expected.GridSize - 1
+                Dim vertex = expected.GetVertex(column, row)
+                Dim replayVertex = replay.GetVertex(column, row)
+                Check(replayVertex.Position = vertex.Position AndAlso replayVertex.Normal = vertex.Normal,
+                      "replaying the same seed and seeking to the same time changed the surface")
+                moved = moved OrElse vertex.Position.Y <> 0
+                differs = differs OrElse other.GetVertex(column, row).Position <> vertex.Position
+            Next
+        Next
+        Check(moved AndAlso differs, "seeded impacts did not produce distinct water motion")
+    End Sub
+
+    Private Function SeededWaterImpacts(seed As Long) As WaterSurfaceImpact()
+        Dim sequence As New LinearCongruentialRandom(seed)
+        Dim impacts(3) As WaterSurfaceImpact
+        For index = 0 To impacts.Length - 1
+            impacts(index) = New WaterSurfaceImpact(index * 14L, sequence.NextSingle(), sequence.NextSingle(), 0.12F, -0.7F)
+        Next
+        Return impacts
+    End Function
 
     Private Sub WaterSpreadsAndDamps()
         Dim pool As New WaterHeightfield(impacts:={New WaterSurfaceImpact(0, 0.5F, 0.5F, 0.12F, 1.0F)})

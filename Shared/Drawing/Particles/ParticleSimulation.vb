@@ -1,4 +1,5 @@
 Imports Microsoft.Xna.Framework
+Imports ProjectZ.Shared.Physics
 
 Namespace [Shared].Drawing.Particles
 
@@ -22,13 +23,24 @@ Namespace [Shared].Drawing.Particles
     Public NotInheritable Class ParticleSimulation
         Private ReadOnly states As ParticleState()
         Private ReadOnly random As Random
+        Private randomSequence As LinearCongruentialRandom
         Private countValue As Integer
         Private emissionRemainder As Double
 
         Public Sub New(Optional capacity As Integer = 4096, Optional seed As Integer = 1)
+            Me.New(capacity, New Random(seed), Nothing)
+        End Sub
+
+        ''' <summary>Uses an independent copy of the supplied sequence for particle velocity spread.</summary>
+        Public Sub New(randomSequence As LinearCongruentialRandom, Optional capacity As Integer = 4096)
+            Me.New(capacity, Nothing, randomSequence)
+        End Sub
+
+        Private Sub New(capacity As Integer, random As Random, randomSequence As LinearCongruentialRandom)
             If capacity < 1 OrElse capacity > 16000 Then Throw New ArgumentOutOfRangeException(NameOf(capacity), "Use 1 through 16000 particles per emitter.")
             ReDim states(capacity - 1)
-            random = New Random(seed)
+            Me.random = random
+            Me.randomSequence = randomSequence
         End Sub
 
         Public ReadOnly Property Capacity As Integer
@@ -120,7 +132,8 @@ Namespace [Shared].Drawing.Particles
         End Sub
 
         Private Function RandomSpread(value As Single) As Single
-            Return CSng((random.NextDouble() * 2 - 1) * SafeRange(Math.Abs(CDbl(value)), 0, 100000, 0))
+            Dim sample = If(random Is Nothing, randomSequence.NextDouble(), random.NextDouble())
+            Return CSng((sample * 2 - 1) * SafeRange(Math.Abs(CDbl(value)), 0, 100000, 0))
         End Function
         Private Shared Function SafeVector(value As Vector3) As Vector3
             Return New Vector3(CSng(SafeRange(value.X, -1000000, 1000000, 0)), CSng(SafeRange(value.Y, -1000000, 1000000, 0)), CSng(SafeRange(value.Z, -1000000, 1000000, 0)))

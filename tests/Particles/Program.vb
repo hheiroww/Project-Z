@@ -1,6 +1,7 @@
 Imports System.IO
 Imports Microsoft.Xna.Framework
 Imports ProjectZ.Shared.Drawing.Particles
+Imports ProjectZ.Shared.Physics
 
 Module Program
     Private assertions As Integer
@@ -43,9 +44,49 @@ Module Program
         Check(ParticleSpriteAnimation.FrameIndexAt(ends, 1.2) = 1, "Variable delay looping")
         Check(ParticleSpriteAnimation.FrameIndexAt(ends, 5, False) = 2, "Nonlooping last frame")
         Check(ParticleSpriteAnimation.FrameIndexAt(ends, Double.NaN) = 0, "Invalid frame time")
+        TestSeededVelocity()
         TestGif()
         Console.WriteLine($"PASS: {assertions} particle/animation/GIF assertions")
     End Sub
+    Private Sub TestSeededVelocity()
+        Dim spread As New Vector3(20, 25, 30)
+        Dim baseline As New Random(42)
+        Dim legacy As New ParticleSimulation(5, 42) With {
+            .Is3D = True, .InitialVelocity = Vector3.Zero, .VelocitySpread = spread
+        }
+        legacy.Emit(5)
+        For index = 0 To legacy.Count - 1
+            Dim expected As New Vector3(
+                CSng((baseline.NextDouble() * 2 - 1) * spread.X),
+                CSng((baseline.NextDouble() * 2 - 1) * spread.Y),
+                CSng((baseline.NextDouble() * 2 - 1) * spread.Z))
+            Check(legacy(index).Velocity = expected, "Established seeded velocity sequence")
+        Next
+
+        Dim randomSequence As New LinearCongruentialRandom(12398)
+        Dim seeded As New ParticleSimulation(randomSequence, capacity:=5) With {
+            .Is3D = True, .InitialVelocity = Vector3.Zero, .VelocitySpread = spread, .EmissionRate = 0
+        }
+        Dim replay As New ParticleSimulation(randomSequence, capacity:=5) With {
+            .Is3D = True, .InitialVelocity = Vector3.Zero, .VelocitySpread = spread, .EmissionRate = 0
+        }
+        seeded.Emit(5)
+        Dim firstExpected As New Vector3(
+            CSng((5025.0 / 134456.0 * 2 - 1) * spread.X),
+            CSng((96268.0 / 134456.0 * 2 - 1) * spread.Y),
+            CSng((93655.0 / 134456.0 * 2 - 1) * spread.Z))
+        Check(seeded(0).Velocity = firstExpected, "Opt-in velocity uses the reference sequence")
+        Check(randomSequence.State = 12398, "Emitting particles altered the caller's sequence")
+        replay.Emit(3)
+        replay.Emit(2)
+        seeded.Advance(0.2)
+        replay.Advance(0.2)
+        For index = 0 To seeded.Count - 1
+            Check(seeded(index).Position = replay(index).Position AndAlso seeded(index).Velocity = replay(index).Velocity,
+                  "Separate opt-in particle simulations reproduce the same motion")
+        Next
+    End Sub
+
     Private Sub TestGif()
         ' One black pixel with a valid clear/literal/end LZW sequence.
         Dim bytes As Byte() = {71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255, 255,
