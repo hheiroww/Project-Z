@@ -1172,10 +1172,26 @@ Namespace [Shared].Drawing
                 DrawSceneBackground()
                 RaiseEvent PreDraw(gameTime)
                 If Not hasBegun Then
-                    hasBegun = True
                     spriteBatch.Begin()
+                    hasBegun = True
                 End If
-                ApplyEffects()
+                Try
+                    ApplyEffects()
+                Finally
+                    ' Elements can borrow the scene's batch. Finish the scene
+                    ' pass so each element can apply its own clipping and blend.
+                    If hasBegun Then
+                        Dim rasterizer = graphicsDevice.RasterizerState
+                        Dim scissor = graphicsDevice.ScissorRectangle
+                        hasBegun = False
+                        Try
+                            spriteBatch.End()
+                        Finally
+                            graphicsDevice.RasterizerState = rasterizer
+                            graphicsDevice.ScissorRectangle = scissor
+                        End Try
+                    End If
+                End Try
                 DrawElements(I_Elements.Values)
             End If
             If isCursorVisible Then

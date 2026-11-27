@@ -15,6 +15,7 @@ internal static class Program
         second.SetOwner(first);
         Require(GetWindow(childHandle, 4) == ownerHandle, "native top-level ownership is attached");
         first.Scene.BackgroundColor = new Color(10, 24, 32); second.Scene.BackgroundColor = new Color(32, 24, 10);
+        CheckBorrowedBatch(first);
         var textureField = typeof(RectangleElement).GetField("Texture", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var reusedRectangle = new RectangleElement(first.Scene);
         using var survivingRectangle = new RectangleElement(first.Scene);
@@ -81,6 +82,54 @@ internal static class Program
         try { Hosting.Run(()=>new ImportedWindowApplication()); ImportedLayoutChecks.Run(); WrappedItemChecks.Run(); TemplateFocusChecks.Run(); }
         catch(Exception error) { Console.Error.WriteLine(error); Environment.ExitCode=1; return; }
         Console.WriteLine("NATIVE_WINDOWS_READY");
+    }
+    static void CheckBorrowedBatch(NativeWindowSurface surface)
+    {
+        var scene = surface.Scene;
+        var clip = new RectangleElement(scene)
+        {
+            Position = new(18, 24), Size = new(72, 48), BackgroundColor = Color.Navy, Clip = true,
+            ClipBounds = new Rectangle(0, 0, 40, 48)
+        };
+        var row = new RectangleElement(scene, newSpritebatch: false)
+        {
+            Position = new(18, 24), Size = new(72, 48), BackgroundColor = Color.Lime
+        };
+        clip.Children.Add(row);
+        scene.AddElement(clip);
+        scene.isCursorVisible = true;
+        void PlaceCursor(GameTime time) => scene.Cursor.Position = new(112, 80);
+        scene.PreDraw += PlaceCursor;
+        try
+        {
+            var faults = ProjectZ.Shared.Drawing.UI.SceneElement.RenderExceptionCount;
+            surface.RenderFrame();
+            Require(ProjectZ.Shared.Drawing.UI.SceneElement.RenderExceptionCount == faults,
+                "clipped shared-batch rows render without opening an existing SpriteBatch");
+            AssertClippedRowAndCursor();
+
+            row.VisualEffect = new XamlNativeEffect { Kind = XamlEffectKind.PassThrough };
+            surface.RenderFrame();
+            Require(ProjectZ.Shared.Drawing.UI.SceneElement.RenderExceptionCount == faults,
+                "effect compositing releases the borrowed batch before cursor rendering");
+            AssertClippedRowAndCursor();
+        }
+        finally
+        {
+            scene.PreDraw -= PlaceCursor;
+            scene.isCursorVisible = false;
+            scene.RemoveElement(clip);
+        }
+
+        void AssertClippedRowAndCursor()
+        {
+            var pixels = surface.CaptureFrame();
+            const int width = 300;
+            Require(pixels[40 * width + 35] == Color.Lime && pixels[40 * width + 65] == scene.BackgroundColor,
+                "the shared-batch row paints inside its clip and preserves the background outside");
+            Require(Enumerable.Range(80, 12).Any(y => Enumerable.Range(112, 12).Any(x => pixels[y * width + x] == Color.White)),
+                "the scene cursor paints above clipped rows");
+        }
     }
     static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); Console.WriteLine("PASS " + message); }
     [DllImport("user32.dll")] static extern bool IsWindow(IntPtr handle);
