@@ -165,6 +165,8 @@ internal static class Program
         var unfiltered = renderer.CopyFrame(64, 40, 0, minified);
         var filtered = renderer.Render(64, 40, 0, minified, default, default, highQuality: true).ToArray();
         Require(!filtered.AsSpan().SequenceEqual(unfiltered), "Anisotropic texture filtering did not affect minified terrain.");
+        Require(filtered.AsSpan().SequenceEqual(renderer.Render(64, 40, 0, minified, default, default,
+            highQuality: false, anisotropicFiltering: true)), "Preview filtering did not use the full texture quality.");
         Require(CheckAlpha(filtered, 64, 40, "filtered") == CheckAlpha(unfiltered, 64, 40, "unfiltered"),
             "Texture filtering changed the terrain silhouette.");
         Require(unfiltered.AsSpan().SequenceEqual(renderer.Render(64, 40, 0, minified)),

@@ -56,7 +56,20 @@ public sealed class StudioSceneRender : IDisposable
 
     /// <summary>Renders with denser endless water and up to 16× anisotropic texture filtering when highQuality is enabled.</summary>
     public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings, StudioSignal signal,
-        StudioClock clock, bool highQuality)
+        StudioClock clock, bool highQuality) =>
+        Render(width, height, seconds, settings, signal, clock, highQuality, anisotropicFiltering: highQuality);
+
+    /// <summary>Renders with separate controls for terrain texture filtering and higher quality water.</summary>
+    /// <param name="width">Frame width in pixels.</param>
+    /// <param name="height">Frame height in pixels.</param>
+    /// <param name="seconds">Scene time in seconds.</param>
+    /// <param name="settings">Optional settings for the frame.</param>
+    /// <param name="signal">Audio signal for the frame.</param>
+    /// <param name="clock">Transport position and tempo for the frame.</param>
+    /// <param name="highQuality">Enables denser terrain water and high quality ocean rendering.</param>
+    /// <param name="anisotropicFiltering">Enables up to 16× filtering for rasterized scene textures.</param>
+    public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings, StudioSignal signal,
+        StudioClock clock, bool highQuality, bool anisotropicFiltering)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         seconds = ValidateFrame(width, height, seconds);
@@ -90,7 +103,7 @@ public sealed class StudioSceneRender : IDisposable
         }
 
         _raster.Begin(width, height, camera.ViewProjection, active.Sky, _visibleTerrain,
-            active.HasTerrain ? _lastTerrain : null, fog, highQuality);
+            active.HasTerrain ? _lastTerrain : null, fog, anisotropicFiltering);
         if (active.HasModel)
             _model!.Draw(_raster, active.Model, seconds, modelGround, normalized);
 

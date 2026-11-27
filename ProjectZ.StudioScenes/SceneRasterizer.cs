@@ -27,7 +27,7 @@ internal sealed class SceneRasterizer
     private TerrainFog _fog;
     private int _width;
     private int _height;
-    private bool _highQuality;
+    private bool _anisotropicFiltering;
     private int[] _pixels = [];
     private float[] _depth = [];
     private const int MaximumCachedTerrainPixels = 2073600;
@@ -38,7 +38,7 @@ internal sealed class SceneRasterizer
     private StudioSky? _cachedSky;
     private Matrix4x4 _cachedCamera;
     private TerrainFog _cachedFog;
-    private bool _cachedHighQuality;
+    private bool _cachedAnisotropicFiltering;
     private (int Width, int Height) _cachedSize;
     private int[] _cachedPixels = [];
     private float[] _cachedDepth = [];
@@ -49,13 +49,13 @@ internal sealed class SceneRasterizer
     private readonly record struct PixelVertex(float X, float Y, float Depth, float ReciprocalW, Vector2 UV, Vector4 Tint);
 
     internal void Begin(int width, int height, Matrix4x4 camera, StudioSky sky, IReadOnlyList<TerrainGeometry> terrain,
-        StudioTerrain? terrainSettings, TerrainFog fog, bool highQuality)
+        StudioTerrain? terrainSettings, TerrainFog fog, bool anisotropicFiltering)
     {
         _width = width;
         _height = height;
         _camera = camera;
         _fog = fog;
-        _highQuality = highQuality;
+        _anisotropicFiltering = anisotropicFiltering;
         var count = checked(width * height);
         if (count != _pixels.Length)
         {
@@ -64,7 +64,7 @@ internal sealed class SceneRasterizer
         }
         if (terrainSettings is not null && ReferenceEquals(terrainSettings, _cachedTerrainSettings) && sky == _cachedSky &&
             camera == _cachedCamera && fog == _cachedFog && _cachedSize == (width, height) &&
-            highQuality == _cachedHighQuality)
+            anisotropicFiltering == _cachedAnisotropicFiltering)
         {
             _cachedPixels.CopyTo(_pixels, 0);
             _cachedDepth.CopyTo(_depth, 0);
@@ -105,7 +105,7 @@ internal sealed class SceneRasterizer
         _cachedCamera = camera;
         _cachedFog = fog;
         _cachedSize = (width, height);
-        _cachedHighQuality = highQuality;
+        _cachedAnisotropicFiltering = anisotropicFiltering;
     }
 
     internal void Release()
@@ -226,7 +226,7 @@ internal sealed class SceneRasterizer
         var rowC = Edge(left + .5f, top + .5f, a, b) * oneOver;
         Vector2 textureA = default, textureB = default, textureC = default, dx = default, dy = default;
         float dwx = 0, dwy = 0;
-        var filter = texture is not null && _highQuality;
+        var filter = texture is not null && _anisotropicFiltering;
         if (filter)
         {
             textureA = a.UV * a.ReciprocalW;

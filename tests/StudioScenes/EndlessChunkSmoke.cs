@@ -123,6 +123,15 @@ internal static class EndlessChunkSmoke
         Require(initial.AsSpan().SequenceEqual(renderer.Render(720, 405, 1, signal: signal, clock: new StudioClock(120, 0))),
             "Returning to preview quality did not reconstruct the same frame.");
 
+        var untextured = scene.Copy();
+        untextured.Terrain.Material.Enabled = false;
+        var clock = new StudioClock(120, 0);
+        var previewWater = renderer.Render(720, 405, 1, untextured, signal, clock).ToArray();
+        Require(previewWater.AsSpan().SequenceEqual(renderer.Render(720, 405, 1, untextured, signal, clock,
+            highQuality: false, anisotropicFiltering: true)), "Texture filtering changed preview water geometry.");
+        Require(!previewWater.AsSpan().SequenceEqual(renderer.Render(720, 405, 1, untextured, signal, clock,
+            highQuality: true, anisotropicFiltering: false)), "Denser water geometry required texture filtering.");
+
         var watch = Stopwatch.StartNew();
         for (var index = 0; index < 32; index++)
             renderer.Render(720, 405, index / 30d, signal: signal, clock: new StudioClock(120, 0));
