@@ -35,7 +35,7 @@ Namespace Windows.ShaderEditing
         Private appliedTheme As WindowAppearanceSettings
         Private revision As Long = -1
         Private nextIdleFrame As Long
-        Private frameReady, closing, promptToClose, initialized As Boolean
+        Private frameReady, closing, closeRequestPosted, initialized As Boolean
         Private failure As Exception
 
         Friend Sub New(documentPath As String, graphJson As String, getAppearance As Func(Of WindowAppearanceSettings),
@@ -105,7 +105,7 @@ Namespace Windows.ShaderEditing
             scene = New ShaderEditorScene(manager, windowSurface, documentPath, graphJson, publish,
                 Sub() windowSurface.WindowState = Forms.FormWindowState.Minimized,
                 Sub() windowSurface.WindowState = If(windowSurface.WindowState = Forms.FormWindowState.Maximized, Forms.FormWindowState.Normal, Forms.FormWindowState.Maximized),
-                Sub() closing = True, takeReceipt, hosted, surface, windowSurface.Text, realtime)
+                AddressOf QueueWindowClose, takeReceipt, hosted, surface, windowSurface.Text, realtime)
             scene.Quality.AntiAliasingSamples = 4
             scene.Quality.PpiPerfectText = True
             manager.AddScene("shader-editor", scene)
@@ -118,15 +118,8 @@ Namespace Windows.ShaderEditing
             Dim timer = DirectCast(sender, Forms.Timer)
             timer.Stop()
             Try
-                If shouldClose() OrElse Not IsOwnerAlive() Then closing = True
-                If promptToClose Then
-                    promptToClose = False
-                    If scene Is Nothing Then closing = True Else scene.RequestClose()
-                End If
-                If closing Then
-                    windowSurface.Close()
-                    Return
-                End If
+                If shouldClose() OrElse Not IsOwnerAlive() Then QueueWindowClose()
+                If closing Then Return
                 If Not initialized Then
                     ' Enter the form's message loop before starting the device.
                     ' Do not publish readiness until the first frame is visible.
@@ -150,8 +143,7 @@ Namespace Windows.ShaderEditing
                 backdrop?.Tick()
             Catch ex As Exception
                 failure = ex
-                closing = True
-                windowSurface.Close()
+                QueueWindowClose()
             Finally
                 If Not closing Then timer.Start()
             End Try
@@ -174,8 +166,41 @@ Namespace Windows.ShaderEditing
 
         Private Sub WindowClosing(sender As Object, e As Forms.FormClosingEventArgs)
             If closing Then Return
+            Select Case e.CloseReason
+                Case Forms.CloseReason.WindowsShutDown, Forms.CloseReason.ApplicationExitCall,
+                    Forms.CloseReason.FormOwnerClosing, Forms.CloseReason.TaskManagerClosing
+                    closing = True
+                    Return
+            End Select
             e.Cancel = True
-            promptToClose = True
+            If closeRequestPosted Then Return
+            closeRequestPosted = True
+            ' Process the native X on the form's message queue. Closing must not depend
+            ' on the render timer running or on another preview frame completing.
+            windowSurface.BeginInvoke(New Action(AddressOf RequestWindowClose))
+        End Sub
+
+        Private Sub RequestWindowClose()
+            closeRequestPosted = False
+            If closing Then Return
+            If scene Is Nothing Then
+                QueueWindowClose()
+                Return
+            End If
+            scene.RequestClose()
+            If Not closing AndAlso windowSurface.WindowState = Forms.FormWindowState.Minimized Then
+                windowSurface.WindowState = Forms.FormWindowState.Normal
+            End If
+        End Sub
+
+        Private Sub QueueWindowClose()
+            If closing Then Return
+            closing = True
+            If Not windowSurface.IsHandleCreated OrElse windowSurface.IsDisposed Then Return
+            windowSurface.BeginInvoke(New Action(
+                Sub()
+                    If Not windowSurface.IsDisposed Then windowSurface.Close()
+                End Sub))
         End Sub
 
         Private Sub ResizeFrame()
@@ -242,12 +267,18 @@ Namespace Windows.ShaderEditing
 
         Protected Overrides Sub Dispose(disposing As Boolean)
             If disposing Then
-                scene?.CancelCompilation()
+                Dim compilerShutdown = If(scene Is Nothing, Task.CompletedTask, scene.CancelCompilationAsync())
+                windowSurface.Dispose()
                 manager?.Dispose()
                 backdrop?.Dispose()
                 frame?.Dispose()
                 sprite?.Dispose()
-                windowSurface.Dispose()
+                ' Allow the cancelled compiler to terminate its child process after the editor
+                ' has left the message loop and released its visible window.
+                Try
+                    compilerShutdown.WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult()
+                Catch ex As TimeoutException
+                End Try
             End If
             MyBase.Dispose(disposing)
         End Sub

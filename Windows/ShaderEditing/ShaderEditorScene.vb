@@ -744,17 +744,21 @@ Namespace Windows.ShaderEditing
             End Select
         End Sub
 
-        Friend Sub CancelCompilation()
-            If cancellation Is Nothing Then Return
-            cancellation.Cancel()
+        Friend Async Function CancelCompilationAsync() As Task
+            Dim active = cancellation
+            Dim pendingCompile = compile
+            If active Is Nothing Then Return
+            cancellation = Nothing
+            compile = Nothing
             Try
-                compile?.WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult()
-            Catch ex As Exception When TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is TimeoutException OrElse TypeOf ex Is IOException
+                Await active.CancelAsync().ConfigureAwait(False)
+                If pendingCompile IsNot Nothing Then Await pendingCompile.ConfigureAwait(False)
+            Catch ex As Exception When TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is IOException
                 ' Closing the worker has no diagnostics panel to receive these results.
             Finally
-                cancellation.Dispose()
+                active.Dispose()
             End Try
-        End Sub
+        End Function
 
         Private Sub ClearEditorFocus()
             If document.Mode = ShaderMode.Advanced Then advanced.CommitEdits()
