@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input.Touch;
 using ProjectZ.Shared.Content;
 using ProjectZ.Shared.Drawing;
 
@@ -68,6 +70,7 @@ public sealed class NativeWindowSurface : IDisposable
     sealed class SurfaceScene(SceneManager manager) : Scene(manager);
     sealed class SurfaceGame : Game
     {
+        static readonly FieldInfo? legacyTouchWindow = typeof(TouchPanel).GetField("PrimaryWindow", BindingFlags.Static | BindingFlags.NonPublic);
         readonly GraphicsDeviceManager graphics;
         SceneManager manager = null!;
         SpriteBatch presentation = null!;
@@ -94,7 +97,16 @@ public sealed class NativeWindowSurface : IDisposable
             IsFixedTimeStep = false;
             InactiveSleepTime = TimeSpan.Zero;
             graphics = new(this) { PreferredBackBufferWidth = width, PreferredBackBufferHeight = height, GraphicsProfile = GraphicsProfile.HiDef, SynchronizeWithVerticalRetrace = false };
+            graphics.DeviceReset += BindTouchPanelForReset;
             Window.Title = title; Window.AllowUserResizing = true; IsMouseVisible = true; Content.RootDirectory = Application.Active?.StartupOptions.ContentRoot ?? "Content";
+        }
+        void BindTouchPanelForReset(object? sender, EventArgs args)
+        {
+            // MonoGame 3.8.5.1 clears its process-wide touch window when any
+            // game closes. This manager event runs before MonoGame sizes the
+            // touch panel, so attach the live window whose device just reset.
+            if (legacyTouchWindow is { IsInitOnly: false } field && field.FieldType == typeof(GameWindow))
+                field.SetValue(null, Window);
         }
         public void Resize(int width, int height)
         {

@@ -110,9 +110,10 @@ internal static class ImportedLayoutChecks
                     titleBounds.Right <= actionBounds.Left,
                     $"right-docked actions fit inside the toolbar, leaving the remainder for its title (toolbar {toolbarBounds}, actions {actionBounds}, final button {resetBounds}, title {titleBounds})");
                 CheckImportedTabs(tabsWindow);
+                window.Close();
+                Require(window.IsDisposed && !tabsWindow.IsDisposed, "closing the first native window leaves the second ready to resize");
                 CheckNativeClientResize(tabsWindow);
                 tabsWindow.Close();
-                window.Close();
             };
             timer.Start();
         }
