@@ -295,9 +295,13 @@ internal static class ShaderWorkerEntry
         finally
         {
             results.Writer.TryComplete();
-            writing.GetAwaiter().GetResult();
-            stop.Cancel();
-            reading.GetAwaiter().GetResult();
+            try { writing.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(); }
+            catch (TimeoutException) { }
+            finally
+            {
+                stop.Cancel();
+                Task.WhenAll(reading, writing).GetAwaiter().GetResult();
+            }
         }
         return failure is null ? 0 : 1;
 
