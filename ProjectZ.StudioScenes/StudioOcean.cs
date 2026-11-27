@@ -4,6 +4,7 @@ namespace ProjectZ.StudioScenes;
 public sealed record StudioOcean
 {
     public int Seed { get; set; } = 173;
+    public int FftResolution { get; set; } = 128;
     public float WindSpeed { get; set; } = 12;
     public float WindDirection { get; set; } = 28;
     public float Fetch { get; set; } = 42_000;
@@ -16,10 +17,15 @@ public sealed record StudioOcean
     public float EyeHeight { get; set; } = 3.2f;
     public float SunElevation { get; set; } = 17;
     public float SunAzimuth { get; set; } = 18;
+    public float SunIntensity { get; set; } = 1;
+    public float CloudCoverage { get; set; } = .56f;
+    public float Haze { get; set; } = .86f;
     public float Roughness { get; set; } = .14f;
 
     public void Validate()
     {
+        if (FftResolution is not (64 or 128 or 256))
+            throw new InvalidDataException("Ocean FFT resolution must be 64, 128, or 256.");
         SceneRanges.Check(WindSpeed, 1, 35, "Ocean wind speed");
         SceneRanges.Check(WindDirection, -3600, 3600, "Ocean wind direction");
         SceneRanges.Check(Fetch, 100, 1_000_000, "Ocean wind fetch");
@@ -32,6 +38,9 @@ public sealed record StudioOcean
         SceneRanges.Check(EyeHeight, .5f, 150, "Ocean eye height");
         SceneRanges.Check(SunElevation, -10, 90, "Ocean sun elevation");
         SceneRanges.Check(SunAzimuth, -3600, 3600, "Ocean sun azimuth");
+        SceneRanges.Check(SunIntensity, 0, 3, "Ocean sun intensity");
+        SceneRanges.Check(CloudCoverage, 0, 1, "Ocean cloud coverage");
+        SceneRanges.Check(Haze, 0, 2, "Ocean haze");
         SceneRanges.Check(Roughness, .025f, .75f, "Ocean roughness");
     }
 }

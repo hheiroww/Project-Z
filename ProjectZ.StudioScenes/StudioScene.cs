@@ -20,12 +20,17 @@ public sealed record StudioScene
     public static StudioScene CreateOcean() => new()
     {
         Kind = StudioSceneKind.Ocean,
-        Camera = new StudioCamera { Pitch = 4, Yaw = 18, FieldOfView = 56 },
+        Camera = new StudioCamera { Pitch = -.8f, Yaw = 18, FieldOfView = 56 },
+        Ocean = new StudioOcean
+        {
+            WindSpeed = 14, Choppiness = 1.4f, WaveScale = 1.03f, Foam = .9f, EyeHeight = 2.6f,
+            SunElevation = 13, SunAzimuth = 22, Roughness = .115f
+        },
         Sky = new StudioSky
         {
             Enabled = true,
-            TopColor = unchecked((int)0xff285f9a),
-            HorizonColor = unchecked((int)0xffc8c7be)
+            TopColor = unchecked((int)0xff236cbc),
+            HorizonColor = unchecked((int)0xffc8d6df)
         }
     };
 

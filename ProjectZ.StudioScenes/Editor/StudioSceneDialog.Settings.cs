@@ -110,6 +110,8 @@ public sealed partial class StudioSceneDialog
     private static EditorRow[] BuildOcean(StudioOcean ocean) =>
     [
         new NumberRow("Seed", () => ocean.Seed, value => ocean.Seed = (int)value, -1000000, 1000000, 1),
+        new ChoiceRow("Wave resolution", ["64", "128", "256"], () => ocean.FftResolution switch { 64 => 0, 256 => 2, _ => 1 },
+            index => ocean.FftResolution = 64 << index),
         new NumberRow("Wind speed (m/s)", () => ocean.WindSpeed, value => ocean.WindSpeed = value, 1, 35, .5f),
         new NumberRow("Wind direction", () => ocean.WindDirection, value => ocean.WindDirection = value, -3600, 3600, 2),
         new NumberRow("Wind fetch (m)", () => ocean.Fetch, value => ocean.Fetch = value, 100, 1000000, 500),
@@ -122,7 +124,10 @@ public sealed partial class StudioSceneDialog
         new NumberRow("Audio response", () => ocean.AudioResponse, value => ocean.AudioResponse = value, 0, 2, .05f),
         new NumberRow("Eye height (m)", () => ocean.EyeHeight, value => ocean.EyeHeight = value, .5f, 150, .2f),
         new NumberRow("Sun elevation", () => ocean.SunElevation, value => ocean.SunElevation = value, -10, 90, 1),
-        new NumberRow("Sun azimuth", () => ocean.SunAzimuth, value => ocean.SunAzimuth = value, -3600, 3600, 1)
+        new NumberRow("Sun azimuth", () => ocean.SunAzimuth, value => ocean.SunAzimuth = value, -3600, 3600, 1),
+        new NumberRow("Sun intensity", () => ocean.SunIntensity, value => ocean.SunIntensity = value, 0, 3, .05f),
+        new NumberRow("Cloud coverage", () => ocean.CloudCoverage, value => ocean.CloudCoverage = value, 0, 1, .025f),
+        new NumberRow("Haze", () => ocean.Haze, value => ocean.Haze = value, 0, 2, .05f)
     ];
 
     private EditorRow[] BuildRig(StudioModel model)

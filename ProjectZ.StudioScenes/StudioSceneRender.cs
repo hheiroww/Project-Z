@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace ProjectZ.StudioScenes;
 
-/// <summary>Renders a scene into premultiplied BGRA8888 without creating a UI or graphics device.</summary>
+/// <summary>Renders a scene into premultiplied BGRA8888 or a native ocean texture without a UI.</summary>
 /// <remarks>Create one instance per playback or export worker. Model loading is synchronous.</remarks>
 public sealed class StudioSceneRender : IDisposable
 {
@@ -13,6 +13,10 @@ public sealed class StudioSceneRender : IDisposable
     private ModelGeometry? _model;
     private readonly SceneRasterizer _raster = new();
     private StudioOceanRender? _ocean;
+    private StudioOceanGpu? _oceanReadback;
+    private StudioOceanGpu? _oceanOnHost;
+    private bool _readbackUnavailable;
+    private nint _unsupportedDevice;
     private StudioTerrain? _lastTerrain;
     private const float TerrainTileSide = 4;
     private const int MaximumResidentTiles = 144;
@@ -42,6 +46,9 @@ public sealed class StudioSceneRender : IDisposable
 
     public IReadOnlyList<string> Animations => _model?.Animations ?? Array.Empty<string>();
     public IReadOnlyList<StudioJoint> Joints => _model?.Joints ?? Array.Empty<StudioJoint>();
+    public bool LastOceanFrameUsedGpu { get; private set; }
+    internal string? OceanGpuError { get; private set; }
+    internal bool UseSoftwareOcean { get; set; }
 
     /// <summary>Returns a view of the completed frame until this instance renders again or is disposed.</summary>
     public ReadOnlySpan<int> Render(int width, int height, double seconds, StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default) =>
@@ -52,19 +59,16 @@ public sealed class StudioSceneRender : IDisposable
         StudioClock clock, bool highQuality)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (width is <= 0 or > MaximumSide || height is <= 0 or > MaximumSide || (long)width * height > MaximumPixels)
-            throw new ArgumentOutOfRangeException(nameof(width), "The viewport must fit within 4096 pixels per side and 8,388,608 pixels total.");
-        if (!double.IsFinite(seconds))
-            throw new ArgumentOutOfRangeException(nameof(seconds));
-        seconds = Math.Clamp(seconds, -1e12, 1e12);
+        seconds = ValidateFrame(width, height, seconds);
         var active = settings ?? _original;
         active.Validate();
         if (active.HasModel && (_model is null || !string.Equals(active.Model.Asset, _original.Model.Asset, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Create a new renderer when changing the model asset.", nameof(settings));
         var pose = active.Motion.Sample(active.Camera, seconds, clock);
-        var normalized = new StudioSignal(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
+        var normalized = Normalize(signal);
+        LastOceanFrameUsedGpu = false;
         if (active.HasOcean)
-            return (_ocean ??= new StudioOceanRender()).Draw(width, height, seconds, active, pose, normalized, highQuality);
+            return RenderOcean(width, height, seconds, active, pose, normalized, highQuality);
         var camera = MakeCamera(pose, width, height, active.HasTerrain ? active.Terrain.Relief : null);
         var fog = active.HasTerrain && active.Terrain.Endless
             ? TerrainFog.ForCamera(camera.Eye, camera.Distance)
@@ -99,6 +103,97 @@ public sealed class StudioSceneRender : IDisposable
         return _raster.Pixels;
     }
 
+    /// <summary>Draws the initialized open ocean on the host's Direct3D 11.0+ immediate context.</summary>
+    /// <remarks>
+    /// Call on the context's owner thread with its compute stage available. Unbind the previous output
+    /// from graphics stages before submitting a new frame. The returned RGBA8 UNORM shader texture
+    /// is borrowed until the next resize or disposal. A retaining host must take its own reference.
+    /// False indicates pending shader compilation, unavailable GPU support, or a non-ocean scene.
+    /// </remarks>
+    public bool TryRenderOceanTexture(nint device, nint immediateContext, int width, int height, double seconds,
+        StudioSignal signal, StudioClock clock, bool highQuality, out nint texture)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        texture = 0;
+        LastOceanFrameUsedGpu = false;
+        seconds = ValidateFrame(width, height, seconds);
+        if (!_original.HasOcean || device == 0 || immediateContext == 0 || device == _unsupportedDevice)
+            return false;
+        var program = ReadyOceanShader(highQuality);
+        if (program is null)
+            return false;
+
+        try
+        {
+            if (_oceanOnHost?.Uses(device, immediateContext) != true)
+            {
+                _oceanOnHost?.Dispose();
+                _oceanOnHost = null;
+                _oceanOnHost = StudioOceanGpu.Attach(device, immediateContext, program);
+            }
+            var pose = _original.Motion.Sample(_original.Camera, seconds, clock);
+            texture = _oceanOnHost.Draw(width, height, seconds, _original, pose, Normalize(signal), highQuality);
+            return LastOceanFrameUsedGpu = texture != 0;
+        }
+        catch (Exception failure) when (GpuUnavailable(failure))
+        {
+            _unsupportedDevice = device;
+            OceanGpuError = failure.Message;
+            _oceanOnHost?.Dispose();
+            _oceanOnHost = null;
+            return false;
+        }
+    }
+
+    private ReadOnlySpan<int> RenderOcean(int width, int height, double seconds, StudioScene scene,
+        StudioCameraPose pose, StudioSignal signal, bool highQuality)
+    {
+        var program = _readbackUnavailable ? null : ReadyOceanShader(highQuality);
+        if (program is not null)
+        {
+            try
+            {
+                _oceanReadback ??= StudioOceanGpu.Create(program);
+                _oceanReadback.Draw(width, height, seconds, scene, pose, signal, highQuality);
+                var pixels = _oceanReadback.CopyPixels();
+                LastOceanFrameUsedGpu = true;
+                return pixels;
+            }
+            catch (Exception failure) when (GpuUnavailable(failure))
+            {
+                _readbackUnavailable = true;
+                OceanGpuError = failure.Message;
+                _oceanReadback?.Dispose();
+                _oceanReadback = null;
+            }
+        }
+        return (_ocean ??= new StudioOceanRender()).Draw(width, height, seconds, scene, pose, signal, highQuality);
+    }
+
+    private byte[][]? ReadyOceanShader(bool wait)
+    {
+        if (UseSoftwareOcean || !OperatingSystem.IsWindowsVersionAtLeast(10))
+            return null;
+        var program = OceanShaderProgram.Ready(wait, out var error);
+        OceanGpuError = error;
+        return program;
+    }
+
+    private static bool GpuUnavailable(Exception failure) =>
+        failure is SharpDX.SharpDXException or NotSupportedException or DllNotFoundException or BadImageFormatException;
+
+    private static double ValidateFrame(int width, int height, double seconds)
+    {
+        if (width is <= 0 or > MaximumSide || height is <= 0 or > MaximumSide || (long)width * height > MaximumPixels)
+            throw new ArgumentOutOfRangeException(nameof(width), "The viewport must fit within 4096 pixels per side and 8,388,608 pixels total.");
+        if (!double.IsFinite(seconds))
+            throw new ArgumentOutOfRangeException(nameof(seconds));
+        return Math.Clamp(seconds, -1e12, 1e12);
+    }
+
+    private static StudioSignal Normalize(StudioSignal signal) =>
+        new(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
+
     /// <summary>Returns owned pixels for callers that cannot use spans or want to retain frames.</summary>
     public int[] CopyFrame(int width, int height, double seconds, StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default) =>
         Render(width, height, seconds, settings, signal, clock).ToArray();
@@ -123,6 +218,8 @@ public sealed class StudioSceneRender : IDisposable
         _disposed = true;
         _raster.Release();
         _ocean = null;
+        _oceanReadback?.Dispose();
+        _oceanOnHost?.Dispose();
         _model = null;
         ClearTerrain();
         _landIndices = [];

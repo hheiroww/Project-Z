@@ -31,6 +31,12 @@ internal static class Program
                 }
                 return 0;
             }
+            if (args is ["--ocean-gpu", var oceanImage] && Path.IsPathFullyQualified(oceanImage))
+            {
+                const int width = 1920, height = 1080;
+                SavePng(oceanImage, StudioOceanGpuSmoke.Run(width, height), width, height);
+                return 0;
+            }
             if (args.Length is < 1 or > 3 || args.Any(path => !Path.IsPathFullyQualified(path)))
                 throw new ArgumentException("Supply an absolute fixture directory and optional paths for terrain and Project-Z dialog PNGs.");
 

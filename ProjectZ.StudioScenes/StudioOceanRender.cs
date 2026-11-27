@@ -32,7 +32,7 @@ internal sealed class StudioOceanRender
         var (ss, cs) = MathF.SinCos(Radians(ocean.SunElevation));
         var (sa, ca) = MathF.SinCos(Radians(ocean.SunAzimuth));
         var sun = new Vector3(-sa * cs, ss, -ca * cs);
-        var sky = new OceanSky(scene.Sky, sun);
+        var sky = new OceanSky(scene.Sky, ocean, sun);
         var footprint = 2 * scale / height;
         var roughness = ocean.Roughness;
         var workers = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount - 1, 1, 12) };
@@ -43,7 +43,7 @@ internal sealed class StudioOceanRender
             {
                 var ray = Vector3.Normalize(row + horizontal * (2 * (x + .5f) / width - 1));
                 var light = ray.Y < -.0008f
-                    ? ShadeWater(ray, eye, sun, sky, footprint, roughness, highQuality)
+                    ? ShadeWater(ray, eye, sun, sky, footprint, roughness, ocean.Haze, ocean.SunIntensity, highQuality)
                     : sky.Color(ray, clouds: true);
                 _pixels[y * width + x] = ray.Y >= -.0008f && !scene.Sky.Enabled ? 0 : ToBgra(light);
             }
@@ -52,7 +52,7 @@ internal sealed class StudioOceanRender
     }
 
     private Vector3 ShadeWater(Vector3 ray, Vector3 eye, Vector3 sun, OceanSky sky, float pixelAngle,
-        float roughness, bool highQuality)
+        float roughness, float haze, float sunIntensity, bool highQuality)
     {
         float fall = -ray.Y;
         float planeHit = MathF.Min(3800, eye.Y / fall);
@@ -107,9 +107,9 @@ internal sealed class StudioOceanRender
             + new Vector3(.017f, .081f, .101f) * (crest / (1 + crest) * (.45f + .64f * backlight));
         var reflection = sky.Color(reflected, clouds: highQuality && footprint < .56f) * new Vector3(.56f, .77f, .90f);
         transmitted *= .73f + .33f * Smooth(-.45f, .47f, wave.Height);
-        var water = transmitted * (1 - fresnel) + reflection * fresnel + sunWhite * (highlight * 1.75f);
+        var water = transmitted * (1 - fresnel) + reflection * fresnel + sunWhite * (highlight * 1.75f * sunIntensity);
         water = Vector3.Lerp(water, FoamColor * (.37f + .57f * diffuseLight), foamCoverage * .93f);
-        float fog = 1 - MathF.Exp(-distance * .00265f);
+        float fog = 1 - MathF.Exp(-distance * .00308f * haze);
         return Vector3.Lerp(water, sky.Color(ray, clouds: false), fog);
     }
 
@@ -144,12 +144,16 @@ internal sealed class StudioOceanRender
         private readonly Vector3 _horizon;
         private readonly Vector3 _zenith;
         private readonly Vector3 _sun;
+        private readonly float _coverage;
+        private readonly float _sunIntensity;
 
-        public OceanSky(StudioSky settings, Vector3 sun)
+        public OceanSky(StudioSky settings, StudioOcean ocean, Vector3 sun)
         {
             _horizon = Linear(settings.HorizonColor);
             _zenith = Linear(settings.TopColor);
             _sun = sun;
+            _coverage = ocean.CloudCoverage;
+            _sunIntensity = ocean.SunIntensity;
         }
 
         public Vector3 Color(Vector3 ray, bool clouds)
@@ -157,18 +161,19 @@ internal sealed class StudioOceanRender
             float elevation = MathF.Max(ray.Y, 0);
             float atmosphere = Smooth(.012f, .76f, MathF.Sqrt(elevation));
             var color = Vector3.Lerp(_horizon, _zenith, atmosphere);
-            if (clouds && elevation > .022f)
+            if (clouds && elevation > .022f && _coverage > 0)
             {
                 var projection = new Vector2(ray.X, ray.Z) * (1.8f / (elevation + .16f)) + new Vector2(-2.7f, 5.3f);
                 var cloud = .61f * Noise(projection * 1.9f) + .26f * Noise(projection * 4.9f)
                     + .13f * Noise(projection * 11.7f);
-                var coverage = Smooth(.44f, .72f, cloud) * Smooth(.025f, .18f, elevation);
+                var threshold = Lerp(.69f, .29f, _coverage);
+                var coverage = Smooth(threshold - .025f, threshold + .23f, cloud) * Smooth(.025f, .18f, elevation);
                 color = Vector3.Lerp(color, new Vector3(.66f, .73f, .81f), coverage * .9f);
             }
             float sunFacing = Math.Clamp(Vector3.Dot(ray, _sun), 0, 1);
             var haze = MathF.Pow(sunFacing, 38) * .21f;
             var disk = Smooth(.99925f, .99984f, sunFacing);
-            return color + new Vector3(1f, .86f, .69f) * (haze + disk * 2.85f);
+            return color + new Vector3(1f, .86f, .69f) * ((haze + disk * 2.85f) * _sunIntensity);
         }
     }
 

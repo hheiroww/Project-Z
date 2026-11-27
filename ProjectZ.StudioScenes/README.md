@@ -40,6 +40,8 @@ Choose Flythrough, Orbit, or Keyframes on the Path page. The beat grid snaps aut
 
 ## Open ocean
 
-Choose **Open ocean** in the 3D Scene Editor or start with `StudioScene.CreateOcean()`. Both preview and export use the same four wind-driven spectral cascades, inverse FFT, choppy displacement, and Jacobian foam from a shared scene. The surface lighting uses roughness-aware Fresnel reflection, Beckmann highlights, and water scattering. The **Ocean** tab exposes wind, depth, wave height, foam, audio response, eye height, and lighting. Wave phases use absolute scene time so playback and timeline seeks agree.
+Choose **Open ocean** in the 3D Scene Editor or start with `StudioScene.CreateOcean()`. Preview and export share the Direct3D 11 compute pipeline for four directional wave cascades, a two-dimensional inverse FFT, choppy displacement, and Jacobian foam. The water shader uses Fresnel reflection, Beckmann sunlight, and crest scattering. The **Ocean** tab exposes FFT resolution, wind, depth, foam, audio response, eye height, sun, cloud coverage, and atmospheric haze. The software fallback uses the same scene settings when a supported device is unavailable.
 
-The spectral and lighting methods adapt [Garrett Gunnell’s Water](https://github.com/GarrettGunnell/Water) and [Ivan Pensionerov’s FFT Ocean](https://github.com/gasgiant/FFT-Ocean). See `LICENSE.Water.txt` for the MIT notices.
+Hosts that already own a Direct3D 11 device can use `TryRenderOceanTexture` on the render worker. It produces a shader-readable premultiplied RGBA8 texture on that device. Hosts that composite into a BGRA buffer can use `Render` or `CopyFrameTo`. Capture waits for the first shader compile. Interactive preview remains responsive while the shaders compile. GPU wave phases use absolute scene time and repeat every 200 seconds. Backward and discontinuous seeks rebuild the foam field.
+
+The spectral and lighting methods adapt [Garrett Gunnell’s Water](https://github.com/GarrettGunnell/Water) and [Ivan Pensionerov’s FFT Ocean](https://github.com/gasgiant/FFT-Ocean). See `LICENSE.Water.txt` and `LICENSE.SharpDX.txt` for MIT notices.

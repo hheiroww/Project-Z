@@ -22,7 +22,7 @@ internal static class SpectralOceanSmoke
     internal static int[] CapturePreview(int width, int height)
     {
         var scene = CreateScene();
-        using var renderer = new StudioSceneRender(scene);
+        using var renderer = new StudioSceneRender(scene) { UseSoftwareOcean = true };
         var signal = new StudioSignal(.7f, .25f, .18f, .85f);
         renderer.Render(640, 360, Time, signal: signal);
         var clock = Stopwatch.StartNew();
@@ -91,7 +91,7 @@ internal static class SpectralOceanSmoke
         Require(terrain.HasTerrain && !terrain.HasOcean && terrain.Terrain.Grid == 17 &&
                 !StudioSceneFile.Serialize(terrain).Contains("\"ocean\"", StringComparison.Ordinal),
             "Legacy terrain lost its authored settings or serialized an unrecognized ocean block.");
-        using var renderer = new StudioSceneRender(terrain);
+        using var renderer = new StudioSceneRender(terrain) { UseSoftwareOcean = true };
         var originalTerrain = renderer.CopyFrame(Width, Height, Time);
         Require(originalTerrain.Any(pixel => (pixel >>> 24) != 0), "The legacy terrain fixture was empty.");
 
