@@ -711,10 +711,13 @@ Namespace [Shared].Drawing
             End If
             If Not CanFocus(element) Then Return
             KeyboardButton = Nothing
-            If LastSelected IsNot Nothing AndAlso LastSelected IsNot element Then
-                LastSelected.isSelected = False
-            End If
+            Dim previous = LastSelected
+            ' Lost-focus handlers read the current focus path from this scene.
             LastSelected = element
+            If previous IsNot Nothing AndAlso previous IsNot element Then
+                previous.isSelected = False
+            End If
+            If LastSelected IsNot element Then Return
             element.isSelected = True
             element.OnUserInvalidated()
         End Sub
