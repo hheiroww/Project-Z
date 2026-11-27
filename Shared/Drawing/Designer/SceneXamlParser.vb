@@ -468,9 +468,20 @@ Namespace [Shared].Drawing.Designer
                 Next
             End If
             Dim surface = TryCast(template.SelectSingleNode("*[local-name()='Border']"), XmlElement)
+            Dim effectNode = surface?.SelectSingleNode("*[contains(local-name(), '.Effect')]")
+            Dim existingEffect = element.SelectSingleNode("*[contains(local-name(), '.Effect')]")
             If ImportedEventRouting AndAlso surface IsNot Nothing Then
-                Dim surfaceName = surface.GetAttribute("Name", "http://schemas.microsoft.com/winfx/2006/xaml")
+                Const xamlNamespace As String = "http://schemas.microsoft.com/winfx/2006/xaml"
+                Dim surfaceName = surface.GetAttribute("Name", xamlNamespace)
                 If surfaceName.Length = 0 Then surfaceName = GetAttributeString(surface, "Name", String.Empty)
+                Dim effect = TryCast(effectNode?.SelectSingleNode("*"), XmlElement)
+                Dim effectName = If(effect?.GetAttribute("Name", xamlNamespace), String.Empty)
+                Dim installedEffect = TryCast(existingEffect?.SelectSingleNode("*"), XmlElement)
+                ' Expanded markup can already contain the effect copied from this surface.
+                Dim mapsEffect = effectName.Length > 0 AndAlso
+                    (existingEffect Is Nothing OrElse
+                    (installedEffect IsNot Nothing AndAlso installedEffect.LocalName = effect.LocalName AndAlso
+                        installedEffect.GetAttribute("Name", xamlNamespace) = effectName))
                 Dim triggers = TryCast(element.SelectSingleNode("*[local-name()='" & element.LocalName & ".Triggers']"), XmlElement)
                 For Each original In template.SelectNodes("*[local-name()='ControlTemplate.Triggers']/*[local-name()='Trigger' or local-name()='DataTrigger']").OfType(Of XmlElement)()
                     Dim trigger = DirectCast(element.OwnerDocument.ImportNode(original, True), XmlElement)
@@ -478,7 +489,15 @@ Namespace [Shared].Drawing.Designer
                         If setter.GetAttribute("TargetName") = surfaceName Then setter.RemoveAttribute("TargetName")
                     Next
                     For Each animation In trigger.SelectNodes(".//*[@*[local-name()='Storyboard.TargetName']]").OfType(Of XmlElement)()
-                        If animation.GetAttribute("Storyboard.TargetName") = surfaceName Then animation.RemoveAttribute("Storyboard.TargetName")
+                        Dim targetName = animation.GetAttribute("Storyboard.TargetName")
+                        If targetName = surfaceName Then
+                            animation.RemoveAttribute("Storyboard.TargetName")
+                        ElseIf mapsEffect AndAlso targetName = effectName Then
+                            ' Native templates attach the effect to the owning control.
+                            animation.RemoveAttribute("Storyboard.TargetName")
+                            animation.SetAttribute("Storyboard.TargetProperty",
+                                                   "(UIElement.Effect)." & animation.GetAttribute("Storyboard.TargetProperty"))
+                        End If
                     Next
                     If trigger.GetAttribute("SourceName") = surfaceName Then trigger.RemoveAttribute("SourceName")
                     If triggers Is Nothing Then
@@ -511,8 +530,7 @@ Namespace [Shared].Drawing.Designer
                     If value.Length > 0 AndAlso Not value.StartsWith("{TemplateBinding", StringComparison.Ordinal) Then element.SetAttribute(alignment.Item2, value)
                 Next
             End If
-            Dim effectNode = surface.SelectSingleNode("*[contains(local-name(), '.Effect')]")
-            If effectNode IsNot Nothing AndAlso element.SelectSingleNode("*[contains(local-name(), '.Effect')]") Is Nothing Then
+            If effectNode IsNot Nothing AndAlso existingEffect Is Nothing Then
                 Dim propertyNode = element.OwnerDocument.CreateElement(element.LocalName & ".Effect", element.NamespaceURI)
                 For Each child In effectNode.ChildNodes.OfType(Of XmlElement)()
                     propertyNode.AppendChild(element.OwnerDocument.ImportNode(child, True))

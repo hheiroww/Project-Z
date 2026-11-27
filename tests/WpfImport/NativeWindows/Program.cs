@@ -78,7 +78,7 @@ internal static class Program
         first.RenderFrame(); Require(first.FrameCount > previousFrames, "owner continues rendering after child disposal");
         first.Dispose(); Require(!IsWindow(ownerHandle), "native window disposal releases its HWND");
         Require(sharedWhite.IsDisposed, "graphics device disposal releases its shared primitive texture");
-        try { Hosting.Run(()=>new ImportedWindowApplication()); ImportedLayoutChecks.Run(); WrappedItemChecks.Run(); }
+        try { Hosting.Run(()=>new ImportedWindowApplication()); ImportedLayoutChecks.Run(); WrappedItemChecks.Run(); TemplateFocusChecks.Run(); }
         catch(Exception error) { Console.Error.WriteLine(error); Environment.ExitCode=1; return; }
         Console.WriteLine("NATIVE_WINDOWS_READY");
     }
