@@ -106,7 +106,7 @@ Namespace Windows.ShaderEditing
                 Sub() windowSurface.WindowState = Forms.FormWindowState.Minimized,
                 Sub() windowSurface.WindowState = If(windowSurface.WindowState = Forms.FormWindowState.Maximized, Forms.FormWindowState.Normal, Forms.FormWindowState.Maximized),
                 AddressOf QueueWindowClose, takeReceipt, hosted, surface, windowSurface.Text, realtime)
-            scene.Quality.AntiAliasingSamples = 4
+            scene.Quality.AntiAliasingSamples = If(realtime, 16, 4)
             scene.Quality.PpiPerfectText = True
             manager.AddScene("shader-editor", scene)
             manager.ActiveScene = scene
