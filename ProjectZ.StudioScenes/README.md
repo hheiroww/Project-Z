@@ -37,3 +37,9 @@ Enable Endless terrain to travel beyond the island's original bounds. The seed a
 Fog blends distant ground and water into the sky or transparent background. The CPU renderer reuses chunk topology, skips water under dry ground, and caches the rendered land and depth at a fixed camera. Active camera movement and higher geometry or material resolutions require more CPU time. The surrounding host still needs its own supported graphics backend.
 
 Choose Flythrough, Orbit, or Keyframes on the Path page. The beat grid snaps authored keys. Playback interpolates camera orientation, position, zoom, and field of view between those keys. When a host supplies track tempo or beat position, Sync to track lets the camera follow it.
+
+## Open ocean
+
+Choose **Open ocean** in the 3D Scene Editor or start with `StudioScene.CreateOcean()`. Both preview and export use the same four wind-driven spectral cascades, inverse FFT, choppy displacement, and Jacobian foam from a shared scene. The surface lighting uses roughness-aware Fresnel reflection, Beckmann highlights, and water scattering. The **Ocean** tab exposes wind, depth, wave height, foam, audio response, eye height, and lighting. Wave phases use absolute scene time so playback and timeline seeks agree.
+
+The spectral and lighting methods adapt [Garrett Gunnell’s Water](https://github.com/GarrettGunnell/Water) and [Ivan Pensionerov’s FFT Ocean](https://github.com/gasgiant/FFT-Ocean). See `LICENSE.Water.txt` for the MIT notices.

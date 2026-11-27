@@ -111,7 +111,7 @@ public sealed partial class StudioSceneDialog
         {
             var page = index;
             var tab = new Rectangle(x + index * (tabWidth + 5), 99, tabWidth, 31);
-            DrawButton(canvas, $"tab-{index}", PageNames[index], tab,
+            DrawButton(canvas, $"tab-{index}", index == 1 && Scene.HasOcean ? "Ocean" : PageNames[index], tab,
                 () => SelectPage(page), active: index == _page, style: StudioTextStyle.Small);
         }
 

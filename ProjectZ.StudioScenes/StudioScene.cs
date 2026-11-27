@@ -1,6 +1,6 @@
 namespace ProjectZ.StudioScenes;
 
-public enum StudioSceneKind { Terrain = 0, Model = 1, TerrainAndModel = 2 }
+public enum StudioSceneKind { Terrain = 0, Model = 1, TerrainAndModel = 2, Ocean = 3 }
 
 public sealed record StudioScene
 {
@@ -10,20 +10,34 @@ public sealed record StudioScene
     public StudioCameraMotion Motion { get; set; } = new();
     public StudioTerrain Terrain { get; set; } = new();
     public StudioSky Sky { get; set; } = new();
+    public StudioOcean Ocean { get; set; } = new();
     public StudioModel Model { get; set; } = new();
 
     public bool HasTerrain => Kind is StudioSceneKind.Terrain or StudioSceneKind.TerrainAndModel;
     public bool HasModel => Kind is StudioSceneKind.Model or StudioSceneKind.TerrainAndModel;
+    public bool HasOcean => Kind == StudioSceneKind.Ocean;
+
+    public static StudioScene CreateOcean() => new()
+    {
+        Kind = StudioSceneKind.Ocean,
+        Camera = new StudioCamera { Pitch = 4, Yaw = 18, FieldOfView = 56 },
+        Sky = new StudioSky
+        {
+            Enabled = true,
+            TopColor = unchecked((int)0xff285f9a),
+            HorizonColor = unchecked((int)0xffc8c7be)
+        }
+    };
 
     public StudioScene Copy() => this with
     {
-        Camera = Camera with { }, Motion = Motion.Copy(), Terrain = Terrain with { Material = Terrain.Material with { } }, Sky = Sky with { },
+        Camera = Camera with { }, Motion = Motion.Copy(), Terrain = Terrain with { Material = Terrain.Material with { } }, Sky = Sky with { }, Ocean = Ocean with { },
         Model = Model with { Ik = Model.Ik is { } chain ? chain with { } : null }
     };
 
     public void Validate()
     {
-        if (Version != 1 || !Enum.IsDefined(Kind) || Camera is null || Terrain is null || Model is null || Sky is null || Motion is null)
+        if (Version != 1 || !Enum.IsDefined(Kind) || Camera is null || Terrain is null || Model is null || Sky is null || Ocean is null || Motion is null)
             throw new InvalidDataException("This Project-Z scene format or scene kind is unsupported.");
 
         SceneRanges.Check(Camera.Yaw, -3600, 3600, "Camera yaw");
@@ -43,6 +57,8 @@ public sealed record StudioScene
         if (Terrain.Material is null)
             throw new InvalidDataException("The terrain material is missing.");
         Terrain.Material.Validate();
+        if (HasOcean)
+            Ocean.Validate();
 
         if (Model.Animation is < -1 or > 16384)
             throw new InvalidDataException("The model animation index is invalid.");

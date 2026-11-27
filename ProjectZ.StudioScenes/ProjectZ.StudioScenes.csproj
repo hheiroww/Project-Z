@@ -5,13 +5,15 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.3</Version>
+    <Version>1.1.0</Version>
     <StudioScenesProjectZVersion Condition="'$(StudioScenesProjectZVersion)' == ''">2026.11.20.1</StudioScenesProjectZVersion>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Shared portable model and terrain scenes for Project-Z applications.</Description>
   </PropertyGroup>
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
+    <None Update="LICENSE.Water.txt" Pack="true" PackagePath="/" />
+    <EmbeddedResource Include="LICENSE.Water.txt" LogicalName="ProjectZ.StudioScenes.LICENSE.Water.txt" />
     <InternalsVisibleTo Include="StudioScenes" />
   </ItemGroup>
   <ItemGroup Condition="'$(StudioScenesProjectZRoot)' == ''">

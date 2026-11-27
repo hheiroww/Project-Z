@@ -12,6 +12,7 @@ public sealed class StudioSceneRender : IDisposable
     private readonly StudioScene _original;
     private ModelGeometry? _model;
     private readonly SceneRasterizer _raster = new();
+    private StudioOceanRender? _ocean;
     private StudioTerrain? _lastTerrain;
     private const float TerrainTileSide = 4;
     private const int MaximumResidentTiles = 144;
@@ -61,6 +62,9 @@ public sealed class StudioSceneRender : IDisposable
         if (active.HasModel && (_model is null || !string.Equals(active.Model.Asset, _original.Model.Asset, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Create a new renderer when changing the model asset.", nameof(settings));
         var pose = active.Motion.Sample(active.Camera, seconds, clock);
+        var normalized = new StudioSignal(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
+        if (active.HasOcean)
+            return (_ocean ??= new StudioOceanRender()).Draw(width, height, seconds, active, pose, normalized, highQuality);
         var camera = MakeCamera(pose, width, height, active.HasTerrain ? active.Terrain.Relief : null);
         var fog = active.HasTerrain && active.Terrain.Endless
             ? TerrainFog.ForCamera(camera.Eye, camera.Distance)
@@ -81,7 +85,6 @@ public sealed class StudioSceneRender : IDisposable
             _visibleTerrainValid = false;
         }
 
-        var normalized = new StudioSignal(Unit(signal.Bass), Unit(signal.Mid), Unit(signal.Treble), Unit(signal.Beat));
         _raster.Begin(width, height, camera.ViewProjection, active.Sky, _visibleTerrain,
             active.HasTerrain ? _lastTerrain : null, fog, highQuality);
         if (active.HasModel)
@@ -102,10 +105,15 @@ public sealed class StudioSceneRender : IDisposable
 
     /// <summary>Writes the premultiplied BGRA frame into a caller-owned byte buffer.</summary>
     public void CopyFrameTo(byte[] destination, int width, int height, double seconds,
-        StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default)
+        StudioScene? settings = null, StudioSignal signal = default, StudioClock clock = default) =>
+        CopyFrameTo(destination, width, height, seconds, settings, signal, clock, false);
+
+    /// <summary>Writes a scene frame into a caller-owned buffer with optional export quality.</summary>
+    public void CopyFrameTo(byte[] destination, int width, int height, double seconds,
+        StudioScene? settings, StudioSignal signal, StudioClock clock, bool highQuality)
     {
         ArgumentNullException.ThrowIfNull(destination);
-        var frame = MemoryMarshal.AsBytes(Render(width, height, seconds, settings, signal, clock));
+        var frame = MemoryMarshal.AsBytes(Render(width, height, seconds, settings, signal, clock, highQuality));
         frame.CopyTo(destination);
     }
 
@@ -114,6 +122,7 @@ public sealed class StudioSceneRender : IDisposable
         if (_disposed) return;
         _disposed = true;
         _raster.Release();
+        _ocean = null;
         _model = null;
         ClearTerrain();
         _landIndices = [];

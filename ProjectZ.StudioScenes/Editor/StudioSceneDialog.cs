@@ -111,6 +111,8 @@ public sealed partial class StudioSceneDialog : Form
         _draftChain = null;
         if (Scene.Kind == StudioSceneKind.Terrain)
             Scene.Kind = StudioSceneKind.TerrainAndModel;
+        else if (Scene.HasOcean)
+            Scene.Kind = StudioSceneKind.Model;
         SelectPage(3);
         LoadRenderer(autoSelectAnimation: true);
     });

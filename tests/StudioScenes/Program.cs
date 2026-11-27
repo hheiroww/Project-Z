@@ -19,12 +19,25 @@ internal static class Program
                 StudioUiSmoke.CheckCanvas();
                 return 0;
             }
+            if (args is ["--ocean-only"] or ["--ocean-only", _])
+            {
+                SpectralOceanSmoke.Run();
+                if (args.Length == 2)
+                {
+                    if (!Path.IsPathFullyQualified(args[1]))
+                        throw new ArgumentException("Supply an absolute ocean preview PNG path.");
+                    const int previewWidth = 960, previewHeight = 540;
+                    SavePng(args[1], SpectralOceanSmoke.CapturePreview(previewWidth, previewHeight), previewWidth, previewHeight);
+                }
+                return 0;
+            }
             if (args.Length is < 1 or > 3 || args.Any(path => !Path.IsPathFullyQualified(path)))
                 throw new ArgumentException("Supply an absolute fixture directory and optional paths for terrain and Project-Z dialog PNGs.");
 
             CheckCameraMotion();
             CheckTerrain(args.ElementAtOrDefault(1));
             EndlessChunkSmoke.Run();
+            SpectralOceanSmoke.Run();
             var fixture = CheckSceneFile(args[0]);
             CheckImportedModel(fixture.Scene, fixture.ModelPath);
             if (args.Length == 3) StudioUiSmoke.Run(args[2]);

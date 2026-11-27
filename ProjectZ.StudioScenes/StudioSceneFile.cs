@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using ProjectZ.Shared.Drawing.ThreeD;
 
 namespace ProjectZ.StudioScenes;
@@ -15,6 +16,20 @@ public static class StudioSceneFile
         MaxDepth = 16,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver
+        {
+            Modifiers =
+            {
+                info =>
+                {
+                    if (info.Type != typeof(StudioScene))
+                        return;
+                    var ocean = info.Properties.Single(property => property.Name == "ocean");
+                    // Continue producing legacy scene data that older Studio hosts can read.
+                    ocean.ShouldSerialize = static (scene, _) => ((StudioScene)scene).HasOcean;
+                }
+            }
+        },
         WriteIndented = true,
         Converters =
         {

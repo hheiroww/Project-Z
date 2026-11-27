@@ -36,13 +36,13 @@ public sealed partial class StudioSceneDialog
         _rows =
         [
             [
-                new ChoiceRow("Contents", ["Terrain", "3D model", "Terrain and model"], () => (int)scene.Kind, SetSceneKind),
+                new ChoiceRow("Contents", ["Terrain", "3D model", "Terrain and model", "Open ocean"], () => (int)scene.Kind, SetSceneKind),
                 new NumberRow("Camera yaw", () => InputCamera.Yaw, value => InputCamera.Yaw = value, -3600, 3600, 1),
                 new NumberRow("Camera pitch", () => InputCamera.Pitch, value => InputCamera.Pitch = value, -89, 89, 1),
                 new NumberRow("Camera roll", () => InputCamera.Roll, value => InputCamera.Roll = value, -3600, 3600, 1),
                 new NumberRow("Camera zoom", () => InputCamera.Zoom, value => InputCamera.Zoom = value, .2f, 3, .05f),
                 new NumberRow("Field of view", () => InputCamera.FieldOfView, value => InputCamera.FieldOfView = value, 18, 90, 1),
-                new ToggleRow("Sky gradient", () => scene.Sky.Enabled, enabled => scene.Sky.Enabled = enabled),
+                new ToggleRow("Show sky", () => scene.Sky.Enabled, enabled => scene.Sky.Enabled = enabled),
                 new SwatchRow("Sky color", () => scene.Sky.TopColor, color => scene.Sky.TopColor = color),
                 new SwatchRow("Horizon color", () => scene.Sky.HorizonColor, color => scene.Sky.HorizonColor = color)
             ],
@@ -101,9 +101,29 @@ public sealed partial class StudioSceneDialog
             BuildRig(model),
             BuildPath()
         ];
+        if (scene.HasOcean)
+            _rows[1] = BuildOcean(scene.Ocean);
         _popup = null;
         _numberEdit = null;
     }
+
+    private static EditorRow[] BuildOcean(StudioOcean ocean) =>
+    [
+        new NumberRow("Seed", () => ocean.Seed, value => ocean.Seed = (int)value, -1000000, 1000000, 1),
+        new NumberRow("Wind speed (m/s)", () => ocean.WindSpeed, value => ocean.WindSpeed = value, 1, 35, .5f),
+        new NumberRow("Wind direction", () => ocean.WindDirection, value => ocean.WindDirection = value, -3600, 3600, 2),
+        new NumberRow("Wind fetch (m)", () => ocean.Fetch, value => ocean.Fetch = value, 100, 1000000, 500),
+        new NumberRow("Depth (m)", () => ocean.Depth, value => ocean.Depth = value, 1, 1000, 2),
+        new NumberRow("Swell", () => ocean.Swell, value => ocean.Swell = value, 0, 1, .025f),
+        new NumberRow("Wave scale", () => ocean.WaveScale, value => ocean.WaveScale = value, 0, 3, .05f),
+        new NumberRow("Choppiness", () => ocean.Choppiness, value => ocean.Choppiness = value, 0, 3, .05f),
+        new NumberRow("Foam", () => ocean.Foam, value => ocean.Foam = value, 0, 2, .05f),
+        new NumberRow("Roughness", () => ocean.Roughness, value => ocean.Roughness = value, .025f, .75f, .02f),
+        new NumberRow("Audio response", () => ocean.AudioResponse, value => ocean.AudioResponse = value, 0, 2, .05f),
+        new NumberRow("Eye height (m)", () => ocean.EyeHeight, value => ocean.EyeHeight = value, .5f, 150, .2f),
+        new NumberRow("Sun elevation", () => ocean.SunElevation, value => ocean.SunElevation = value, -10, 90, 1),
+        new NumberRow("Sun azimuth", () => ocean.SunAzimuth, value => ocean.SunAzimuth = value, -3600, 3600, 1)
+    ];
 
     private EditorRow[] BuildRig(StudioModel model)
     {
@@ -144,6 +164,12 @@ public sealed partial class StudioSceneDialog
     {
         var wanted = (StudioSceneKind)index;
         if (Scene.Kind == wanted) return;
+        if (wanted == StudioSceneKind.Ocean && Scene.Camera == new StudioCamera() && Scene.Sky == new StudioSky())
+        {
+            var defaults = StudioScene.CreateOcean();
+            Scene.Camera = defaults.Camera;
+            Scene.Sky = defaults.Sky;
+        }
         Scene.Kind = wanted;
         LoadRenderer();
     }
