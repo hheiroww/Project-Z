@@ -44,6 +44,10 @@ public sealed class ShaderDocument
     public List<ShaderNode> Nodes { get; set; } = [];
     public List<ShaderConnection> Connections { get; set; } = [];
 
+    /// <summary>Optional HLSL declarations used by custom expression nodes in a real-time screen effect.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RealtimeFunctions { get; set; }
+
     [JsonIgnore]
     public bool IsSurface => Nodes?.Any(node => node?.Kind == "SurfaceOutput") == true;
 
@@ -103,6 +107,8 @@ public sealed class ShaderDocument
             throw new InvalidDataException($"Unsupported shader document version {Version}.");
         if (Name is null || !Enum.IsDefined(Mode) || Nodes is null || Connections is null)
             throw new InvalidDataException("The shader document is missing required fields.");
+        if (IsSurface && !string.IsNullOrWhiteSpace(RealtimeFunctions))
+            throw new InvalidDataException("Real-time HLSL functions require a screen-space shader graph.");
 
         var nodes = new Dictionary<Guid, ShaderNode>();
         var incoming = new Dictionary<Guid, int>();

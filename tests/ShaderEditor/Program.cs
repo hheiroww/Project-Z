@@ -106,6 +106,35 @@ static async Task CheckRealtime(string? compiler, string? staging)
     Reject(() => ShaderGenerator.GenerateRealtimeEffect(SurfaceMaterials.CreatePreset("clear-water")),
         "live screen shader generation requires a pixel-effect graph");
 
+    graph.RealtimeFunctions = """
+        Texture2D OverlayTexture : register(t1);
+        float DriveAlpha(float2 uv, float amount)
+        {
+            float4 original = SourceTexture.SampleLevel(SourceSampler, uv, 0);
+            float4 overlay = OverlayTexture.Sample(SourceSampler, uv);
+            return lerp(original.a, overlay.a, saturate(amount + AudioHigh * length(AspectUV(uv, TexelSize))));
+        }
+        """;
+    custom.Expression = "DriveAlpha(uv, A)";
+    var withFunctions = ShaderDocument.Parse(graph.ToJson());
+    Require(withFunctions.RealtimeFunctions == graph.RealtimeFunctions, "real-time HLSL functions round-trip with the graph");
+    Reject(() => ShaderGenerator.Generate(withFunctions), "ordinary effects reject real-time-only graph functions");
+    Reject(() => ShaderGenerator.GenerateVideoShader(withFunctions), "standalone video rejects real-time-only graph functions");
+    var functionEffect = ShaderGenerator.GenerateRealtimeEffect(withFunctions);
+    Require(functionEffect.IndexOf("float DriveAlpha", StringComparison.Ordinal) <
+            functionEffect.IndexOf("return (DriveAlpha", StringComparison.Ordinal),
+        "the generator emits graph function declarations before custom expression nodes");
+    if (compiler is not null)
+    {
+        foreach (var backend in Enum.GetValues<ShaderBackend>())
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var result = await ShaderCompiler.CompileAsync(functionEffect, backend, compiler, staging!, timeout.Token);
+            Require(result.Success && result.Bytecode is { Length: > 16 }, $"Real-time functions {backend}: {result.Diagnostics}");
+        }
+        Console.WriteLine("PASS real-time graph functions compile with typed source and auxiliary textures on both backends");
+    }
+
     var presets = ShaderPresets.Realtime;
     Require(presets.Select(preset => preset.Id).SequenceEqual(new[] { "spectral-rings", "prism-bloom", "folded-pulse" }),
         "the editable live shader catalog has stable preset identities");

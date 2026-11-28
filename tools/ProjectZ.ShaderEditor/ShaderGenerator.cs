@@ -23,6 +23,10 @@ public static class ShaderGenerator
 
     private static string Generate(ShaderDocument document, bool video, bool realtime = false)
     {
+        bool hasRealtimeFunctions = !string.IsNullOrWhiteSpace(document.RealtimeFunctions);
+        if (hasRealtimeFunctions && !realtime)
+            throw new InvalidDataException("This graph uses HLSL functions that require a real-time shader host.");
+
         var ordered = document.GetEvaluationOrder();
         var output = ordered.Single(node => node.Kind == "Output");
         var upstream = document.Connections.ToLookup(wire => wire.Target);
@@ -38,7 +42,10 @@ public static class ShaderGenerator
                     pending.Push(wire.Source);
         }
 
-        var source = new StringBuilder(video ? VideoHeader : XamlHeader);
+        var source = new StringBuilder();
+        if (hasRealtimeFunctions)
+            source.AppendLine("#define PROJECTZ_TYPED_SOURCE 1");
+        source.Append(video ? VideoHeader : XamlHeader);
         if (realtime || ordered.Any(node => reachable.Contains(node.Id) && UsesRuntimeInput(node)))
         {
             source.AppendLine();
@@ -51,6 +58,8 @@ public static class ShaderGenerator
             }
         }
         source.AppendLine().AppendLine().Append(SharedFunctions);
+        if (hasRealtimeFunctions)
+            source.AppendLine().AppendLine().Append(document.RealtimeFunctions);
         source.AppendLine().AppendLine();
         var body = new StringBuilder();
         body.AppendLine(video ? "float4 ProjectZVideoShader(float2 uv : TEXCOORD0) : SV_Target"
@@ -164,12 +173,15 @@ public static class ShaderGenerator
         #if DIRECTX12
         #define PS_MODEL ps_6_0
         #define PS_TARGET SV_Target0
+        #else
+        #define PS_MODEL ps_4_0
+        #define PS_TARGET COLOR0
+        #endif
+        #if DIRECTX12 || defined(PROJECTZ_TYPED_SOURCE)
         Texture2D SourceTexture : register(t0);
         SamplerState SourceSampler : register(s0);
         #define SAMPLE_SOURCE(uv) SourceTexture.Sample(SourceSampler, uv)
         #else
-        #define PS_MODEL ps_4_0
-        #define PS_TARGET COLOR0
         sampler2D SourceTexture : register(s0);
         #define SAMPLE_SOURCE(uv) tex2D(SourceTexture, uv)
         #endif
